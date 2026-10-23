@@ -7,7 +7,12 @@ Copy `.env.example` to `.env`:
 | Variable | Required | Description |
 | :--- | :---: | :--- |
 | `VITE_SLIP2SURE_API_KEY` / `SLIP2SURE_API_KEY` | Yes | Application API Key from [Slip2Sure Dashboard](https://app.slip2sure.com) ("แอพของฉัน" -> Key icon). Make sure your server IP is whitelisted in the Slip2Sure app settings. |
-| `VITE_GEMINI_API_KEY` / `GEMINI_API_KEY` | Optional | Google Gemini API Key for `gemini-2.5-flash-preview-tts`. Can also be provided in the web UI form. Falls back to browser `speechSynthesis` (`th-TH`) if omitted. |
+| `VITE_GEMINI_API_KEY` / `GEMINI_API_KEY` | Optional | Google Gemini API Key for `gemini-2.5-flash-preview-tts` (fixed `Aoede` voice). Falls back to browser `speechSynthesis` (`th-TH`) if omitted. |
+| `VITE_BANK_NAME` / `BANK_NAME` | Optional | Bank name/code displayed on the donation page (e.g., `KBANK`, `SCB`). |
+| `VITE_BANK_ACCOUNT` / `BANK_ACCOUNT` | Optional | Receiving bank account number (displayed on UI and verified against slip receiver). |
+| `VITE_ACCOUNT_NAME` / `ACCOUNT_NAME` | Optional | Account holder display name shown to donors. |
+| `VITE_PROMPTPAY_ID` / `PROMPTPAY_ID` | Optional | Receiving PromptPay phone/ID number (displayed on UI and verified against slip receiver). |
+| `VITE_TRUEWALLET_ID` / `TRUEWALLET_ID` | Optional | Receiving TrueMoney Wallet phone number (displayed on UI and verified against TrueMoney slip `account_to_mobile`). |
 
 For Cloudflare Workers production deployment, set secrets via Wrangler:
 
@@ -43,11 +48,9 @@ Multipart form-data endpoint:
 | `type` | `string` | `bank-image` \| `truemoney` \| `bank-payload` \| `test` |
 | `donor` | `string` | Optional display name (defaults to sender name on slip) |
 | `message` | `string` | Donation message to display and read via TTS |
-| `voice` | `string` | Gemini prebuilt voice (`Kore`, `Puck`, `Zephyr`, `Charon`, `Aoede`) |
 | `image` | `File` | Slip image file (required for `bank-image` and `truemoney`) |
 | `payload` | `string` | QR Code string (required for `bank-payload`) |
 | `amount` | `number` | Test amount in THB (used when `type=test`) |
-| `geminiKey` | `string` | Optional override for Gemini API Key |
 
 ---
 

@@ -7,9 +7,12 @@ export const renderer = jsxRenderer(({ children, title }) => {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{title || 'Donate Tools — Slip2Sure + Gemini TTS'}</title>
+        <title>{title || 'DONATE TOOLS — RAWBLOCK'}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
         <ViteClient />
         <Link href="/src/style.css" rel="stylesheet" />
       </head>
