@@ -38,7 +38,9 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
         stream.writeSSE({ event: 'donate', data: JSON.stringify(ev), id: ev.id })
       }
       listeners.add(send)
-      stream.onAbort(() => listeners.delete(send))
+      stream.onAbort(() => {
+        listeners.delete(send)
+      })
       while (true) {
         const fresh = await listDonations(c.env?.DB, 10, lastSeen, true)
         for (const ev of fresh.reverse()) {

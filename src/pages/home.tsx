@@ -13,7 +13,7 @@ export function HomePage({ config }: { config: AppConfig }) {
         </div>
         <h1>DONATE</h1>
         <p class="subtitle">
-          SLIP2SURE VERIFICATION + GEMINI 2.5 FLASH TTS (AOEDE)
+          deth'z vibing ai generate donate website (i got no time ;w;)
         </p>
 
         {hasPaymentInfo && (
@@ -82,7 +82,9 @@ export function HomePage({ config }: { config: AppConfig }) {
                 accept="image/png,image/jpeg"
                 required
               />
-              <div id="dropzoneText">DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE</div>
+              <div id="dropzoneText">
+                DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE
+              </div>
             </div>
           </div>
 
