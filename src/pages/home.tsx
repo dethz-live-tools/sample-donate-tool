@@ -104,7 +104,11 @@ export function HomePage({ config }: { config: AppConfig }) {
         </form>
       </div>
 
-      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+      <script
+        src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"
+        integrity="sha384-lQXOAyZwHXE55JFyrOMB7nY2Wv+m5ZWNtJcHrd1rceRQXAYNLak8ukN5TjBTcIwz"
+        crossOrigin="anonymous"
+      ></script>
       <script
         dangerouslySetInnerHTML={{
           __html: `

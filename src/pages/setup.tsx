@@ -11,7 +11,7 @@ export function SetupPage({ error }: { error?: boolean }) {
 
         {error && (
           <div class="status err" style="margin-bottom: 16px;">
-            ERROR // PASSWORDS MUST MATCH AND BE AT LEAST 4 CHARACTERS
+            ERROR // PASSWORDS MUST MATCH AND BE AT LEAST 8 CHARACTERS
           </div>
         )}
 
@@ -19,11 +19,11 @@ export function SetupPage({ error }: { error?: boolean }) {
           <label>ADMIN USERNAME</label>
           <input type="text" name="username" placeholder="admin" required autofocus />
 
-          <label>PASSWORD (MIN 4 CHARS)</label>
-          <input type="password" name="password" minlength={4} required />
+          <label>PASSWORD (MIN 8 CHARS)</label>
+          <input type="password" name="password" minlength={8} required />
 
           <label>CONFIRM PASSWORD</label>
-          <input type="password" name="confirm" minlength={4} required />
+          <input type="password" name="confirm" minlength={8} required />
 
           <button type="submit">CREATE ADMIN & SIGN IN</button>
         </form>

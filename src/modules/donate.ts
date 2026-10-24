@@ -6,44 +6,57 @@ import { broadcast, type DonateEvent } from './events'
 import { verifySlip } from './slip2sure'
 import { generateGeminiTTS } from './tts'
 
+const inflightRefs = new Set<string>()
+
 export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/', async (c) => {
     const cfg = getConfig(c.env)
     const form = await c.req.formData()
-    const donorInput = String(form.get('donor') || '').trim()
-    const message = String(form.get('message') || '').trim()
+    const donorInput = String(form.get('donor') || '').trim().slice(0, 50)
+    const message = String(form.get('message') || '').trim().slice(0, 200)
 
     const verified = await verifySlip(form, cfg, c.env?.DB)
     if (!verified.ok) {
       return c.json({ ok: false, code: verified.code, error: verified.error }, verified.status as any)
     }
 
-    const type = String(form.get('type') || 'bank-image')
-    const donor = donorInput || verified.senderName
-    const tts = await generateGeminiTTS(`${donor} โดเนท ${verified.amount} บาท ${message}`, cfg.geminiKey)
-
-    const ev: DonateEvent = {
-      id: crypto.randomUUID(),
-      donor,
-      amount: verified.amount,
-      message,
-      type,
-      transRef: verified.transRef,
-      audioBase64: tts.audioBase64,
-      sampleRate: tts.sampleRate,
-      createdAt: Date.now()
+    if (inflightRefs.has(verified.transRef)) {
+      return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
     }
+    inflightRefs.add(verified.transRef)
 
-    await insertDonation(c.env?.DB, ev)
-    broadcast(ev)
-    return c.json({ ok: true, event: ev, slip: verified.raw })
+    try {
+      const type = form.get('type') === 'truemoney' ? 'truemoney' : 'bank-image'
+      const donor = (donorInput || verified.senderName).slice(0, 50)
+      const tts = await generateGeminiTTS(`${donor} โดเนท ${verified.amount} บาท ${message}`, cfg.geminiKey)
+
+      const ev: DonateEvent = {
+        id: crypto.randomUUID(),
+        donor,
+        amount: verified.amount,
+        message,
+        type,
+        transRef: verified.transRef,
+        audioBase64: tts.audioBase64,
+        sampleRate: tts.sampleRate,
+        createdAt: Date.now()
+      }
+
+      if (!(await insertDonation(c.env?.DB, ev))) {
+        return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
+      }
+      broadcast(ev)
+      return c.json({ ok: true, event: ev })
+    } finally {
+      inflightRefs.delete(verified.transRef)
+    }
   })
   .post('/test', dashboardAuth, async (c) => {
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any
-    const donor = String(body.donor || 'TEST DONOR').trim()
-    const amount = Math.max(10, Number(body.amount) || 99)
-    const message = String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!').trim()
+    const donor = String(body.donor || 'TEST DONOR').trim().slice(0, 50)
+    const amount = Math.min(1_000_000, Math.max(10, Number(body.amount) || 99))
+    const message = String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!').trim().slice(0, 200)
     const tts = await generateGeminiTTS(`${donor} โดเนท ${amount} บาท ${message}`, cfg.geminiKey)
 
     const ev: DonateEvent = {

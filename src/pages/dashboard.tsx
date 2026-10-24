@@ -94,10 +94,10 @@ export function DashboardPage({ items }: { items: DonateEvent[] }) {
       <script
         dangerouslySetInnerHTML={{
           __html: `
-          let totalAmt = ${totalAmount};
-          let totalCnt = ${items.length};
-          let lastSeen = ${items[0]?.createdAt || 'Date.now()'};
-          const seenIds = new Set(${JSON.stringify(items.map((i) => i.id))});
+          let totalAmt = ${Number(totalAmount) || 0};
+          let totalCnt = ${Number(items.length) || 0};
+          let lastSeen = ${Number(items[0]?.createdAt) || 'Date.now()'};
+          const seenIds = new Set(${JSON.stringify(items.map((i) => i.id)).replace(/</g, '\\u003c')});
           const tbody = document.getElementById('txBody');
           const amtEl = document.getElementById('totalAmount');
           const cntEl = document.getElementById('totalCount');

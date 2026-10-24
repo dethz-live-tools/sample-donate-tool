@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { isValidSession } from './auth'
 import type { Bindings } from './config'
 import { listDonations } from './db'
 
@@ -21,33 +22,34 @@ export function broadcast(ev: DonateEvent) {
   listeners.forEach((fn) => fn(ev))
 }
 
+function sanitizeEvent(ev: DonateEvent, isAdmin: boolean): DonateEvent {
+  return isAdmin ? ev : { ...ev, transRef: undefined }
+}
+
 export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/poll', async (c) => {
-    const since = Number(c.req.query('since') || 0)
+    const isAdmin = await isValidSession(c)
+    const minSince = Date.now() - 60_000
+    const since = Math.max(Number(c.req.query('since') || 0), minSince)
     const items = await listDonations(c.env?.DB, 20, since, true)
-    return c.json({ ok: true, items: items.reverse() })
+    return c.json({ ok: true, items: items.reverse().map((ev) => sanitizeEvent(ev, isAdmin)) })
   })
-  .get('/', (c) => {
+  .get('/', async (c) => {
+    const isAdmin = await isValidSession(c)
     return streamSSE(c, async (stream) => {
-      let lastSeen = Date.now()
       const seenIds = new Set<string>()
       const send = (ev: DonateEvent) => {
         if (seenIds.has(ev.id)) return
         seenIds.add(ev.id)
-        if (ev.createdAt > lastSeen) lastSeen = ev.createdAt
-        stream.writeSSE({ event: 'donate', data: JSON.stringify(ev), id: ev.id })
+        stream.writeSSE({ event: 'donate', data: JSON.stringify(sanitizeEvent(ev, isAdmin)), id: ev.id })
       }
       listeners.add(send)
       stream.onAbort(() => {
         listeners.delete(send)
       })
       while (true) {
-        const fresh = await listDonations(c.env?.DB, 10, lastSeen, true)
-        for (const ev of fresh.reverse()) {
-          send(ev)
-        }
         await stream.writeSSE({ event: 'ping', data: '1' })
-        await stream.sleep(2000)
+        await stream.sleep(15000)
       }
     })
   })

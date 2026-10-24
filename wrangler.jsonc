@@ -1,13 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "donate-tools",
-  "compatibility_date": "2025-08-03",
+  "account_id": "407b5567b1ed97c1e84dd8a750048516",
+  "compatibility_date": "2026-10-01",
   "main": "./src/index.tsx",
+  "vars": {
+    "ACCOUNT_NAME": "นายศุภกฤต ภิญโญวรพจน์",
+    "BANK_NAME": "",
+    "BANK_ACCOUNT": "",
+    "PROMPTPAY_ID": "0947293181",
+    "TRUEWALLET_ID": ""
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "donate-tools-db",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "0777007a-0464-4f33-8225-3078b28e059f"
     }
   ]
 }

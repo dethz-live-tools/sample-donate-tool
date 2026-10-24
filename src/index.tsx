@@ -1,4 +1,6 @@
 import { Hono } from 'hono'
+import { csrf } from 'hono/csrf'
+import { secureHeaders } from 'hono/secure-headers'
 import { authRoute, dashboardAuth } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, listDonations } from './modules/db'
@@ -13,6 +15,8 @@ import { renderer } from './renderer'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+app.use(secureHeaders())
+app.use(csrf())
 app.use(renderer)
 app.route('/', authRoute)
 app.route('/api/events', eventsRoute)

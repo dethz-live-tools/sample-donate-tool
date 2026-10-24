@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS donations (
   message TEXT NOT NULL,
   type TEXT NOT NULL,
   trans_ref TEXT UNIQUE NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  audio_base64 TEXT,
+  sample_rate INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS admins (

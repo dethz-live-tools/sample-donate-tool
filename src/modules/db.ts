@@ -62,25 +62,30 @@ export async function isSlipUsed(db: D1Binding | undefined, transRef: string): P
   return Boolean(row)
 }
 
-export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent): Promise<void> {
-  if (!db) return
+export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent): Promise<boolean> {
+  if (!db) return true
   await ensureSchema(db)
-  await db
-    .prepare(
-      'INSERT INTO donations (id, donor, amount, message, type, trans_ref, created_at, audio_base64, sample_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    )
-    .bind(
-      ev.id,
-      ev.donor,
-      ev.amount,
-      ev.message,
-      ev.type || 'bank-image',
-      ev.transRef || ev.id,
-      ev.createdAt,
-      ev.audioBase64 || null,
-      ev.sampleRate || 24000
-    )
-    .run()
+  try {
+    await db
+      .prepare(
+        'INSERT INTO donations (id, donor, amount, message, type, trans_ref, created_at, audio_base64, sample_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(
+        ev.id,
+        ev.donor,
+        ev.amount,
+        ev.message,
+        ev.type || 'bank-image',
+        ev.transRef,
+        ev.createdAt,
+        ev.audioBase64 || null,
+        ev.sampleRate || 24000
+      )
+      .run()
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function listDonations(

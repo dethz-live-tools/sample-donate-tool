@@ -9,12 +9,20 @@ function digitsOnly(v: string) {
   return String(v || '').replace(/\D/g, '')
 }
 
-// ponytail: direct regex digit match for masked bank/PromptPay/TrueMoney numbers instead of external validator lib
+// ponytail: direct positional mask match for bank/PromptPay/TrueMoney numbers instead of external validator lib
 function matchMaskedDigits(masked: string, expected: string): boolean {
   const exp = digitsOnly(expected)
-  const msk = digitsOnly(masked)
-  if (!exp || !msk) return true
-  return exp.endsWith(msk) || msk.endsWith(exp.slice(-4))
+  const cleanMask = String(masked || '')
+    .replace(/[^0-9xX*]/g, '')
+    .replace(/^(00)?66/, exp.startsWith('0') ? '0' : '66')
+  const visible = digitsOnly(cleanMask)
+  if (!exp || visible.length < 4) return false
+  const len = Math.min(cleanMask.length, exp.length)
+  for (let i = 1; i <= len; i++) {
+    const mc = cleanMask[cleanMask.length - i]
+    if (mc >= '0' && mc <= '9' && mc !== exp[exp.length - i]) return false
+  }
+  return true
 }
 
 // ponytail: direct Slip2Sure API fetch instead of slip2sure-js + undici + image-type
@@ -37,6 +45,9 @@ export async function verifySlip(
 
   const file = form.get('image') as File | null
   if (!file || !file.size) return { ok: false, status: 400, error: 'กรุณาแนบรูปสลิป (PNG/JPG)' }
+  if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    return { ok: false, status: 400, error: 'รองรับเฉพาะไฟล์รูปภาพ PNG/JPG ขนาดไม่เกิน 5MB' }
+  }
   const upstream = new FormData()
   upstream.append('image', file, file.name || 'slip.jpg')
   const endpoint =
@@ -67,7 +78,7 @@ export async function verifySlip(
 
   if (type === 'truemoney' && cfg.truewalletId) {
     const toMobile = String(info.account_to_mobile || '')
-    if (toMobile && !matchMaskedDigits(toMobile, cfg.truewalletId)) {
+    if (!toMobile || !matchMaskedDigits(toMobile, cfg.truewalletId)) {
       return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: 'เบอร์รับเงิน TrueMoney ไม่ตรงกับระบบ' }
     }
   } else if (type !== 'truemoney' && (cfg.bankAccount || cfg.promptpayId)) {
@@ -75,13 +86,16 @@ export async function verifySlip(
     const recvProxy = String(info?.receiver?.proxy?.value || '')
     const bankOk = cfg.bankAccount ? matchMaskedDigits(recvAcc || recvProxy, cfg.bankAccount) : false
     const ppOk = cfg.promptpayId ? matchMaskedDigits(recvProxy || recvAcc, cfg.promptpayId) : false
-    if ((recvAcc || recvProxy) && !bankOk && !ppOk) {
+    if ((!recvAcc && !recvProxy) || (!bankOk && !ppOk)) {
       return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: 'บัญชีหรือพร้อมเพย์ผู้รับไม่ตรงกับระบบ' }
     }
   }
 
-  const refId = String(info.transRef || info.transaction_id || info.payload || '')
-  if (s2sData.is_exist || (refId && (await isSlipUsed(db, refId)))) {
+  const refId = String(info.transRef || info.transaction_id || info.payload || '').trim()
+  if (!refId) {
+    return { ok: false, status: 400, code: 'INVALID_SLIP', error: 'ไม่พบรหัสอ้างอิงสลิป' }
+  }
+  if (s2sData.is_exist || (await isSlipUsed(db, refId))) {
     return { ok: false, status: 400, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }
   }
 

@@ -12,6 +12,7 @@ export type AppConfig = {
 
 export type Bindings = {
   DB?: D1Binding
+  SESSION_SECRET?: string
   SLIP2SURE_API_KEY?: string
   VITE_SLIP2SURE_API_KEY?: string
   GEMINI_API_KEY?: string
@@ -30,16 +31,18 @@ export type Bindings = {
 
 export function getConfig(env?: Bindings): AppConfig {
   const meta = (import.meta as any).env || {}
-  const pick = (k1: keyof Bindings, k2: keyof Bindings) =>
+  const pickPublic = (k1: keyof Bindings, k2: keyof Bindings) =>
     String(env?.[k1] || env?.[k2] || meta[k2] || meta[k1] || '').trim()
+  const pickSecret = (k1: keyof Bindings, k2: keyof Bindings) =>
+    String(env?.[k1] || env?.[k2] || meta[k1] || '').trim()
 
   return {
-    s2sKey: pick('SLIP2SURE_API_KEY', 'VITE_SLIP2SURE_API_KEY'),
-    geminiKey: pick('GEMINI_API_KEY', 'VITE_GEMINI_API_KEY'),
-    bankName: pick('BANK_NAME', 'VITE_BANK_NAME'),
-    bankAccount: pick('BANK_ACCOUNT', 'VITE_BANK_ACCOUNT'),
-    accountName: pick('ACCOUNT_NAME', 'VITE_ACCOUNT_NAME'),
-    promptpayId: pick('PROMPTPAY_ID', 'VITE_PROMPTPAY_ID'),
-    truewalletId: pick('TRUEWALLET_ID', 'VITE_TRUEWALLET_ID')
+    s2sKey: pickSecret('SLIP2SURE_API_KEY', 'VITE_SLIP2SURE_API_KEY'),
+    geminiKey: pickSecret('GEMINI_API_KEY', 'VITE_GEMINI_API_KEY'),
+    bankName: pickPublic('BANK_NAME', 'VITE_BANK_NAME'),
+    bankAccount: pickPublic('BANK_ACCOUNT', 'VITE_BANK_ACCOUNT'),
+    accountName: pickPublic('ACCOUNT_NAME', 'VITE_ACCOUNT_NAME'),
+    promptpayId: pickPublic('PROMPTPAY_ID', 'VITE_PROMPTPAY_ID'),
+    truewalletId: pickPublic('TRUEWALLET_ID', 'VITE_TRUEWALLET_ID')
   }
 }
