@@ -95,6 +95,15 @@ export function HomePage({ config }: { config: AppConfig }) {
             placeholder="KEEP GOING!"
           ></textarea>
 
+          {config.turnstileSiteKey && (
+            <div
+              class="cf-turnstile"
+              data-sitekey={config.turnstileSiteKey}
+              data-theme="dark"
+              style="margin-bottom:16px;"
+            ></div>
+          )}
+
           <button type="submit" id="submitBtn" disabled={!hasPaymentInfo}>
             {hasPaymentInfo
               ? "SUBMIT DONATION"
@@ -104,6 +113,13 @@ export function HomePage({ config }: { config: AppConfig }) {
         </form>
       </div>
 
+      {config.turnstileSiteKey && (
+        <script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+          async
+          defer
+        ></script>
+      )}
       <script
         src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"
         integrity="sha384-lQXOAyZwHXE55JFyrOMB7nY2Wv+m5ZWNtJcHrd1rceRQXAYNLak8ukN5TjBTcIwz"
@@ -185,6 +201,10 @@ export function HomePage({ config }: { config: AppConfig }) {
 
             try {
               const fd = new FormData(e.target);
+              // ponytail: verify turnstile token before submit
+              if (document.querySelector('.cf-turnstile') && !fd.get('cf-turnstile-response')) {
+                throw new Error('กรุณายืนยันความปลอดภัย (Turnstile) ก่อนส่ง');
+              }
               const res = await fetch('/api/donate', { method: 'POST', body: fd });
               const data = await res.json();
               if (!res.ok || !data.ok) {
@@ -198,6 +218,9 @@ export function HomePage({ config }: { config: AppConfig }) {
             } finally {
               btn.disabled = false;
               btn.textContent = 'SUBMIT DONATION';
+              if (typeof turnstile !== 'undefined') {
+                try { turnstile.reset(); } catch (_) {}
+              }
             }
           });
         `,
