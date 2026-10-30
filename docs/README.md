@@ -23,34 +23,18 @@ bunx wrangler secret put GEMINI_API_KEY
 
 ---
 
-## 2. Internal Endpoints
+## 2. API Endpoints
 
-### `GET /`
-Donor-facing web form and recent donation feed. Supports:
-- Uploading Bank Slip images (`PNG`, `JPG`, `JPEG`)
-- Uploading TrueMoney Slip images (`PNG`, `JPG`, `JPEG`)
-- Submitting raw Bank QR Code payload strings
-- Sending test alerts without a slip (`type=test`)
+See detailed request/response schemas and event payloads in [API.md](./API.md).
 
-### `GET /overlay`
-Transparent OBS Browser Source overlay. Connects to `/api/events` via `EventSource`, queues incoming donations, animates the alert card, and plays raw 24kHz L16 PCM audio from Gemini TTS.
-
-### `GET /api/events`
-Server-Sent Events (`text/event-stream`) endpoint. Emits:
-- `event: donate` — JSON payload of `DonateEvent` (`id`, `donor`, `amount`, `message`, `audioBase64`, `sampleRate`, `createdAt`)
-- `event: ping` — Keep-alive heartbeat every 15 seconds
-
-### `POST /api/donate`
-Multipart form-data endpoint:
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `type` | `string` | `bank-image` \| `truemoney` \| `bank-payload` \| `test` |
-| `donor` | `string` | Optional display name (defaults to sender name on slip) |
-| `message` | `string` | Donation message to display and read via TTS |
-| `image` | `File` | Slip image file (required for `bank-image` and `truemoney`) |
-| `payload` | `string` | QR Code string (required for `bank-payload`) |
-| `amount` | `number` | Test amount in THB (used when `type=test`) |
+### Quick Summary:
+- `POST /api/donate`: Verify slip, generate Gemini TTS, persist to D1, and broadcast donation.
+- `POST /api/donate/test`: Trigger simulated donation alert (Admin only).
+- `GET /api/events`: SSE stream for dashboard and donor index page with heartbeat and overlay status.
+- `GET /api/events/overlay`: Dedicated SSE stream for OBS overlay page.
+- `GET /api/events/status`: JSON overlay connection status (`online`, `count`, `timestamp`).
+- `GET /api/events/poll`: Fallback polling for donations and overlay status.
+- `POST /api/events/heartbeat`: Ping/renew overlay heartbeat.
 
 ---
 

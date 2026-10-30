@@ -1,6 +1,12 @@
 import type { AppConfig } from "../modules/config";
 
-export function HomePage({ config }: { config: AppConfig }) {
+export function HomePage({
+  config,
+  overlayOnline = false
+}: {
+  config: AppConfig
+  overlayOnline?: boolean
+}) {
   const hasBankOrPP = Boolean(config.bankAccount || config.promptpayId);
   const hasTrueMoney = Boolean(config.truewalletId);
   const hasPaymentInfo = hasBankOrPP || hasTrueMoney;
@@ -10,6 +16,10 @@ export function HomePage({ config }: { config: AppConfig }) {
       <div class="card elevated">
         <div class="nav-links">
           <span>RAWBLOCK // DONATE SYSTEM</span>
+          <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
+            <span class="overlay-square"></span>
+            <span id="overlayNavText">OVERLAY: {overlayOnline ? 'ONLINE' : 'OFFLINE'}</span>
+          </div>
         </div>
         <h1>DONATE</h1>
         <p class="subtitle">
@@ -223,6 +233,42 @@ export function HomePage({ config }: { config: AppConfig }) {
               }
             }
           });
+
+          function updateOverlayStatus(data) {
+            const online = typeof data === 'boolean' ? data : Boolean(data?.online);
+            const navBadge = document.getElementById('overlayNavBadge');
+            const navText = document.getElementById('overlayNavText');
+            if (navBadge && navText) {
+              if (online) {
+                navBadge.classList.add('is-online');
+                navText.textContent = 'OVERLAY: ONLINE';
+              } else {
+                navBadge.classList.remove('is-online');
+                navText.textContent = 'OVERLAY: OFFLINE';
+              }
+            }
+          }
+
+          const es = new EventSource('/api/events');
+          es.addEventListener('overlay_status', (e) => {
+            try { updateOverlayStatus(JSON.parse(e.data)); } catch {}
+          });
+          es.addEventListener('heartbeat', (e) => {
+            try { updateOverlayStatus(JSON.parse(e.data)); } catch {}
+          });
+          es.onerror = () => {
+            fetch('/api/events/status').then(r => r.json()).then(d => {
+              if (typeof d.online === 'boolean') updateOverlayStatus(d.online);
+            }).catch(() => {});
+          };
+
+          setInterval(async () => {
+            try {
+              const r = await fetch('/api/events/status');
+              const d = await r.json();
+              if (typeof d.online === 'boolean') updateOverlayStatus(d.online);
+            } catch {}
+          }, 5000);
         `,
         }}
       />

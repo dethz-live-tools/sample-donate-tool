@@ -96,12 +96,15 @@ export function OverlayPage() {
             processQueue();
           }
 
-          const es = new EventSource('/api/events');
+          const es = new EventSource('/api/events/overlay');
+          es.addEventListener('heartbeat', (e) => {
+            console.log('[overlay] heartbeat received', e.data);
+          });
           es.addEventListener('donate', (e) => enqueue(JSON.parse(e.data)));
 
           setInterval(async () => {
             try {
-              const r = await fetch('/api/events/poll?since=' + lastSeen);
+              const r = await fetch('/api/events/poll?client=overlay&since=' + lastSeen);
               const d = await r.json();
               if (d.items) d.items.forEach(enqueue);
             } catch {}

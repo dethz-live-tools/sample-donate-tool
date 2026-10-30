@@ -68,4 +68,5 @@ Stream donation receiving app with real-time OBS overlay alerts, automatic slip 
 
 ## Documentation
 
-See [docs/README.md](./docs/README.md) for API endpoints, Slip2Sure error codes, and OBS setup instructions.
+- [API Reference](./docs/API.md) — Comprehensive documentation for endpoints, SSE events, and payloads.
+- [Setup & Architecture](./docs/README.md) — Environment variables, Slip2Sure error codes, and OBS configuration.
