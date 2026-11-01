@@ -120,7 +120,12 @@ Unified SSE stream for dashboard, donor page, and general clients.
    id: e6a4b3f1-285b-481d-862d-6060c283d6a9
    data: {"id":"e6a4b3f1-285b-481d-862d-6060c283d6a9","donor":"SOMCHAI","amount":100,"message":"Hello","audioBase64":"...","sampleRate":24000,"createdAt":1793335000000}
    ```
-4. `ping`: Keep-alive ping every 15 seconds.
+4. `control`: Emitted to signal remote commands to connected overlay browser sources.
+   ```
+   event: control
+   data: {"action":"reload","timestamp":1793335000000}
+   ```
+5. `ping`: Keep-alive ping every 15 seconds.
    ```
    event: ping
    data: 1
@@ -198,5 +203,41 @@ Manually register or renew overlay heartbeat timestamp.
   "online": true,
   "count": 1,
   "timestamp": 1793335000000
+}
+```
+
+---
+
+### `POST /api/events/control`
+Dispatch remote command to all connected overlay browser sources via the SSE event bus.
+
+- **Content-Type**: `application/json`
+- **Authentication**: Admin session cookie required (`session_id`)
+
+#### Request Body
+```json
+{
+  "action": "reload"
+}
+```
+
+Supported actions:
+- `reload`: Forces all OBS overlay sources to refresh window.
+- `clear`: Flushes alert queue and immediately dismisses active alert card.
+- `disconnect`: Resets server-side active socket list and triggers reconnect.
+
+#### Success Response (`200 OK`)
+```json
+{
+  "ok": true,
+  "command": {
+    "action": "reload",
+    "timestamp": 1793335000000
+  },
+  "status": {
+    "online": true,
+    "count": 1,
+    "timestamp": 1793335000000
+  }
 }
 ```

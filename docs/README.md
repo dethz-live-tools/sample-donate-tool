@@ -30,11 +30,13 @@ See detailed request/response schemas and event payloads in [API.md](./API.md).
 ### Quick Summary:
 - `POST /api/donate`: Verify slip, generate Gemini TTS, persist to D1, and broadcast donation.
 - `POST /api/donate/test`: Trigger simulated donation alert (Admin only).
-- `GET /api/events`: SSE stream for dashboard and donor index page with heartbeat and overlay status.
+- `GET /api/events`: SSE stream for dashboard, controller, and donor index page with heartbeat and overlay status.
 - `GET /api/events/overlay`: Dedicated SSE stream for OBS overlay page.
 - `GET /api/events/status`: JSON overlay connection status (`online`, `count`, `timestamp`).
 - `GET /api/events/poll`: Fallback polling for donations and overlay status.
 - `POST /api/events/heartbeat`: Ping/renew overlay heartbeat.
+- `POST /api/events/control`: Dispatch command bus actions (`reload`, `clear`, `disconnect`) to overlays (Admin only).
+- `GET /overlay/control`: Controller dashboard for managing overlay connections, triggering commands, and live terminal logging.
 
 ---
 

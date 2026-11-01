@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { isValidSession } from './auth'
+import { dashboardAuth, isValidSession } from './auth'
 import type { Bindings } from './config'
 import { listDonations } from './db'
 
@@ -22,8 +22,14 @@ export type OverlayStatus = {
   timestamp: number
 }
 
+export type OverlayCommand = {
+  action: 'reload' | 'clear' | 'disconnect' | string
+  [key: string]: any
+}
+
 const listeners = new Set<(ev: DonateEvent) => void>()
 const statusListeners = new Set<(status: OverlayStatus) => void>()
+const controlListeners = new Set<(cmd: OverlayCommand) => void>()
 const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
 const OVERLAY_TIMEOUT_MS = 15_000
@@ -46,6 +52,14 @@ export function broadcastOverlayStatus() {
   statusListeners.forEach((fn) => {
     try {
       fn(status)
+    } catch {}
+  })
+}
+
+export function broadcastControl(cmd: OverlayCommand) {
+  controlListeners.forEach((fn) => {
+    try {
+      fn(cmd)
     } catch {}
   })
 }
@@ -104,12 +118,23 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
     }
     statusListeners.add(sendStatus)
 
+    const sendControl = (cmd: OverlayCommand) => {
+      try {
+        stream.writeSSE({
+          event: 'control',
+          data: JSON.stringify(cmd)
+        })
+      } catch {}
+    }
+    controlListeners.add(sendControl)
+
     let cleanedUp = false
     const cleanup = () => {
       if (cleanedUp) return
       cleanedUp = true
       listeners.delete(sendDonate)
       statusListeners.delete(sendStatus)
+      controlListeners.delete(sendControl)
       if (isOverlay) {
         overlayConnections.delete(connId)
         if (overlayConnections.size === 0) {
@@ -128,6 +153,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
         ok: true,
         client,
         online: isOverlayOnline(),
+        count: overlayConnections.size,
         timestamp: Date.now()
       })
     })
@@ -188,6 +214,23 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
     return c.json({ ok: true, ...getOverlayStatus() })
+  })
+  .post('/control', dashboardAuth, async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
+    const action = String(body.action || '').trim()
+    if (!action) {
+      return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
+    }
+
+    if (action === 'disconnect') {
+      overlayConnections.clear()
+      lastOverlayHeartbeat = 0
+      broadcastOverlayStatus()
+    }
+
+    const payload = { ...body, action, timestamp: Date.now() }
+    broadcastControl(payload)
+    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
   })
   .get('/overlay', (c) => sseHandler(c, 'overlay'))
   .get('/', (c) => sseHandler(c))

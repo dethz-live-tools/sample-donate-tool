@@ -23,6 +23,7 @@ export function DashboardPage({
                 OVERLAY: {overlayOnline ? `ONLINE${clientCount > 1 ? ` (${clientCount})` : ''}` : 'OFFLINE'}
               </span>
             </div>
+            <a href="/overlay/control">OVERLAY CONTROLS</a>
             <a href="/overlay" target="_blank">OPEN OVERLAY</a>
             <button
               type="button"

@@ -6,6 +6,7 @@ import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
 import { eventsRoute, getOverlayStatus, isOverlayOnline } from './modules/events'
+import { OverlayControlPage } from './pages/control'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
@@ -37,6 +38,10 @@ app.get('/dashboard', dashboardAuth, async (c) => {
   const items = await listDonations(c.env?.DB)
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
 })
+app.get('/overlay/control', dashboardAuth, (c) => {
+  return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} />)
+})
+app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
 app.get('/overlay', (c) => c.render(<OverlayPage />))
 
 export default app

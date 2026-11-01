@@ -310,6 +310,46 @@ button:disabled {
   color: var(--ctp-red);
 }
 
+.grid-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.console-log {
+  background: var(--ctp-crust);
+  border: 3px solid var(--ctp-surface2);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.console-entry {
+  margin-bottom: 4px;
+}
+
+.console-entry.info {
+  color: var(--ctp-subtext0);
+}
+
+.console-entry.success {
+  color: var(--ctp-green);
+}
+
+.console-entry.warn {
+  color: var(--ctp-yellow);
+}
+
+.console-entry.err {
+  color: var(--ctp-red);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
