@@ -276,6 +276,80 @@ button:disabled {
   padding: 2px 10px;
 }
 
+.overlay-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border: 2px solid var(--ctp-red);
+  color: var(--ctp-red);
+  background: var(--ctp-crust);
+}
+
+.overlay-indicator.is-online {
+  border-color: var(--ctp-green);
+  color: var(--ctp-green);
+}
+
+.overlay-square {
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  display: inline-block;
+}
+
+.status-online {
+  color: var(--ctp-green);
+}
+
+.status-offline {
+  color: var(--ctp-red);
+}
+
+.grid-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.console-log {
+  background: var(--ctp-crust);
+  border: 3px solid var(--ctp-surface2);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.console-entry {
+  margin-bottom: 4px;
+}
+
+.console-entry.info {
+  color: var(--ctp-subtext0);
+}
+
+.console-entry.success {
+  color: var(--ctp-green);
+}
+
+.console-entry.warn {
+  color: var(--ctp-yellow);
+}
+
+.console-entry.err {
+  color: var(--ctp-red);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

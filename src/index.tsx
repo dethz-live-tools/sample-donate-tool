@@ -5,7 +5,8 @@ import { authRoute, dashboardAuth } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline } from './modules/events'
+import { OverlayControlPage } from './pages/control'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
@@ -22,7 +23,7 @@ app.route('/', authRoute)
 app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
 
-app.get('/', (c) => c.render(<HomePage config={getConfig(c.env)} />))
+app.get('/', (c) => c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} />))
 app.get('/setup', async (c) => {
   const admin = await getAdmin(c.env?.DB)
   if (admin) return c.redirect('/login')
@@ -35,8 +36,12 @@ app.get('/login', async (c) => {
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
   const items = await listDonations(c.env?.DB)
-  return c.render(<DashboardPage items={items} />)
+  return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
 })
+app.get('/overlay/control', dashboardAuth, (c) => {
+  return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} />)
+})
+app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
 app.get('/overlay', (c) => c.render(<OverlayPage />))
 
 export default app

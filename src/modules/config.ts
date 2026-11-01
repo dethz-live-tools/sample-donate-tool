@@ -8,6 +8,8 @@ export type AppConfig = {
   accountName: string
   promptpayId: string
   truewalletId: string
+  turnstileSiteKey: string
+  turnstileSecret: string
 }
 
 export type Bindings = {
@@ -27,6 +29,10 @@ export type Bindings = {
   VITE_PROMPTPAY_ID?: string
   TRUEWALLET_ID?: string
   VITE_TRUEWALLET_ID?: string
+  TURNSTILE_SITE_KEY?: string
+  VITE_TURNSTILE_SITE_KEY?: string
+  TURNSTILE_SECRET_KEY?: string
+  VITE_TURNSTILE_SECRET_KEY?: string
 }
 
 export function getConfig(env?: Bindings): AppConfig {
@@ -43,6 +49,8 @@ export function getConfig(env?: Bindings): AppConfig {
     bankAccount: pickPublic('BANK_ACCOUNT', 'VITE_BANK_ACCOUNT'),
     accountName: pickPublic('ACCOUNT_NAME', 'VITE_ACCOUNT_NAME'),
     promptpayId: pickPublic('PROMPTPAY_ID', 'VITE_PROMPTPAY_ID'),
-    truewalletId: pickPublic('TRUEWALLET_ID', 'VITE_TRUEWALLET_ID')
+    truewalletId: pickPublic('TRUEWALLET_ID', 'VITE_TRUEWALLET_ID'),
+    turnstileSiteKey: pickPublic('TURNSTILE_SITE_KEY', 'VITE_TURNSTILE_SITE_KEY'),
+    turnstileSecret: pickSecret('TURNSTILE_SECRET_KEY', 'VITE_TURNSTILE_SECRET_KEY')
   }
 }

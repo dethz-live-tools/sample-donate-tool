@@ -9,7 +9,8 @@
     "BANK_NAME": "",
     "BANK_ACCOUNT": "",
     "PROMPTPAY_ID": "0947293181",
-    "TRUEWALLET_ID": ""
+    "TRUEWALLET_ID": "",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFsDEJrv5csefss-"
   },
   "d1_databases": [
     {

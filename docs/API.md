@@ -1,0 +1,304 @@
+# API Documentation
+
+Base URL: `http://localhost:5173` (local development) or your Cloudflare Worker domain.
+
+> [!NOTE]
+> All `POST` routes are protected by Hono's `csrf()` middleware (`Origin` header validation) and `secureHeaders()`. Admin-protected endpoints require a valid `dash_token` HTTP-only session cookie obtained via `/setup` or `/login`.
+
+---
+
+## 1. Donation Endpoints
+
+### `POST /api/donate`
+Process a donation by verifying Cloudflare Turnstile (if configured), validating the bank/PromptPay or TrueMoney slip image via Slip2Sure, synthesizing Gemini 2.5 Flash TTS audio, persisting the transaction to Cloudflare D1, and broadcasting a real-time `donate` SSE event.
+
+- **Content-Type**: `multipart/form-data`
+- **Authentication**: Public (protected by optional Cloudflare Turnstile)
+
+#### Request Fields
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `type` | `string` | No | `bank-image` (default) or `truemoney`. |
+| `donor` | `string` | No | Donor display name (max 50 chars). Defaults to sender name extracted from slip. |
+| `message` | `string` | No | Donation message read aloud by TTS (max 200 chars). |
+| `image` | `File` | Yes | Slip image (`image/png`, `image/jpeg`, or `image/webp`, max 5 MB). |
+| `cf-turnstile-response` | `string` | Conditional | Cloudflare Turnstile token (required when `TURNSTILE_SECRET_KEY` is configured). |
+
+#### Success Response (`200 OK`)
+```json
+{
+  "ok": true,
+  "event": {
+    "id": "e6a4b3f1-285b-481d-862d-6060c283d6a9",
+    "donor": "SOMCHAI",
+    "amount": 100,
+    "message": "Keep up the great work!",
+    "type": "bank-image",
+    "transRef": "2026103001234567890",
+    "audioBase64": "UklGRi...",
+    "sampleRate": 24000,
+    "createdAt": 1793335000000
+  }
+}
+```
+
+#### Error Response (`400 Bad Request` / upstream status)
+```json
+{
+  "ok": false,
+  "code": "DUPLICATE_SLIP",
+  "error": "สลิปนี้ถูกใช้งานไปแล้ว"
+}
+```
+
+#### Error Codes
+| Code | Status | Description |
+| :--- | :---: | :--- |
+| `TURNSTILE_REQUIRED` | `400` | Turnstile token missing when `TURNSTILE_SECRET_KEY` is enabled. |
+| `TURNSTILE_FAILED` | `400` | Turnstile token verification failed at Cloudflare siteverify. |
+| `MIN_AMOUNT` | `400` | Slip transfer amount is less than `10` THB. |
+| `WRONG_RECEIVER` | `400` | Slip recipient account/PromptPay/TrueMoney number does not match configured receiver. |
+| `INVALID_SLIP` | `400` | Missing transaction reference in slip verification payload. |
+| `DUPLICATE_SLIP` | `400` | Slip was already used (`is_exist`, stored in D1 `donations`, or currently in-flight). |
+| `<SLIP2SURE_CODE>` | `4xx/5xx` | Upstream Slip2Sure error code (e.g., `SLIP_NOT_EXIST`, `SLIP_BBL_PENDING`, `UNAUTHORIZED`). |
+
+---
+
+### `POST /api/donate/test`
+Trigger a simulated donation alert with Gemini TTS audio synthesis, store it in D1 (`type: "test"`), and broadcast it to all connected overlays and dashboards.
+
+- **Content-Type**: `application/json`
+- **Authentication**: Admin session cookie required (`dash_token`)
+
+#### Request Body
+| Field | Type | Required | Default | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `donor` | `string` | No | `"TEST DONOR"` | Simulated donor name (max 50 chars). |
+| `amount` | `number` | No | `99` | Simulated amount in THB (clamped between `10` and `1,000,000`). |
+| `message` | `string` | No | `"ทดสอบระบบแจ้งเตือนโดเนท!"` | Simulated message read aloud by TTS (max 200 chars). |
+
+```json
+{
+  "donor": "TEST DONOR",
+  "amount": 99,
+  "message": "ทดสอบระบบแจ้งเตือนโดเนท!"
+}
+```
+
+#### Success Response (`200 OK`)
+```json
+{
+  "ok": true,
+  "event": {
+    "id": "c1f73b88-c71b-42ea-a4e9-1144de94c8ee",
+    "donor": "TEST DONOR",
+    "amount": 99,
+    "message": "ทดสอบระบบแจ้งเตือนโดเนท!",
+    "type": "test",
+    "transRef": "TEST-1793335000000",
+    "audioBase64": "UklGRi...",
+    "sampleRate": 24000,
+    "createdAt": 1793335000000
+  }
+}
+```
+
+---
+
+## 2. Real-Time Server-Sent Events (SSE) & Overlay Control
+
+### `GET /api/events`
+Unified SSE stream for the donor home page, streamer dashboard, overlay controller, or custom integrations.
+
+- **Query Parameters**:
+  - `client` (optional): `dashboard` | `overlay` | `default`. Passing `client=overlay` registers the connection in the active overlay pool.
+- **Headers**:
+  - `Accept: text/event-stream`
+
+#### SSE Events Emitted
+1. `heartbeat`: Sent immediately on connection (includes `client` identifier) and every 15 seconds thereafter.
+   ```
+   event: heartbeat
+   data: {"ok":true,"client":"default","online":true,"count":1,"timestamp":1793335000000}
+   ```
+2. `overlay_status`: Sent immediately on connection and broadcast whenever an overlay connects, disconnects, or sends a heartbeat.
+   ```
+   event: overlay_status
+   data: {"online":true,"count":1,"timestamp":1793335000000}
+   ```
+3. `donate`: Broadcast when a real or test donation is processed.
+   - **Privacy Scrubbing**: `transRef` is included only if the SSE request carries a valid admin `dash_token` cookie; public/non-admin streams have `transRef` omitted.
+   ```
+   event: donate
+   id: e6a4b3f1-285b-481d-862d-6060c283d6a9
+   data: {"id":"e6a4b3f1-285b-481d-862d-6060c283d6a9","donor":"SOMCHAI","amount":100,"message":"Keep up the great work!","type":"bank-image","audioBase64":"...","sampleRate":24000,"createdAt":1793335000000}
+   ```
+4. `control`: Broadcast when an admin dispatches a command via `POST /api/events/control`.
+   ```
+   event: control
+   data: {"action":"reload","timestamp":1793335000000}
+   ```
+5. `ping`: Keep-alive frame emitted every 15 seconds.
+   ```
+   event: ping
+   data: 1
+   ```
+
+---
+
+### `GET /api/events/overlay`
+Dedicated SSE stream endpoint for the OBS `/overlay` page. Equivalent to `GET /api/events?client=overlay`.
+
+- **Behavior**:
+  - Registers a unique connection ID in `overlayConnections` and marks overlay status `online: true`.
+  - Broadcasts updated `overlay_status` to all connected clients.
+  - Renews heartbeat every 15 seconds while open.
+  - Automatically removes the connection ID and broadcasts updated `overlay_status` when the stream aborts or closes.
+
+---
+
+### `GET /api/events/status`
+Retrieve current overlay online state and active SSE connection count.
+
+- **Authentication**: None
+- **Success Response (`200 OK`)**:
+```json
+{
+  "ok": true,
+  "online": true,
+  "count": 1,
+  "timestamp": 1793335000000
+}
+```
+
+---
+
+### `GET /api/events/poll`
+Fallback JSON polling endpoint for recent donations (within the last 60 seconds) and current overlay status.
+
+- **Query Parameters**:
+  - `since` (`number`, optional): Unix timestamp in ms. Clamped to at most 60 seconds ago (`Date.now() - 60000`).
+  - `client` (`string`, optional): Pass `client=overlay` to refresh the server-side overlay heartbeat (`15s` TTL).
+- **Authentication**: Public (`transRef` is scrubbed unless a valid `dash_token` cookie is present).
+
+#### Success Response (`200 OK`)
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "id": "e6a4b3f1-285b-481d-862d-6060c283d6a9",
+      "donor": "SOMCHAI",
+      "amount": 100,
+      "message": "Keep going!",
+      "type": "bank-image",
+      "sampleRate": 24000,
+      "createdAt": 1793335000000
+    }
+  ],
+  "overlayOnline": true,
+  "overlayStatus": {
+    "online": true,
+    "count": 1,
+    "timestamp": 1793335000000
+  }
+}
+```
+
+---
+
+### `GET /api/events/heartbeat` & `POST /api/events/heartbeat`
+Manually touch the overlay heartbeat timestamp (marks overlay online for 15 seconds even without an open SSE stream) and broadcast `overlay_status`.
+
+- **Authentication**: None
+- **Success Response (`200 OK`)**:
+```json
+{
+  "ok": true,
+  "online": true,
+  "count": 1,
+  "timestamp": 1793335000000
+}
+```
+
+---
+
+### `POST /api/events/control`
+Dispatch a remote command to all connected OBS overlay clients over the SSE `control` event channel.
+
+- **Content-Type**: `application/json`
+- **Authentication**: Admin session cookie required (`dash_token`)
+
+#### Request Body
+```json
+{
+  "action": "reload"
+}
+```
+
+| Action | Effect |
+| :--- | :--- |
+| `reload` | Instructs connected `/overlay` browsers to execute `window.location.reload()`. |
+| `clear` | Empties the overlay's client-side alert queue, stops active TTS playback, and hides the alert card. |
+| `disconnect` | Clears `overlayConnections` and resets `lastOverlayHeartbeat` on the server, then broadcasts `disconnect` so overlays close and reconnect after 2 seconds. |
+
+#### Success Response (`200 OK`)
+```json
+{
+  "ok": true,
+  "command": {
+    "action": "reload",
+    "timestamp": 1793335000000
+  },
+  "status": {
+    "online": true,
+    "count": 1,
+    "timestamp": 1793335000000
+  }
+}
+```
+
+#### Error Response (`400 Bad Request`)
+```json
+{
+  "ok": false,
+  "error": "ACTION_REQUIRED"
+}
+```
+
+---
+
+## 3. Authentication & Admin Endpoints
+
+Admin sessions use an HTTP-only, `SameSite=Lax` cookie named `dash_token` valid for 7 days (`604800` seconds), signed with `HMAC-SHA256`. Passwords are hashed using Web Crypto `PBKDF2` (`100,000` iterations, `SHA-256`, 16-byte random salt).
+
+### `POST /setup`
+Create the initial administrator account (only allowed when no admin row exists in D1 `admins`).
+
+- **Content-Type**: `application/x-www-form-urlencoded` or `multipart/form-data`
+- **Form Fields**:
+  - `username`: Admin username (1–50 chars, required)
+  - `password`: Password (minimum 8 chars, required)
+  - `confirm`: Must match `password`
+- **Responses**:
+  - `302 Found -> /dashboard` (sets `dash_token` cookie on success)
+  - `302 Found -> /setup?error=1` (validation failure)
+  - `302 Found -> /login` (if admin already exists)
+
+### `POST /login`
+Authenticate administrator and issue a `dash_token` cookie. Rate-limited to 5 failed attempts per 60 seconds per client IP (`cf-connecting-ip` / `x-forwarded-for`).
+
+- **Content-Type**: `application/x-www-form-urlencoded` or `multipart/form-data`
+- **Form Fields**:
+  - `username`: Admin username
+  - `password`: Admin password
+- **Responses**:
+  - `302 Found -> /dashboard` (sets `dash_token` cookie on success)
+  - `302 Found -> /login?error=1` (invalid credentials or rate-limited)
+  - `302 Found -> /setup` (if no admin is configured yet)
+
+### `POST /logout`
+Clear the `dash_token` session cookie.
+
+- **Responses**:
+  - `302 Found -> /login`

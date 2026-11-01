@@ -1,7 +1,15 @@
-import type { DonateEvent } from '../modules/events'
+import type { DonateEvent, OverlayStatus } from '../modules/events'
 
-export function DashboardPage({ items }: { items: DonateEvent[] }) {
+export function DashboardPage({
+  items,
+  overlayStatus
+}: {
+  items: DonateEvent[]
+  overlayStatus?: OverlayStatus
+}) {
   const totalAmount = items.reduce((sum, h) => sum + h.amount, 0)
+  const overlayOnline = Boolean(overlayStatus?.online)
+  const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
 
   return (
     <div class="container wide">
@@ -9,6 +17,13 @@ export function DashboardPage({ items }: { items: DonateEvent[] }) {
         <div class="nav-links">
           <a href="/">RETURN TO DONATE</a>
           <div style="display:flex; gap:16px; align-items:center;">
+            <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
+              <span class="overlay-square"></span>
+              <span id="overlayNavText">
+                OVERLAY: {overlayOnline ? `ONLINE${clientCount > 1 ? ` (${clientCount})` : ''}` : 'OFFLINE'}
+              </span>
+            </div>
+            <a href="/overlay/control">OVERLAY CONTROLS</a>
             <a href="/overlay" target="_blank">OPEN OVERLAY</a>
             <button
               type="button"
@@ -43,6 +58,24 @@ export function DashboardPage({ items }: { items: DonateEvent[] }) {
             <label>COUNT</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="totalCount">
               {items.length}
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0;">
+            <label>OVERLAY STATUS</label>
+            <div
+              style="font-family:var(--font-head); font-size:32px;"
+              id="overlayStatusText"
+              class={overlayOnline ? 'status-online' : 'status-offline'}
+            >
+              {overlayOnline ? 'ONLINE' : 'OFFLINE'}
+            </div>
+            <div
+              id="overlayDetailText"
+              style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-top:4px;"
+            >
+              {overlayOnline
+                ? `${clientCount} CLIENT${clientCount > 1 ? 'S' : ''} CONNECTED`
+                : 'NO OVERLAY CONNECTED'}
             </div>
           </div>
         </div>
@@ -159,14 +192,60 @@ export function DashboardPage({ items }: { items: DonateEvent[] }) {
             }
           });
 
-          const es = new EventSource('/api/events');
+          function updateOverlayStatus(data) {
+            const online = typeof data === 'boolean' ? data : Boolean(data?.online);
+            const count = typeof data === 'object' && typeof data?.count === 'number'
+              ? data.count
+              : (online ? 1 : 0);
+
+            const statText = document.getElementById('overlayStatusText');
+            const navBadge = document.getElementById('overlayNavBadge');
+            const navText = document.getElementById('overlayNavText');
+            const detailText = document.getElementById('overlayDetailText');
+
+            if (statText) {
+              statText.textContent = online ? 'ONLINE' : 'OFFLINE';
+              statText.className = online ? 'status-online' : 'status-offline';
+            }
+            if (detailText) {
+              detailText.textContent = online
+                ? (count + ' CLIENT' + (count > 1 ? 'S' : '') + ' CONNECTED')
+                : 'NO OVERLAY CONNECTED';
+            }
+            if (navBadge && navText) {
+              if (online) {
+                navBadge.classList.add('is-online');
+                navText.textContent = 'OVERLAY: ONLINE' + (count > 1 ? ' (' + count + ')' : '');
+              } else {
+                navBadge.classList.remove('is-online');
+                navText.textContent = 'OVERLAY: OFFLINE';
+              }
+            }
+          }
+
+          const es = new EventSource('/api/events?client=dashboard');
           es.addEventListener('donate', (e) => addRow(JSON.parse(e.data)));
+          es.addEventListener('overlay_status', (e) => {
+            try {
+              updateOverlayStatus(JSON.parse(e.data));
+            } catch {}
+          });
+          es.addEventListener('heartbeat', (e) => {
+            try {
+              updateOverlayStatus(JSON.parse(e.data));
+            } catch {}
+          });
 
           setInterval(async () => {
             try {
               const r = await fetch('/api/events/poll?since=' + lastSeen);
               const d = await r.json();
               if (d.items) d.items.forEach(addRow);
+              if (d.overlayStatus) {
+                updateOverlayStatus(d.overlayStatus);
+              } else if (typeof d.overlayOnline === 'boolean') {
+                updateOverlayStatus(d.overlayOnline);
+              }
             } catch {}
           }, 2500);
         `

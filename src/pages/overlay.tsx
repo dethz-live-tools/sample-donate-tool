@@ -96,12 +96,34 @@ export function OverlayPage() {
             processQueue();
           }
 
-          const es = new EventSource('/api/events');
+          const es = new EventSource('/api/events/overlay');
+          es.addEventListener('heartbeat', (e) => {
+            console.log('[overlay] heartbeat received', e.data);
+          });
+          es.addEventListener('control', (e) => {
+            try {
+              const cmd = JSON.parse(e.data);
+              console.log('[overlay] control command received', cmd);
+              if (cmd.action === 'reload') {
+                window.location.reload();
+              } else if (cmd.action === 'clear') {
+                queue.length = 0;
+                const box = document.getElementById('alertBox');
+                if (box) box.classList.remove('show');
+                playing = false;
+              } else if (cmd.action === 'disconnect') {
+                es.close();
+                setTimeout(() => window.location.reload(), 1500);
+              }
+            } catch (err) {
+              console.error('[overlay] control error', err);
+            }
+          });
           es.addEventListener('donate', (e) => enqueue(JSON.parse(e.data)));
 
           setInterval(async () => {
             try {
-              const r = await fetch('/api/events/poll?since=' + lastSeen);
+              const r = await fetch('/api/events/poll?client=overlay&since=' + lastSeen);
               const d = await r.json();
               if (d.items) d.items.forEach(enqueue);
             } catch {}

@@ -15,6 +15,28 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     const donorInput = String(form.get('donor') || '').trim().slice(0, 50)
     const message = String(form.get('message') || '').trim().slice(0, 200)
 
+    // ponytail: native fetch to cloudflare turnstile siteverify, saves slip2sure api quota
+    const turnstileSecret = c.env?.TURNSTILE_SECRET_KEY || cfg.turnstileSecret
+    if (turnstileSecret) {
+      const token = String(form.get('cf-turnstile-response') || '')
+      if (!token) {
+        return c.json({ ok: false, code: 'TURNSTILE_REQUIRED', error: 'กรุณายืนยันความปลอดภัย (Turnstile)' }, 400)
+      }
+      const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          secret: turnstileSecret,
+          response: token,
+          remoteip: c.req.header('cf-connecting-ip') || ''
+        })
+      })
+      const outcome = (await verifyRes.json()) as { success: boolean; 'error-codes'?: string[] }
+      if (!outcome.success) {
+        return c.json({ ok: false, code: 'TURNSTILE_FAILED', error: 'การตรวจสอบ Turnstile ไม่ถูกต้อง' }, 400)
+      }
+    }
+
     const verified = await verifySlip(form, cfg, c.env?.DB)
     if (!verified.ok) {
       return c.json({ ok: false, code: verified.code, error: verified.error }, verified.status as any)
