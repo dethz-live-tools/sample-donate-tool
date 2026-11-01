@@ -2,10 +2,10 @@ import type { AppConfig } from "../modules/config";
 
 export function HomePage({
   config,
-  overlayOnline = false
+  overlayOnline = false,
 }: {
-  config: AppConfig
-  overlayOnline?: boolean
+  config: AppConfig;
+  overlayOnline?: boolean;
 }) {
   const hasBankOrPP = Boolean(config.bankAccount || config.promptpayId);
   const hasTrueMoney = Boolean(config.truewalletId);
@@ -16,9 +16,14 @@ export function HomePage({
       <div class="card elevated">
         <div class="nav-links">
           <span>RAWBLOCK // DONATE SYSTEM</span>
-          <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
+          <div
+            id="overlayNavBadge"
+            class={`overlay-indicator ${overlayOnline ? "is-online" : ""}`}
+          >
             <span class="overlay-square"></span>
-            <span id="overlayNavText">OVERLAY: {overlayOnline ? 'ONLINE' : 'OFFLINE'}</span>
+            <span id="overlayNavText">
+              OVERLAY: {overlayOnline ? "ONLINE" : "OFFLINE"}
+            </span>
           </div>
         </div>
         <h1>DONATE</h1>
