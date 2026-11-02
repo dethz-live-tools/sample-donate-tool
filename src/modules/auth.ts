@@ -1,8 +1,25 @@
 import { Hono, type Context, type Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { Bindings } from './config'
-import { createAdmin, deleteDonation, getAdmin, getDonationStats, listDonations, updateAdmin } from './db'
-import { broadcastControl, broadcastOverlayStatus, getOverlayStatus, touchOverlayHeartbeat, type OverlayCommand } from './events'
+import {
+  bumpTokenVersion,
+  createAdmin,
+  deleteDonation,
+  getAdmin,
+  getDonationStats,
+  listDonations,
+  setApiEnabled,
+  updateAdmin
+} from './db'
+import {
+  broadcastControl,
+  broadcastOverlayStatus,
+  getOverlayStatus,
+  resolveTtsEnabled,
+  touchOverlayHeartbeat,
+  updateTtsEnabled,
+  type OverlayCommand
+} from './events'
 
 const COOKIE_NAME = 'dash_token'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
@@ -54,27 +71,38 @@ async function hmacSign(secret: string, data: string): Promise<string> {
   return toHex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)))
 }
 
-function getSecret(env: Bindings | undefined, passwordHash: string): string {
-  return `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:${passwordHash}`
+function getSecret(env: Bindings | undefined, passwordHash: string, tokenVersion = 1): string {
+  return `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:${passwordHash}:v${tokenVersion}`
 }
 
-async function createSessionToken(env: Bindings | undefined, username: string, passwordHash: string): Promise<string> {
+async function createSessionToken(
+  env: Bindings | undefined,
+  username: string,
+  passwordHash: string,
+  tokenVersion = 1
+): Promise<string> {
   const exp = Date.now() + SESSION_TTL_MS
-  const sig = await hmacSign(getSecret(env, passwordHash), `${username}:${exp}`)
+  const sig = await hmacSign(getSecret(env, passwordHash, tokenVersion), `${username}:${exp}`)
   return `${exp}.${sig}`
+}
+
+function extractToken(c: Context<{ Bindings: Bindings }>): { token: string; isBearer: boolean } {
+  const authHeader = c.req.header('authorization') || ''
+  const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
+  if (bearer) return { token: bearer, isBearer: true }
+  return { token: getCookie(c, COOKIE_NAME) || '', isBearer: false }
 }
 
 export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
   const admin = await getAdmin(c.env?.DB)
   if (!admin) return false
-  const authHeader = c.req.header('authorization') || ''
-  const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
-  const token = bearer || getCookie(c, COOKIE_NAME)
+  const { token, isBearer } = extractToken(c)
+  if (isBearer && !admin.apiEnabled) return false
   if (!token || !token.includes('.')) return false
   const [expStr, sig] = token.split('.')
   const exp = Number(expStr)
   if (!Number.isFinite(exp) || Date.now() > exp) return false
-  const expected = await hmacSign(getSecret(c.env, admin.passwordHash), `${admin.username}:${exp}`)
+  const expected = await hmacSign(getSecret(c.env, admin.passwordHash, admin.tokenVersion), `${admin.username}:${exp}`)
   const a = new TextEncoder().encode(sig)
   const b = new TextEncoder().encode(expected)
   if (a.length !== b.length) return false
@@ -87,6 +115,10 @@ export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Ne
   const isApi = c.req.path.startsWith('/api/')
   const admin = await getAdmin(c.env?.DB)
   if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
+  const { isBearer } = extractToken(c)
+  if (isBearer && !admin.apiEnabled) {
+    return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
+  }
   if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
   await next()
 }
@@ -101,7 +133,7 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     const password = String(form.get('password') || '')
     const confirm = String(form.get('confirm') || '')
 
-    if (!username || password.length < 8 || password !== confirm) {
+    if (!username || password.length < 8 || password.length > 128 || password !== confirm) {
       return c.redirect('/setup?error=1')
     }
 
@@ -138,9 +170,13 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     const username = String(form.get('username') || '').trim()
     const password = String(form.get('password') || '')
 
+    if (!username || password.length > 128) {
+      return c.redirect('/login?error=1')
+    }
+
     if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
       loginAttempts.delete(ip)
-      const token = await createSessionToken(c.env, admin.username, admin.passwordHash)
+      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
       setCookie(c, COOKIE_NAME, token, {
         httpOnly: true,
         secure: new URL(c.req.url).protocol === 'https:',
@@ -181,7 +217,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const body = (await c.req.json().catch(() => ({}))) as any
     const username = String(body.username || '').trim().slice(0, 50)
     const password = String(body.password || '')
-    if (!username || password.length < 8) {
+    if (!username || password.length < 8 || password.length > 128) {
       return c.json({ ok: false, error: 'INVALID_CREDENTIALS_FORMAT' }, 400)
     }
 
@@ -197,6 +233,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
   .post('/login', async (c) => {
     const admin = await getAdmin(c.env?.DB)
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+    if (!admin.apiEnabled) return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
 
     const ip = c.req.header('cf-connecting-ip') || 'local'
     const now = Date.now()
@@ -212,11 +249,21 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const username = String(body.username || '').trim()
     const password = String(body.password || '')
 
+    if (!username || password.length > 128) {
+      return c.json({ ok: false, error: 'INVALID_CREDENTIALS' }, 401)
+    }
+
     if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
       loginAttempts.delete(ip)
-      const token = await createSessionToken(c.env, admin.username, admin.passwordHash)
+      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
       setSessionCookie(c, token)
-      return c.json({ ok: true, username: admin.username, token, expiresAt: Number(token.split('.')[0]) })
+      return c.json({
+        ok: true,
+        username: admin.username,
+        token,
+        tokenVersion: admin.tokenVersion,
+        expiresAt: Number(token.split('.')[0])
+      })
     }
 
     loginAttempts.set(ip, {
@@ -229,15 +276,101 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     deleteCookie(c, COOKIE_NAME, { path: '/' })
     return c.json({ ok: true })
   })
-  .get('/me', dashboardAuth, async (c) => {
+  .get('/auth/status', async (c) => {
     const admin = await getAdmin(c.env?.DB)
-    const stats = await getDonationStats(c.env?.DB)
+    const authenticated = await isValidSession(c)
+    const { token, isBearer } = extractToken(c)
+    const exp = authenticated && token.includes('.') ? Number(token.split('.')[0]) : null
+    const ip = c.req.header('cf-connecting-ip') || 'local'
+    const rate = loginAttempts.get(ip)
+    const rateLimited = Boolean(rate && Date.now() < rate.resetAt && rate.count >= 3)
+    return c.json({
+      ok: true,
+      setupRequired: !admin,
+      authenticated,
+      authMethod: authenticated ? (isBearer ? 'bearer' : 'cookie') : null,
+      username: authenticated ? admin?.username : undefined,
+      apiEnabled: admin?.apiEnabled ?? true,
+      tokenVersion: authenticated ? admin?.tokenVersion : undefined,
+      expiresAt: exp,
+      rateLimited
+    })
+  })
+  .post('/auth/refresh', dashboardAuth, async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+    const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
+    setSessionCookie(c, token)
+    return c.json({
+      ok: true,
+      username: admin.username,
+      token,
+      tokenVersion: admin.tokenVersion,
+      expiresAt: Number(token.split('.')[0])
+    })
+  })
+  .post('/auth/revoke', dashboardAuth, async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const keepCurrent = Boolean(body.keepCurrent)
+    const nextVersion = await bumpTokenVersion(c.env?.DB)
+    if (keepCurrent) {
+      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, nextVersion)
+      setSessionCookie(c, token)
+      return c.json({
+        ok: true,
+        revoked: true,
+        tokenVersion: nextVersion,
+        token,
+        expiresAt: Number(token.split('.')[0])
+      })
+    }
+    deleteCookie(c, COOKIE_NAME, { path: '/' })
+    return c.json({ ok: true, revoked: true, tokenVersion: nextVersion })
+  })
+  .put('/auth/config', dashboardAuth, async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+    const body = (await c.req.json().catch(() => ({}))) as any
+    let apiEnabled = admin.apiEnabled
+    if (typeof body.apiEnabled === 'boolean') {
+      apiEnabled = await setApiEnabled(c.env?.DB, body.apiEnabled)
+    }
+    if (body.unlockRateLimit) {
+      loginAttempts.clear()
+    }
+    return c.json({
+      ok: true,
+      apiEnabled,
+      tokenVersion: admin.tokenVersion,
+      rateLimitCleared: Boolean(body.unlockRateLimit)
+    })
+  })
+  .get('/me', dashboardAuth, async (c) => {
+    const [admin, stats, ttsEnabled] = await Promise.all([
+      getAdmin(c.env?.DB),
+      getDonationStats(c.env?.DB),
+      resolveTtsEnabled(c.env)
+    ])
     return c.json({
       ok: true,
       username: admin?.username,
+      ttsEnabled,
       stats,
       overlayStatus: getOverlayStatus()
     })
+  })
+  .get('/tts', dashboardAuth, async (c) => {
+    const ttsEnabled = await resolveTtsEnabled(c.env)
+    return c.json({ ok: true, ttsEnabled })
+  })
+  .put('/tts', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveTtsEnabled(c.env)
+    const next = typeof body.enabled === 'boolean' ? body.enabled : !current
+    const ttsEnabled = await updateTtsEnabled(c.env, next)
+    return c.json({ ok: true, ttsEnabled, overlayStatus: getOverlayStatus() })
   })
   .put('/credentials', dashboardAuth, async (c) => {
     const admin = await getAdmin(c.env?.DB)
@@ -251,7 +384,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (!(await verifyPassword(admin.username, currentPassword, admin.passwordHash))) {
       return c.json({ ok: false, error: 'INVALID_CURRENT_PASSWORD' }, 401)
     }
-    if (!newUsername || (newPassword && newPassword.length < 8)) {
+    if (!newUsername || currentPassword.length > 128 || (newPassword && (newPassword.length < 8 || newPassword.length > 128))) {
       return c.json({ ok: false, error: 'INVALID_CREDENTIALS_FORMAT' }, 400)
     }
 
@@ -260,9 +393,16 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       return c.json({ ok: false, error: 'UPDATE_FAILED' }, 500)
     }
 
-    const token = await createSessionToken(c.env, newUsername, nextHash)
+    const nextVersion = newPassword ? await bumpTokenVersion(c.env?.DB) : admin.tokenVersion
+    const token = await createSessionToken(c.env, newUsername, nextHash, nextVersion)
     setSessionCookie(c, token)
-    return c.json({ ok: true, username: newUsername, token, expiresAt: Number(token.split('.')[0]) })
+    return c.json({
+      ok: true,
+      username: newUsername,
+      token,
+      tokenVersion: nextVersion,
+      expiresAt: Number(token.split('.')[0])
+    })
   })
   .get('/donations', dashboardAuth, async (c) => {
     const rawLimit = Number(c.req.query('limit') || 100)
@@ -282,17 +422,26 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     return c.json({ ok: true, id })
   })
-  .get('/overlay', dashboardAuth, (c) => {
+  .get('/overlay', dashboardAuth, async (c) => {
+    await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
   })
   .post('/overlay/control', dashboardAuth, async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
     const action = String(body.action || '').trim()
     if (!action) return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
+    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+    if (!allowed.has(action)) return c.json({ ok: false, error: 'INVALID_ACTION' }, 400)
     if (action === 'heartbeat') {
       touchOverlayHeartbeat()
       broadcastOverlayStatus()
       return c.json({ ok: true, status: getOverlayStatus() })
+    }
+    if (action === 'tts') {
+      const current = await resolveTtsEnabled(c.env)
+      const next = typeof body.enabled === 'boolean' ? body.enabled : !current
+      await updateTtsEnabled(c.env, next)
+      return c.json({ ok: true, command: { action: 'tts', enabled: next, timestamp: Date.now() }, status: getOverlayStatus() })
     }
     const payload = { ...body, action, timestamp: Date.now() }
     broadcastControl(payload)

@@ -42,13 +42,17 @@ export async function verifySlip(
     return { ok: false, status: 400, error: 'ยังไม่เปิดรับช่องทางธนาคาร / PromptPay' }
   }
 
-  const file = form.get('image') as File | null
-  if (!file || !file.size) return { ok: false, status: 400, error: 'กรุณาแนบรูปสลิป (PNG/JPG)' }
+  const rawFile = form.get('image')
+  if (!rawFile || typeof rawFile === 'string' || !(rawFile instanceof File) || !rawFile.size) {
+    return { ok: false, status: 400, error: 'กรุณาแนบรูปสลิป (PNG/JPG)' }
+  }
+  const file = rawFile as File
   if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
     return { ok: false, status: 400, error: 'รองรับเฉพาะไฟล์รูปภาพ PNG/JPG ขนาดไม่เกิน 5MB' }
   }
   const upstream = new FormData()
-  upstream.append('image', file, file.name || 'slip.jpg')
+  const safeName = (file.name || 'slip.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50) || 'slip.jpg'
+  upstream.append('image', file, safeName)
   const endpoint =
     type === 'truemoney'
       ? 'https://api.slip2sure.com/api/v0/truemoney/v2/verify'

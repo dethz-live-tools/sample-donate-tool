@@ -1,4 +1,4 @@
-export function OverlayPage() {
+export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
   return (
     <div>
       <button class="unlock-btn" id="unlockBtn">ENABLE AUDIO</button>
@@ -15,6 +15,7 @@ export function OverlayPage() {
           document.body.classList.add('overlay-body');
           let audioCtx;
           let activeSource = null;
+          let ttsEnabled = ${Boolean(ttsEnabled)};
           const queue = [];
           const seenIds = new Set();
           let lastSeen = Date.now();
@@ -79,10 +80,13 @@ export function OverlayPage() {
             box.classList.add('show');
 
             try {
-              if (ev.audioBase64) {
-                await playPCM(ev.audioBase64, ev.sampleRate);
-              } else {
-                await playFallbackTTS(ev.donor + ' โดเนท ' + ev.amount + ' บาท ' + (ev.message || ''));
+              const shouldSpeak = ttsEnabled && ev.ttsEnabled !== false;
+              if (shouldSpeak) {
+                if (ev.audioBase64) {
+                  await playPCM(ev.audioBase64, ev.sampleRate);
+                } else {
+                  await playFallbackTTS(ev.donor + ' โดเนท ' + ev.amount + ' บาท ' + (ev.message || ''));
+                }
               }
             } catch (e) {
               console.error(e);
@@ -110,12 +114,29 @@ export function OverlayPage() {
           es.addEventListener('heartbeat', (e) => {
             console.log('[overlay] heartbeat received', e.data);
           });
+          es.addEventListener('overlay_status', (e) => {
+            try {
+              const st = JSON.parse(e.data);
+              if (typeof st.ttsEnabled === 'boolean') ttsEnabled = st.ttsEnabled;
+            } catch {}
+          });
           es.addEventListener('control', (e) => {
             try {
               const cmd = JSON.parse(e.data);
               console.log('[overlay] control command received', cmd);
               if (cmd.action === 'reload') {
                 window.location.reload();
+              } else if (cmd.action === 'tts') {
+                ttsEnabled = Boolean(cmd.enabled);
+                if (!ttsEnabled) {
+                  if (activeSource) {
+                    try { activeSource.stop(); } catch (_) {}
+                    activeSource = null;
+                  }
+                  if ('speechSynthesis' in window) {
+                    try { speechSynthesis.cancel(); } catch (_) {}
+                  }
+                }
               } else if (cmd.action === 'clear') {
                 runId++;
                 queue.length = 0;
@@ -143,6 +164,7 @@ export function OverlayPage() {
             try {
               const r = await fetch('/api/events/poll?client=overlay&since=' + lastSeen);
               const d = await r.json();
+              if (typeof d.overlayStatus?.ttsEnabled === 'boolean') ttsEnabled = d.overlayStatus.ttsEnabled;
               if (d.items) d.items.forEach(enqueue);
             } catch {}
           }, 2000);

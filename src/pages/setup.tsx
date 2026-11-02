@@ -17,13 +17,13 @@ export function SetupPage({ error }: { error?: boolean }) {
 
         <form method="post" action="/setup">
           <label>ADMIN USERNAME</label>
-          <input type="text" name="username" placeholder="admin" required autofocus />
+          <input type="text" name="username" placeholder="admin" maxlength={50} required autofocus />
 
           <label>PASSWORD (MIN 8 CHARS)</label>
-          <input type="password" name="password" minlength={8} required />
+          <input type="password" name="password" minlength={8} maxlength={128} required />
 
           <label>CONFIRM PASSWORD</label>
-          <input type="password" name="confirm" minlength={8} required />
+          <input type="password" name="confirm" minlength={8} maxlength={128} required />
 
           <button type="submit">CREATE ADMIN & SIGN IN</button>
         </form>

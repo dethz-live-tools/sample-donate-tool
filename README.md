@@ -16,63 +16,35 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
   - Fixed `Aoede` voice via `gemini-2.5-flash-preview-tts`
   - 24kHz 16-bit PCM Web Audio decoding in browser
   - Automatic fallback to Web Speech API (`th-TH`) when `GEMINI_API_KEY` is omitted
+  - Configurable on/off via `TTS_ENABLED` env var or live toggle on `/overlay/control` and `PUT /api/manage/tts` (persisted in D1)
 - **Real-Time OBS Overlay & Remote Controller**:
   - Transparent OBS Browser Source (`/overlay`) with sequential alert + TTS playback queue
   - Dedicated SSE stream (`/api/events/overlay`), heartbeat tracking, and automatic polling fallback (`/api/events/poll`)
-  - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`), and view live event logs
+  - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`, `tts`), and view live event logs
 - **Admin Dashboard, Management API & Cloudflare D1 Persistence**:
   - First-run admin setup (`/setup`) and rate-limited login (`/login`, 3 tries/min) using Web Crypto `PBKDF2` + `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`)
-  - Headless Management JSON API (`/api/manage/*`) for login, credential rotation, donation ledger management, and overlay control
+  - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), credential rotation, TTS toggle, donation ledger management, and overlay control
   - Donation history table and simulated test alerts (`/dashboard`)
 
 ## Quick Start
 
-1. **Install dependencies**
-   ```sh
-   bun install
-   ```
+See the dedicated [**Quick Start Guide**](./docs/QUICKSTART.md) for full setup instructions, local development, and deployment steps.
 
-2. **Configure environment variables**
-   ```sh
-   cp .env.example .env
-   ```
-   Edit `.env`:
-   ```dotenv
-   # Slip2Sure Application API Key (from https://app.slip2sure.com)
-   SLIP2SURE_API_KEY=your_slip2sure_api_key_here
+```sh
+# 1. Install dependencies
+bun install
 
-   # Google Gemini API Key for Gemini 2.5 Flash TTS (optional; falls back to browser TTS if omitted)
-   GEMINI_API_KEY=your_gemini_api_key_here
+# 2. Configure environment
+cp .env.example .env
 
-   # Optional HMAC secret for dashboard sessions
-   SESSION_SECRET=change_me_to_random_secret
+# 3. Start local development
+bun run dev
 
-   # Receiving Account Configuration
-   VITE_BANK_NAME=KBANK
-   VITE_BANK_ACCOUNT=123-4-56789-0
-   VITE_ACCOUNT_NAME=นายสมชาย ใจดี
-   VITE_PROMPTPAY_ID=0812345678
-   VITE_TRUEWALLET_ID=0812345678
+# 4. Deploy to Cloudflare Workers
+bun run deploy
+```
 
-   # Cloudflare Turnstile (optional)
-   VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFsDEJrv5csefss-
-   TURNSTILE_SECRET_KEY=your_turnstile_secret_key
-   ```
-
-3. **Run local dev server**
-   ```sh
-   bun run dev
-   ```
-   - **Donation Page**: `http://localhost:5173/`
-   - **Admin Setup / Login**: `http://localhost:5173/setup` or `http://localhost:5173/login`
-   - **Streamer Dashboard**: `http://localhost:5173/dashboard`
-   - **Overlay Controller**: `http://localhost:5173/overlay/control`
-   - **OBS Overlay**: `http://localhost:5173/overlay`
-
-4. **Deploy to Cloudflare Workers**
-   ```sh
-   bun run deploy
-   ```
+---
 
 ## Project Structure
 
@@ -96,5 +68,16 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
 
 ## Documentation
 
-- [Setup & Architecture](./docs/README.md) — Environment variables, D1 & Wrangler configuration, Slip2Sure error codes, and OBS setup.
-- [API Reference](./docs/API.md) — Full documentation for HTTP endpoints, authentication, SSE event streams, and command bus payloads.
+Complete documentation is maintained in the [`docs/`](./docs) directory:
+
+| Document | Topic | Description |
+| :--- | :--- | :--- |
+| [**docs/QUICKSTART.md**](./docs/QUICKSTART.md) | [Quick Start Guide](./docs/QUICKSTART.md) | Prerequisites, local development, D1 configuration, and deployment commands. |
+| [**docs/README.md**](./docs/README.md) | [Setup & Architecture](./docs/README.md#1-environment-variables) | Environment variables, Cloudflare D1 & Wrangler secrets configuration. |
+| [**docs/README.md**](./docs/README.md) | [Slip2Sure Error Codes](./docs/README.md#3-slip2sure-verification--error-codes) | Validation rules, receiver matching, and upstream Slip2Sure error code troubleshooting. |
+| [**docs/README.md**](./docs/README.md) | [OBS Studio Setup](./docs/README.md#4-obs-studio-setup) | Browser source configuration, dimensions, transparent audio routing, and live controls. |
+| [**docs/README.md**](./docs/README.md) | [Security & Threat Model](./docs/README.md#5-security-architecture--threat-model) | PBKDF2 hashing, instant token revocation, CSRF/CORS, input sanitization, and duplicate slip guards. |
+| [**docs/API.md**](./docs/API.md) | [Public Donation APIs](./docs/API.md#1-donation-endpoints) | `POST /api/donate` multipart slip verification and test alerts. |
+| [**docs/API.md**](./docs/API.md) | [Real-Time SSE Stream](./docs/API.md#2-real-time-server-sent-events-sse--overlay-control) | `GET /api/events`, `GET /api/events/overlay`, heartbeat pinging, and polling fallback. |
+| [**docs/API.md**](./docs/API.md) | [Web Authentication](./docs/API.md#3-authentication--admin-endpoints) | Web form `/setup`, `/login`, and `/logout` with rate limiting. |
+| [**docs/API.md**](./docs/API.md) | [Management JSON API](./docs/API.md#4-management-json-api-apimanage) | Headless programmatic administration: login, token refresh/revocation, TTS toggling, and ledger queries. |

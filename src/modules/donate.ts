@@ -2,18 +2,25 @@ import { Hono } from 'hono'
 import { dashboardAuth } from './auth'
 import { getConfig, type Bindings } from './config'
 import { insertDonation } from './db'
-import { broadcast, type DonateEvent } from './events'
+import { broadcast, resolveTtsEnabled, type DonateEvent } from './events'
 import { verifySlip } from './slip2sure'
 import { generateGeminiTTS } from './tts'
 
 const inflightRefs = new Set<string>()
 
+function sanitizeInput(text: string, maxLen: number): string {
+  return String(text || '')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\uFEFF]/g, '')
+    .trim()
+    .slice(0, maxLen)
+}
+
 export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/', async (c) => {
     const cfg = getConfig(c.env)
     const form = await c.req.formData()
-    const donorInput = String(form.get('donor') || '').trim().slice(0, 50)
-    const message = String(form.get('message') || '').trim().slice(0, 200)
+    const donorInput = sanitizeInput(String(form.get('donor') || ''), 50)
+    const message = sanitizeInput(String(form.get('message') || ''), 200)
 
     // ponytail: native fetch to cloudflare turnstile siteverify, saves slip2sure api quota
     const turnstileSecret = c.env?.TURNSTILE_SECRET_KEY || cfg.turnstileSecret
@@ -52,7 +59,10 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     try {
       const type = form.get('type') === 'truemoney' ? 'truemoney' : 'bank-image'
       const donor = (donorInput || verified.senderName).slice(0, 50)
-      const tts = await generateGeminiTTS(`${donor} โดเนท ${verified.amount} บาท ${message}`, cfg.geminiKey)
+      const ttsEnabled = await resolveTtsEnabled(c.env)
+      const tts = ttsEnabled
+        ? await generateGeminiTTS(`${donor} โดเนท ${verified.amount} บาท ${message}`, cfg.geminiKey)
+        : { sampleRate: 0 }
 
       const ev: DonateEvent = {
         id: crypto.randomUUID(),
@@ -62,7 +72,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
         type,
         transRef: verified.transRef,
         audioBase64: tts.audioBase64,
-        sampleRate: tts.sampleRate,
+        sampleRate: tts.sampleRate || 24000,
+        ttsEnabled,
         createdAt: Date.now()
       }
 
@@ -78,11 +89,14 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/test', dashboardAuth, async (c) => {
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any
-    const donor = String(body.donor || 'TEST DONOR').trim().slice(0, 50)
+    const donor = sanitizeInput(String(body.donor || 'TEST DONOR'), 50) || 'TEST DONOR'
     const rawAmt = Number(body.amount)
     const amount = Math.min(1_000_000, Math.max(10, Number.isFinite(rawAmt) ? rawAmt : 99))
-    const message = String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!').trim().slice(0, 200)
-    const tts = await generateGeminiTTS(`${donor} โดเนท ${amount} บาท ${message}`, cfg.geminiKey)
+    const message = sanitizeInput(String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!'), 200)
+    const ttsEnabled = typeof body.ttsEnabled === 'boolean' ? body.ttsEnabled : await resolveTtsEnabled(c.env)
+    const tts = ttsEnabled
+      ? await generateGeminiTTS(`${donor} โดเนท ${amount} บาท ${message}`, cfg.geminiKey)
+      : { sampleRate: 0 }
 
     const ev: DonateEvent = {
       id: crypto.randomUUID(),
@@ -92,7 +106,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       type: 'test',
       transRef: `TEST-${Date.now()}`,
       audioBase64: tts.audioBase64,
-      sampleRate: tts.sampleRate,
+      sampleRate: tts.sampleRate || 24000,
+      ttsEnabled,
       createdAt: Date.now()
     }
     await insertDonation(c.env?.DB, ev)

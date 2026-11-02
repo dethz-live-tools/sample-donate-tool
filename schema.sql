@@ -14,5 +14,8 @@ CREATE TABLE IF NOT EXISTS admins (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   username TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  tts_enabled INTEGER,
+  token_version INTEGER DEFAULT 1,
+  api_enabled INTEGER DEFAULT 1
 );

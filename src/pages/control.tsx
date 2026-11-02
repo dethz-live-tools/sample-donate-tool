@@ -3,6 +3,7 @@ import type { OverlayStatus } from '../modules/events'
 export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
   const overlayOnline = Boolean(overlayStatus?.online)
   const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
+  const ttsEnabled = overlayStatus?.ttsEnabled ?? true
 
   return (
     <div class="container wide">
@@ -59,6 +60,16 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
               {overlayOnline ? '0s' : '-'}
             </div>
           </div>
+          <div class="card" style="margin-bottom:0;">
+            <label>TTS VOICE</label>
+            <div
+              style="font-family:var(--font-head); font-size:32px;"
+              id="ttsStatusText"
+              class={ttsEnabled ? 'status-online' : 'status-offline'}
+            >
+              {ttsEnabled ? 'ON' : 'OFF'}
+            </div>
+          </div>
         </div>
 
         <div class="inverted-block">
@@ -108,6 +119,13 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           >
             PING HEARTBEAT
           </button>
+          <button
+            type="button"
+            id="cmdTtsBtn"
+            style="font-size:14px; padding:14px 20px;"
+          >
+            TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
+          </button>
         </div>
 
         <div class="card" style="margin-bottom:24px;">
@@ -153,6 +171,8 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           const statusText = document.getElementById('controlStatusText');
           const countText = document.getElementById('controlCountText');
           const ageText = document.getElementById('heartbeatAgeText');
+          const ttsStatusText = document.getElementById('ttsStatusText');
+          const cmdTtsBtn = document.getElementById('cmdTtsBtn');
           const navBadge = document.getElementById('overlayNavBadge');
           const navText = document.getElementById('overlayNavText');
           const actionStatus = document.getElementById('actionStatus');
@@ -212,6 +232,16 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
             if (countText) {
               countText.textContent = String(count);
             }
+            if (typeof data === 'object' && typeof data?.ttsEnabled === 'boolean') {
+              const ttsOn = data.ttsEnabled;
+              if (ttsStatusText) {
+                ttsStatusText.textContent = ttsOn ? 'ON' : 'OFF';
+                ttsStatusText.className = ttsOn ? 'status-online' : 'status-offline';
+              }
+              if (cmdTtsBtn) {
+                cmdTtsBtn.textContent = 'TTS VOICE: ' + (ttsOn ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)');
+              }
+            }
             if (navBadge && navText) {
               if (online) {
                 navBadge.classList.add('is-online');
@@ -256,6 +286,7 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
           document.getElementById('cmdClearBtn')?.addEventListener('click', () => sendCommand('clear'));
           document.getElementById('cmdDisconnectBtn')?.addEventListener('click', () => sendCommand('disconnect'));
+          document.getElementById('cmdTtsBtn')?.addEventListener('click', () => sendCommand('tts'));
           document.getElementById('cmdPingBtn')?.addEventListener('click', async () => {
             showStatus('SENDING MANUAL HEARTBEAT...');
             try {

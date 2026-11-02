@@ -1,5 +1,7 @@
 # Donate Tools Documentation
 
+For a fast step-by-step installation and local setup guide, see [**Quick Start Guide**](./QUICKSTART.md).
+
 ## 1. Environment Variables
 
 Copy `.env.example` to `.env` for local development:
@@ -8,6 +10,7 @@ Copy `.env.example` to `.env` for local development:
 | :--- | :---: | :--- |
 | `SLIP2SURE_API_KEY` / `VITE_SLIP2SURE_API_KEY` | Yes | Application API Key from [Slip2Sure Dashboard](https://app.slip2sure.com) ("แอพของฉัน" -> Key icon). Ensure your server/Worker IP is whitelisted if IP restriction is enabled. |
 | `GEMINI_API_KEY` / `VITE_GEMINI_API_KEY` | Optional | Google Gemini API Key for `gemini-2.5-flash-preview-tts` (fixed `Aoede` voice). Falls back to browser `speechSynthesis` (`th-TH`) if omitted. |
+| `TTS_ENABLED` / `VITE_TTS_ENABLED` | Optional | Default TTS voice toggle (`true` or `false`, default `true`). Can also be toggled live via `/overlay/control` or `PUT /api/manage/tts` (persisted in D1). |
 | `SESSION_SECRET` | Optional | Secret key used for HMAC-SHA256 signing of the `dash_token` admin session cookie. Falls back to `SLIP2SURE_API_KEY` if omitted. |
 | `BANK_NAME` / `VITE_BANK_NAME` | Optional | Bank name/code displayed on the donation page (e.g., `KBANK`, `SCB`). |
 | `BANK_ACCOUNT` / `VITE_BANK_ACCOUNT` | Optional | Receiving bank account number (displayed on UI and verified against slip receiver). |
@@ -45,21 +48,23 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 - `GET /setup`: Initial administrator account creation (redirects to `/login` once an admin exists in D1).
 - `GET /login`: Administrator login page (rate-limited to 3 attempts per minute per IP).
 - `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, and transaction log (Admin only).
-- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, remote command bus (`reload`, `clear`, `disconnect`), heartbeat ping, and real-time event terminal (Admin only).
+- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS voice on/off toggle, remote command bus (`reload`, `clear`, `disconnect`, `tts`), heartbeat ping, and real-time event terminal (Admin only).
 - `GET /overlay`: Transparent OBS Browser Source alert overlay.
 
 ### API Endpoints
-- `POST /api/donate`: Verify Turnstile & slip image, synthesize Gemini TTS, store in D1, and broadcast donation event.
+- `POST /api/donate`: Verify Turnstile & slip image, synthesize Gemini TTS (when enabled), store in D1, and broadcast donation event.
 - `POST /api/donate/test`: Trigger a simulated donation alert with TTS (Admin only).
 - `GET /api/events`: Unified SSE stream (`heartbeat`, `overlay_status`, `donate`, `control`, `ping`).
 - `GET /api/events/overlay`: Dedicated SSE stream for OBS `/overlay` that tracks active overlay connections.
-- `GET /api/events/status`: Current overlay connection status (`online`, `count`, `timestamp`).
+- `GET /api/events/status`: Current overlay connection status (`online`, `count`, `ttsEnabled`, `timestamp`).
 - `GET /api/events/poll`: Fallback polling for recent donations and overlay status (`?since=<ms>&client=overlay`).
 - `GET /api/events/heartbeat` & `POST /api/events/heartbeat`: Touch/renew overlay heartbeat and broadcast status (Admin only).
-- `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`) to connected overlays (Admin only).
+- `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`, `tts`) to connected overlays (Admin only).
 - `POST /setup`, `POST /login`, `POST /logout`: Admin authentication form handlers.
 - `POST /api/manage/setup`, `POST /api/manage/login`, `POST /api/manage/logout`: Headless JSON authentication (issues `Bearer` token and `dash_token` cookie).
+- `GET /api/manage/auth/status`, `POST /api/manage/auth/refresh`, `POST /api/manage/auth/revoke`, `PUT /api/manage/auth/config`: Inspect auth state, refresh tokens, revoke all active tokens (`token_version`), toggle Bearer API access (`apiEnabled`), and clear login rate-limit lockouts.
 - `GET /api/manage/me`, `PUT /api/manage/credentials`: Inspect admin profile/stats and rotate admin username/password.
+- `GET /api/manage/tts`, `PUT /api/manage/tts`: Query or toggle TTS voice alerts (`enabled: boolean`), persisted in D1.
 - `GET /api/manage/donations`, `DELETE /api/manage/donations/:id`: Query and delete recorded D1 donations.
 - `GET /api/manage/overlay`, `POST /api/manage/overlay/control`: Query and control OBS overlays via JSON API.
 
@@ -98,4 +103,27 @@ All upstream requests use header `x-api-key: <SLIP2SURE_API_KEY>`.
 2. Set **URL** to `http://localhost:5173/overlay` (or your deployed Worker URL `/overlay`).
 3. Set **Width** to `800` and **Height** to `400`.
 4. Check **Control audio via OBS** if you want to route TTS audio through the OBS audio mixer.
-5. Open `/overlay/control` in your browser to verify that **CONNECTION** shows `ONLINE` and use the **TEST DONATION ALERT** or **REMOTE COMMAND BUS** (`CLEAR QUEUE`, `FORCE RELOAD`, `RESET SOCKETS`) to manage the overlay live during streams.
+5. Open `/overlay/control` in your browser to verify that **CONNECTION** shows `ONLINE` and use the **TEST DONATION ALERT** or **REMOTE COMMAND BUS** (`CLEAR QUEUE`, `FORCE RELOAD`, `RESET SOCKETS`, `TTS VOICE`) to manage the overlay live during streams.
+
+---
+
+## 5. Security Architecture & Threat Model
+
+See [API Reference](./API.md) for full endpoint specifications.
+
+- **Authentication & Password Hashing**:
+  - Passwords hashed using Web Crypto PBKDF2 (`100,000` iterations, `SHA-256`, 16-byte cryptographically secure random salt).
+  - Strict password bound (`8` to `128` chars) prevents computational DoS / CPU exhaustion on crypto hashing.
+  - Tokens signed with HMAC-SHA256 bound to password hash and `token_version` (`${username}:${exp}:v${tokenVersion}`).
+  - Instant revocation: calling `POST /api/manage/auth/revoke` increments `token_version` in D1, invalidating all issued tokens across all devices simultaneously.
+  - Brute-force protection: rate-limited to 3 failed attempts per 60 seconds per IP (`cf-connecting-ip`) on both web form `/login` and JSON `/api/manage/login`.
+- **CSRF & Header Protection**:
+  - All state-changing web requests protected by Hono's `csrf()` (verifies `Origin`). Headless API requests with `Authorization: Bearer <token>` bypass browser CSRF.
+  - `secureHeaders()` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and strict transport security.
+- **Input Sanitization & Injection Defense**:
+  - Text inputs (`donor`, `message`) sanitized by stripping C0/C1 control codes and Unicode directionality/bidi overrides (`\u202A`–`\u202E`, zero-width spaces).
+  - Slip upload filenames sanitized to alphanumeric and safe characters (`[a-zA-Z0-9._-]`, max 50 chars) before upstream proxying.
+  - Gemini TTS prompt separated into `systemInstruction` parts to protect against donor message prompt injection.
+  - Event bus commands validated against a strict action allowlist (`reload`, `clear`, `disconnect`, `tts`, `heartbeat`).
+- **Duplicate Slip Prevention**:
+  - Triple-layer guard: Slip2Sure upstream `is_exist` flag + in-memory `inflightRefs` lock Set + D1 `trans_ref` unique constraint (`INSERT OR IGNORE`).

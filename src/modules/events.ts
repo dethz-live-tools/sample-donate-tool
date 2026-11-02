@@ -1,8 +1,8 @@
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { dashboardAuth, isValidSession } from './auth'
-import type { Bindings } from './config'
-import { listDonations } from './db'
+import { getConfig, type Bindings } from './config'
+import { getTtsSetting, listDonations, setTtsSetting } from './db'
 
 export type DonateEvent = {
   id: string
@@ -13,17 +13,20 @@ export type DonateEvent = {
   transRef?: string
   audioBase64?: string
   sampleRate: number
+  ttsEnabled?: boolean
   createdAt: number
 }
 
 export type OverlayStatus = {
   online: boolean
   count: number
+  ttsEnabled: boolean
   timestamp: number
 }
 
 export type OverlayCommand = {
-  action: 'reload' | 'clear' | 'disconnect' | string
+  action: 'reload' | 'clear' | 'disconnect' | 'tts' | string
+  enabled?: boolean
   [key: string]: any
 }
 
@@ -32,7 +35,24 @@ const statusListeners = new Set<(status: OverlayStatus) => void>()
 const controlListeners = new Set<(cmd: OverlayCommand) => void>()
 const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
+let runtimeTtsEnabled: boolean | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+
+export async function resolveTtsEnabled(env?: Bindings): Promise<boolean> {
+  const cfg = getConfig(env)
+  const val = await getTtsSetting(env?.DB, runtimeTtsEnabled ?? cfg.ttsEnabled)
+  runtimeTtsEnabled = val
+  return val
+}
+
+export async function updateTtsEnabled(env: Bindings | undefined, enabled: boolean): Promise<boolean> {
+  runtimeTtsEnabled = enabled
+  await setTtsSetting(env?.DB, enabled)
+  broadcastOverlayStatus()
+  broadcastControl({ action: 'tts', enabled, timestamp: Date.now() })
+  return enabled
+}
 
 export function isOverlayOnline(): boolean {
   if (overlayConnections.size > 0) return true
@@ -43,6 +63,7 @@ export function getOverlayStatus(): OverlayStatus {
   return {
     online: isOverlayOnline(),
     count: overlayConnections.size,
+    ttsEnabled: runtimeTtsEnabled ?? true,
     timestamp: Date.now()
   }
 }
@@ -86,6 +107,7 @@ function sanitizeEvent(ev: DonateEvent, isAdmin: boolean): DonateEvent {
 }
 
 async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: string) {
+  await resolveTtsEnabled(c.env)
   const isAdmin = await isValidSession(c)
   const client = forcedClient || c.req.query('client') || (c.req.path.endsWith('/overlay') ? 'overlay' : 'default')
   const isOverlay = client === 'overlay'
@@ -194,6 +216,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
 
 export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/poll', async (c) => {
+    await resolveTtsEnabled(c.env)
     const isAdmin = await isValidSession(c)
     if (c.req.query('client') === 'overlay') {
       touchOverlayHeartbeat()
@@ -209,7 +232,8 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
       overlayStatus: getOverlayStatus()
     })
   })
-  .get('/status', (c) => {
+  .get('/status', async (c) => {
+    await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
   })
   .get('/heartbeat', dashboardAuth, (c) => {
@@ -227,6 +251,16 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     const action = String(body.action || '').trim()
     if (!action) {
       return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
+    }
+    if (!ALLOWED_CONTROL_ACTIONS.has(action)) {
+      return c.json({ ok: false, error: 'INVALID_ACTION' }, 400)
+    }
+
+    if (action === 'tts') {
+      const current = await resolveTtsEnabled(c.env)
+      const next = typeof body.enabled === 'boolean' ? body.enabled : !current
+      await updateTtsEnabled(c.env, next)
+      return c.json({ ok: true, command: { action: 'tts', enabled: next, timestamp: Date.now() }, status: getOverlayStatus() })
     }
 
     const payload = { ...body, action, timestamp: Date.now() }

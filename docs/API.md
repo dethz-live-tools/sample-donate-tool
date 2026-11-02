@@ -77,12 +77,14 @@ Trigger a simulated donation alert with Gemini TTS audio synthesis, store it in 
 | `donor` | `string` | No | `"TEST DONOR"` | Simulated donor name (max 50 chars). |
 | `amount` | `number` | No | `99` | Simulated amount in THB (clamped between `10` and `1,000,000`). |
 | `message` | `string` | No | `"ทดสอบระบบแจ้งเตือนโดเนท!"` | Simulated message read aloud by TTS (max 200 chars). |
+| `ttsEnabled` | `boolean` | No | current setting | Override whether TTS is synthesized/spoken for this test alert. |
 
 ```json
 {
   "donor": "TEST DONOR",
   "amount": 99,
-  "message": "ทดสอบระบบแจ้งเตือนโดเนท!"
+  "message": "ทดสอบระบบแจ้งเตือนโดเนท!",
+  "ttsEnabled": true
 }
 ```
 
@@ -99,6 +101,7 @@ Trigger a simulated donation alert with Gemini TTS audio synthesis, store it in 
     "transRef": "TEST-1793335000000",
     "audioBase64": "UklGRi...",
     "sampleRate": 24000,
+    "ttsEnabled": true,
     "createdAt": 1793335000000
   }
 }
@@ -242,6 +245,7 @@ Dispatch a remote command to all connected OBS overlay clients over the SSE `con
 | `reload` | Instructs connected `/overlay` browsers to execute `window.location.reload()`. |
 | `clear` | Empties the overlay's client-side alert queue, stops active TTS playback, and hides the alert card. |
 | `disconnect` | Clears `overlayConnections` and resets `lastOverlayHeartbeat` on the server, then broadcasts `disconnect` so overlays close and reconnect after 2 seconds. |
+| `tts` | Toggles TTS voice on/off (or sets `enabled: boolean` if provided), persists to D1, and immediately mutes/enables overlay audio. |
 
 #### Success Response (`200 OK`)
 ```json
@@ -263,7 +267,7 @@ Dispatch a remote command to all connected OBS overlay clients over the SSE `con
 ```json
 {
   "ok": false,
-  "error": "ACTION_REQUIRED"
+  "error": "ACTION_REQUIRED" | "INVALID_ACTION"
 }
 ```
 
@@ -372,8 +376,29 @@ Clear the `dash_token` cookie.
 
 ---
 
-### `GET /api/manage/me`
-Return current admin username, donation totals (excluding test alerts), and live overlay status.
+### `GET /api/manage/auth/status`
+Inspect current authentication state, active auth method (`bearer` or `cookie`), token version, expiration timestamp, Bearer API enablement, and IP rate-limit status.
+
+- **Authentication**: Public (returns extended session details when authenticated)
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "setupRequired": false,
+    "authenticated": true,
+    "authMethod": "bearer",
+    "username": "admin",
+    "apiEnabled": true,
+    "tokenVersion": 1,
+    "expiresAt": 1793940000000,
+    "rateLimited": false
+  }
+  ```
+
+---
+
+### `POST /api/manage/auth/refresh`
+Issue a new 7-day signed token for the currently authenticated admin without revoking existing sessions.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
 - **Success Response (`200 OK`)**:
@@ -381,6 +406,75 @@ Return current admin username, donation totals (excluding test alerts), and live
   {
     "ok": true,
     "username": "admin",
+    "token": "1793940000000.<hmac_sha256_hex>",
+    "tokenVersion": 1,
+    "expiresAt": 1793940000000
+  }
+  ```
+
+---
+
+### `POST /api/manage/auth/revoke`
+Increment `token_version` in D1 to immediately revoke all previously issued Bearer tokens and `dash_token` cookies across all devices.
+
+- **Content-Type**: `application/json`
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Request Body (optional)**:
+  ```json
+  {
+    "keepCurrent": true
+  }
+  ```
+  - When `keepCurrent: true`, returns a newly signed token for the new `tokenVersion` and updates the session cookie.
+  - When `keepCurrent: false` (default), clears the session cookie and invalidates all tokens immediately.
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "revoked": true,
+    "tokenVersion": 2,
+    "token": "1793940000000.<hmac_sha256_hex>",
+    "expiresAt": 1793940000000
+  }
+  ```
+
+---
+
+### `PUT /api/manage/auth/config`
+Control external Management API access (`apiEnabled`) and reset IP login rate-limit lockouts (`unlockRateLimit`).
+When `apiEnabled` is set to `false`, `POST /api/manage/login` and all `Authorization: Bearer <token>` requests are rejected with `403 Forbidden` (`{"ok": false, "error": "MANAGE_API_DISABLED"}`), while browser dashboard cookie sessions remain usable so the admin can re-enable it.
+
+- **Content-Type**: `application/json`
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Request Body**:
+  ```json
+  {
+    "apiEnabled": true,
+    "unlockRateLimit": true
+  }
+  ```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "apiEnabled": true,
+    "tokenVersion": 2,
+    "rateLimitCleared": true
+  }
+  ```
+
+---
+
+### `GET /api/manage/me`
+Return current admin username, TTS setting, donation totals (excluding test alerts), and live overlay status.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "username": "admin",
+    "ttsEnabled": true,
     "stats": {
       "count": 42,
       "totalAmount": 5400
@@ -388,6 +482,7 @@ Return current admin username, donation totals (excluding test alerts), and live
     "overlayStatus": {
       "online": true,
       "count": 1,
+      "ttsEnabled": true,
       "timestamp": 1793335000000
     }
   }
@@ -471,7 +566,7 @@ Delete a donation record by ID from D1.
 ---
 
 ### `GET /api/manage/overlay`
-Inspect live overlay connection status.
+Inspect live overlay connection status and TTS state.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
 - **Success Response (`200 OK`)**:
@@ -480,7 +575,35 @@ Inspect live overlay connection status.
     "ok": true,
     "online": true,
     "count": 1,
+    "ttsEnabled": true,
     "timestamp": 1793335000000
+  }
+  ```
+
+---
+
+### `GET /api/manage/tts` & `PUT /api/manage/tts`
+Query or update the TTS voice setting (`true` = enabled, `false` = muted). Persisted in D1 (`admins.tts_enabled`, with `TTS_ENABLED` env var as default) and broadcast in real time to all connected overlays.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Request Body (`PUT /api/manage/tts`, optional)**:
+  ```json
+  {
+    "enabled": false
+  }
+  ```
+  *(Omit `enabled` to toggle the current state.)*
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "ttsEnabled": false,
+    "overlayStatus": {
+      "online": true,
+      "count": 1,
+      "ttsEnabled": false,
+      "timestamp": 1793335000000
+    }
   }
   ```
 

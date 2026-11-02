@@ -8,6 +8,8 @@ export type D1Binding = {
 export type AdminRecord = {
   username: string
   passwordHash: string
+  tokenVersion: number
+  apiEnabled: boolean
 }
 
 // ponytail: auto-init tables via D1 prepare.run instead of migration framework
@@ -29,18 +31,73 @@ async function ensureSchema(db: D1Binding) {
     .catch(() => {})
   await db
     .prepare(
-      'CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL)'
+      'CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, tts_enabled INTEGER, token_version INTEGER DEFAULT 1, api_enabled INTEGER DEFAULT 1)'
     )
     .run()
+  await db
+    .prepare('ALTER TABLE admins ADD COLUMN tts_enabled INTEGER')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE admins ADD COLUMN token_version INTEGER DEFAULT 1')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE admins ADD COLUMN api_enabled INTEGER DEFAULT 1')
+    .run()
+    .catch(() => {})
   initialized = true
+}
+
+export async function getTtsSetting(db: D1Binding | undefined, fallback = true): Promise<boolean> {
+  if (!db) return fallback
+  await ensureSchema(db)
+  const row = (await db.prepare('SELECT tts_enabled FROM admins WHERE id = 1').first()) as any
+  if (!row || row.tts_enabled === null || row.tts_enabled === undefined) return fallback
+  return Number(row.tts_enabled) !== 0
+}
+
+export async function setTtsSetting(db: D1Binding | undefined, enabled: boolean): Promise<boolean> {
+  if (!db) return enabled
+  await ensureSchema(db)
+  await db
+    .prepare('UPDATE admins SET tts_enabled = ? WHERE id = 1')
+    .bind(enabled ? 1 : 0)
+    .run()
+  return enabled
 }
 
 export async function getAdmin(db: D1Binding | undefined): Promise<AdminRecord | null> {
   if (!db) return null
   await ensureSchema(db)
-  const row = (await db.prepare('SELECT username, password_hash FROM admins WHERE id = 1').first()) as any
+  const row = (await db
+    .prepare('SELECT username, password_hash, token_version, api_enabled FROM admins WHERE id = 1')
+    .first()) as any
   if (!row) return null
-  return { username: String(row.username), passwordHash: String(row.password_hash) }
+  return {
+    username: String(row.username),
+    passwordHash: String(row.password_hash),
+    tokenVersion: Number(row.token_version || 1),
+    apiEnabled: row.api_enabled === null || row.api_enabled === undefined ? true : Number(row.api_enabled) !== 0
+  }
+}
+
+export async function bumpTokenVersion(db: D1Binding | undefined): Promise<number> {
+  if (!db) return 1
+  await ensureSchema(db)
+  await db.prepare('UPDATE admins SET token_version = COALESCE(token_version, 1) + 1 WHERE id = 1').run()
+  const admin = await getAdmin(db)
+  return admin?.tokenVersion || 1
+}
+
+export async function setApiEnabled(db: D1Binding | undefined, enabled: boolean): Promise<boolean> {
+  if (!db) return enabled
+  await ensureSchema(db)
+  await db
+    .prepare('UPDATE admins SET api_enabled = ? WHERE id = 1')
+    .bind(enabled ? 1 : 0)
+    .run()
+  return enabled
 }
 
 export async function createAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
@@ -114,7 +171,7 @@ export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent)
         ev.transRef,
         ev.createdAt,
         ev.audioBase64 || null,
-        ev.sampleRate || 24000
+        ev.ttsEnabled === false ? 0 : ev.sampleRate || 24000
       )
       .run()
     return (res?.meta?.changes ?? 1) > 0
@@ -135,15 +192,19 @@ export async function listDonations(
     ? 'SELECT id, donor, amount, message, type, trans_ref as transRef, created_at as createdAt, audio_base64 as audioBase64, sample_rate as sampleRate FROM donations WHERE created_at > ? ORDER BY created_at DESC LIMIT ?'
     : "SELECT id, donor, amount, message, type, trans_ref as transRef, created_at as createdAt, audio_base64 as audioBase64, sample_rate as sampleRate FROM donations WHERE created_at > ? AND type != 'test' ORDER BY created_at DESC LIMIT ?"
   const { results } = await db.prepare(sql).bind(since, limit).all()
-  return (results || []).map((r: any) => ({
-    id: r.id,
-    donor: r.donor,
-    amount: Number(r.amount),
-    message: r.message,
-    type: r.type,
-    transRef: r.transRef,
-    audioBase64: r.audioBase64 || undefined,
-    sampleRate: Number(r.sampleRate || 24000),
-    createdAt: Number(r.createdAt)
-  }))
+  return (results || []).map((r: any) => {
+    const sr = r.sampleRate === null || r.sampleRate === undefined ? 24000 : Number(r.sampleRate)
+    return {
+      id: r.id,
+      donor: r.donor,
+      amount: Number(r.amount),
+      message: r.message,
+      type: r.type,
+      transRef: r.transRef,
+      audioBase64: r.audioBase64 || undefined,
+      sampleRate: sr || 24000,
+      ttsEnabled: sr > 0,
+      createdAt: Number(r.createdAt)
+    }
+  })
 }

@@ -17,10 +17,10 @@ export function LoginPage({ error }: { error?: boolean }) {
 
         <form method="post" action="/login">
           <label>USERNAME</label>
-          <input type="text" name="username" required autofocus />
+          <input type="text" name="username" maxlength={50} required autofocus />
 
           <label>PASSWORD</label>
-          <input type="password" name="password" required />
+          <input type="password" name="password" maxlength={128} required />
 
           <button type="submit">SIGN IN</button>
         </form>

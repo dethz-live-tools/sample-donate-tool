@@ -5,7 +5,7 @@ import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute, getOverlayStatus, isOverlayOnline } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveTtsEnabled } from './modules/events'
 import { OverlayControlPage } from './pages/control'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
@@ -40,13 +40,17 @@ app.get('/login', async (c) => {
   return c.render(<LoginPage error={c.req.query('error') === '1'} />)
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
-  const items = await listDonations(c.env?.DB)
+  const [items] = await Promise.all([listDonations(c.env?.DB), resolveTtsEnabled(c.env)])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
 })
-app.get('/overlay/control', dashboardAuth, (c) => {
+app.get('/overlay/control', dashboardAuth, async (c) => {
+  await resolveTtsEnabled(c.env)
   return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} />)
 })
 app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
-app.get('/overlay', (c) => c.render(<OverlayPage />))
+app.get('/overlay', async (c) => {
+  const ttsEnabled = await resolveTtsEnabled(c.env)
+  return c.render(<OverlayPage ttsEnabled={ttsEnabled} />)
+})
 
 export default app
