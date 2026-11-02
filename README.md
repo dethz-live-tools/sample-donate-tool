@@ -20,8 +20,9 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
   - Transparent OBS Browser Source (`/overlay`) with sequential alert + TTS playback queue
   - Dedicated SSE stream (`/api/events/overlay`), heartbeat tracking, and automatic polling fallback (`/api/events/poll`)
   - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`), and view live event logs
-- **Admin Dashboard & Cloudflare D1 Persistence**:
-  - First-run admin setup (`/setup`) and rate-limited login (`/login`) using Web Crypto `PBKDF2` + `HMAC-SHA256` signed cookies (`dash_token`)
+- **Admin Dashboard, Management API & Cloudflare D1 Persistence**:
+  - First-run admin setup (`/setup`) and rate-limited login (`/login`, 3 tries/min) using Web Crypto `PBKDF2` + `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`)
+  - Headless Management JSON API (`/api/manage/*`) for login, credential rotation, donation ledger management, and overlay control
   - Donation history table and simulated test alerts (`/dashboard`)
 
 ## Quick Start

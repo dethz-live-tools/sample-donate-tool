@@ -43,7 +43,7 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 ### Web Pages
 - `GET /`: Public donation form with PromptPay QR, bank/TrueMoney slip upload, Turnstile widget, and live overlay status indicator.
 - `GET /setup`: Initial administrator account creation (redirects to `/login` once an admin exists in D1).
-- `GET /login`: Administrator login page (rate-limited to 5 attempts per minute per IP).
+- `GET /login`: Administrator login page (rate-limited to 3 attempts per minute per IP).
 - `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, and transaction log (Admin only).
 - `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, remote command bus (`reload`, `clear`, `disconnect`), heartbeat ping, and real-time event terminal (Admin only).
 - `GET /overlay`: Transparent OBS Browser Source alert overlay.
@@ -55,9 +55,13 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 - `GET /api/events/overlay`: Dedicated SSE stream for OBS `/overlay` that tracks active overlay connections.
 - `GET /api/events/status`: Current overlay connection status (`online`, `count`, `timestamp`).
 - `GET /api/events/poll`: Fallback polling for recent donations and overlay status (`?since=<ms>&client=overlay`).
-- `GET /api/events/heartbeat` & `POST /api/events/heartbeat`: Touch/renew overlay heartbeat and broadcast status.
+- `GET /api/events/heartbeat` & `POST /api/events/heartbeat`: Touch/renew overlay heartbeat and broadcast status (Admin only).
 - `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`) to connected overlays (Admin only).
 - `POST /setup`, `POST /login`, `POST /logout`: Admin authentication form handlers.
+- `POST /api/manage/setup`, `POST /api/manage/login`, `POST /api/manage/logout`: Headless JSON authentication (issues `Bearer` token and `dash_token` cookie).
+- `GET /api/manage/me`, `PUT /api/manage/credentials`: Inspect admin profile/stats and rotate admin username/password.
+- `GET /api/manage/donations`, `DELETE /api/manage/donations/:id`: Query and delete recorded D1 donations.
+- `GET /api/manage/overlay`, `POST /api/manage/overlay/control`: Query and control OBS overlays via JSON API.
 
 ---
 

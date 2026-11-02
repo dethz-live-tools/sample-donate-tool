@@ -1,9 +1,9 @@
 # API Documentation
 
-Base URL: `http://localhost:5173` (local development) or your Cloudflare Worker domain.
+Base URL: `http://localhost:5173` (local development) or `https://donate-tools.detzz.workers.dev` (production).
 
 > [!NOTE]
-> All `POST` routes are protected by Hono's `csrf()` middleware (`Origin` header validation) and `secureHeaders()`. Admin-protected endpoints require a valid `dash_token` HTTP-only session cookie obtained via `/setup` or `/login`.
+> Browser form/cookie `POST` routes are protected by Hono's `csrf()` middleware (`Origin` header validation) and `secureHeaders()`. Admin-protected endpoints accept either a valid `dash_token` HTTP-only session cookie (obtained via `/setup` or `/login`) or an `Authorization: Bearer <token>` header (obtained via `/api/manage/setup` or `/api/manage/login`). Unauthenticated API calls return `401 Unauthorized` JSON (`{"ok": false, "error": "UNAUTHORIZED" | "SETUP_REQUIRED"}`).
 
 ---
 
@@ -60,6 +60,7 @@ Process a donation by verifying Cloudflare Turnstile (if configured), validating
 | `WRONG_RECEIVER` | `400` | Slip recipient account/PromptPay/TrueMoney number does not match configured receiver. |
 | `INVALID_SLIP` | `400` | Missing transaction reference in slip verification payload. |
 | `DUPLICATE_SLIP` | `400` | Slip was already used (`is_exist`, stored in D1 `donations`, or currently in-flight). |
+| `UPSTREAM_ERROR` | `502` | Unable to reach Slip2Sure verification API. |
 | `<SLIP2SURE_CODE>` | `4xx/5xx` | Upstream Slip2Sure error code (e.g., `SLIP_NOT_EXIST`, `SLIP_BBL_PENDING`, `UNAUTHORIZED`). |
 
 ---
@@ -68,7 +69,7 @@ Process a donation by verifying Cloudflare Turnstile (if configured), validating
 Trigger a simulated donation alert with Gemini TTS audio synthesis, store it in D1 (`type: "test"`), and broadcast it to all connected overlays and dashboards.
 
 - **Content-Type**: `application/json`
-- **Authentication**: Admin session cookie required (`dash_token`)
+- **Authentication**: Admin session cookie (`dash_token`) or `Authorization: Bearer <token>` required
 
 #### Request Body
 | Field | Type | Required | Default | Description |
@@ -133,7 +134,7 @@ Unified SSE stream for the donor home page, streamer dashboard, overlay controll
    id: e6a4b3f1-285b-481d-862d-6060c283d6a9
    data: {"id":"e6a4b3f1-285b-481d-862d-6060c283d6a9","donor":"SOMCHAI","amount":100,"message":"Keep up the great work!","type":"bank-image","audioBase64":"...","sampleRate":24000,"createdAt":1793335000000}
    ```
-4. `control`: Broadcast when an admin dispatches a command via `POST /api/events/control`.
+4. `control`: Broadcast to overlay (`client=overlay`) and authenticated admin streams when an admin dispatches a command via `POST /api/events/control` or `POST /api/manage/overlay/control`.
    ```
    event: control
    data: {"action":"reload","timestamp":1793335000000}
@@ -210,7 +211,7 @@ Fallback JSON polling endpoint for recent donations (within the last 60 seconds)
 ### `GET /api/events/heartbeat` & `POST /api/events/heartbeat`
 Manually touch the overlay heartbeat timestamp (marks overlay online for 15 seconds even without an open SSE stream) and broadcast `overlay_status`.
 
-- **Authentication**: None
+- **Authentication**: Admin session cookie (`dash_token`) or `Authorization: Bearer <token>` required
 - **Success Response (`200 OK`)**:
 ```json
 {
@@ -227,7 +228,7 @@ Manually touch the overlay heartbeat timestamp (marks overlay online for 15 seco
 Dispatch a remote command to all connected OBS overlay clients over the SSE `control` event channel.
 
 - **Content-Type**: `application/json`
-- **Authentication**: Admin session cookie required (`dash_token`)
+- **Authentication**: Admin session cookie (`dash_token`) or `Authorization: Bearer <token>` required
 
 #### Request Body
 ```json
@@ -307,61 +308,207 @@ Clear the `dash_token` session cookie.
 
 ## 4. Management JSON API (`/api/manage`)
 
-Headless JSON API for programmatic administration. Supports both the `dash_token` session cookie and `Authorization: Bearer <token>` header.
+Headless JSON API for programmatic administration. Supports both the `dash_token` session cookie and `Authorization: Bearer <token>` header. Requests carrying `Authorization: Bearer <token>` (plus `/api/manage/login` and `/api/manage/setup`) bypass browser `Origin` CSRF checks so CLI tools and external services can call them directly.
 
 ### `POST /api/manage/setup`
 Initialize the admin account when none exists in D1.
 
-- **Body**: `{"username": "admin", "password": "yourpassword"}` (password min 8 chars)
-- **Response (`200 OK`)**: `{"ok": true, "username": "admin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
+- **Content-Type**: `application/json`
+- **Authentication**: Public (only succeeds when no admin exists)
+- **Request Body**:
+  ```json
+  {
+    "username": "admin",
+    "password": "yourpassword"
+  }
+  ```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "username": "admin",
+    "token": "1793940000000.<hmac_sha256_hex>",
+    "expiresAt": 1793940000000
+  }
+  ```
+- **Error Responses**:
+  - `400 Bad Request`: `{"ok": false, "error": "INVALID_CREDENTIALS_FORMAT"}` (username empty or password < 8 chars)
+  - `409 Conflict`: `{"ok": false, "error": "ADMIN_ALREADY_EXISTS" | "SETUP_FAILED"}`
+
+---
 
 ### `POST /api/manage/login`
-Authenticate with `username` and `password` to receive a signed bearer token (also sets `dash_token` cookie). Rate-limited to 3 failed attempts per 60s per IP.
+Authenticate with `username` and `password` to receive a signed bearer token (also sets the `dash_token` cookie). Rate-limited to 3 failed attempts per 60 seconds per client IP (`cf-connecting-ip`).
 
-- **Body**: `{"username": "admin", "password": "yourpassword"}`
-- **Response (`200 OK`)**: `{"ok": true, "username": "admin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
-- **Error (`401` / `429`)**: `{"ok": false, "error": "INVALID_CREDENTIALS" | "RATE_LIMITED"}`
+- **Content-Type**: `application/json`
+- **Authentication**: Public
+- **Request Body**:
+  ```json
+  {
+    "username": "admin",
+    "password": "yourpassword"
+  }
+  ```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "username": "admin",
+    "token": "1793940000000.<hmac_sha256_hex>",
+    "expiresAt": 1793940000000
+  }
+  ```
+- **Error Responses**:
+  - `400 Bad Request`: `{"ok": false, "error": "SETUP_REQUIRED"}`
+  - `401 Unauthorized`: `{"ok": false, "error": "INVALID_CREDENTIALS"}`
+  - `429 Too Many Requests`: `{"ok": false, "error": "RATE_LIMITED"}`
+
+---
 
 ### `POST /api/manage/logout`
 Clear the `dash_token` cookie.
 
 - **Response (`200 OK`)**: `{"ok": true}`
 
+---
+
 ### `GET /api/manage/me`
-Return current admin username, donation totals, and live overlay status.
+Return current admin username, donation totals (excluding test alerts), and live overlay status.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
-- **Response (`200 OK`)**:
-```json
-{
-  "ok": true,
-  "username": "admin",
-  "stats": { "count": 42, "totalAmount": 5400 },
-  "overlayStatus": { "online": true, "count": 1, "timestamp": 1793335000000 }
-}
-```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "username": "admin",
+    "stats": {
+      "count": 42,
+      "totalAmount": 5400
+    },
+    "overlayStatus": {
+      "online": true,
+      "count": 1,
+      "timestamp": 1793335000000
+    }
+  }
+  ```
+
+---
 
 ### `PUT /api/manage/credentials`
-Update admin `username` and/or `password` (rotates and returns a fresh token; invalidates previous tokens immediately).
+Update admin `username` and/or `password`. Because tokens are HMAC-signed with the admin's password hash, changing the password or username immediately invalidates all previously issued tokens and returns a fresh token.
 
+- **Content-Type**: `application/json`
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
-- **Body**: `{"currentPassword": "oldpassword", "username": "newadmin", "newPassword": "newpassword123"}`
-- **Response (`200 OK`)**: `{"ok": true, "username": "newadmin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
+- **Request Body**:
+  | Field | Type | Required | Description |
+  | :--- | :--- | :---: | :--- |
+  | `currentPassword` | `string` | Yes | Current admin password for verification. |
+  | `username` | `string` | No | New admin username (1–50 chars; defaults to current username). |
+  | `newPassword` | `string` | No | New admin password (min 8 chars if provided; keeps current password if omitted). |
+  ```json
+  {
+    "currentPassword": "oldpassword",
+    "username": "newadmin",
+    "newPassword": "newpassword123"
+  }
+  ```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "username": "newadmin",
+    "token": "1793940000000.<hmac_sha256_hex>",
+    "expiresAt": 1793940000000
+  }
+  ```
+- **Error Responses**:
+  - `400 Bad Request`: `{"ok": false, "error": "INVALID_CREDENTIALS_FORMAT" | "SETUP_REQUIRED"}`
+  - `401 Unauthorized`: `{"ok": false, "error": "INVALID_CURRENT_PASSWORD" | "UNAUTHORIZED"}`
+
+---
 
 ### `GET /api/manage/donations`
-List donations and aggregate stats.
+List recorded donations and aggregate revenue stats.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
-- **Query Params**: `limit` (1–500, default `100`), `since` (timestamp ms, default `0`), `includeTest` (`true` | `1`)
-- **Response (`200 OK`)**: `{"ok": true, "stats": {"count": 42, "totalAmount": 5400}, "items": [...]}`
+- **Query Parameters**:
+  - `limit` (`number`, optional): Max rows to return (`1`–`500`, default `100`).
+  - `since` (`number`, optional): Only return donations with `createdAt > since` (default `0`).
+  - `includeTest` (`string`, optional): Set `true` or `1` to include `type: "test"` alerts.
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "stats": {
+      "count": 42,
+      "totalAmount": 5400
+    },
+    "items": [
+      {
+        "id": "e6a4b3f1-285b-481d-862d-6060c283d6a9",
+        "donor": "SOMCHAI",
+        "amount": 100,
+        "message": "Keep going!",
+        "type": "bank-image",
+        "transRef": "2026103001234567890",
+        "sampleRate": 24000,
+        "createdAt": 1793335000000
+      }
+    ]
+  }
+  ```
+
+---
 
 ### `DELETE /api/manage/donations/:id`
 Delete a donation record by ID from D1.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
-- **Response (`200 OK`)**: `{"ok": true, "id": "..."}`
+- **Success Response (`200 OK`)**: `{"ok": true, "id": "e6a4b3f1-285b-481d-862d-6060c283d6a9"}`
+- **Error Response (`404 Not Found`)**: `{"ok": false, "error": "NOT_FOUND"}`
 
-### `GET /api/manage/overlay` & `POST /api/manage/overlay/control`
-Inspect overlay connection status or broadcast control commands (`reload`, `clear`, `disconnect`, `heartbeat`).
+---
+
+### `GET /api/manage/overlay`
+Inspect live overlay connection status.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "online": true,
+    "count": 1,
+    "timestamp": 1793335000000
+  }
+  ```
+
+---
+
+### `POST /api/manage/overlay/control`
+Broadcast a control command (`reload`, `clear`, `disconnect`, or `heartbeat`) to connected OBS overlays.
+
+- **Content-Type**: `application/json`
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Request Body**:
+  ```json
+  {
+    "action": "clear"
+  }
+  ```
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "command": {
+      "action": "clear",
+      "timestamp": 1793335000000
+    },
+    "status": {
+      "online": true,
+      "count": 1,
+      "timestamp": 1793335000000
+    }
+  }
+  ```
