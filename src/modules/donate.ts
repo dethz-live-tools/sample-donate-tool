@@ -30,8 +30,10 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
           response: token,
           remoteip: c.req.header('cf-connecting-ip') || ''
         })
-      })
-      const outcome = (await verifyRes.json()) as { success: boolean; 'error-codes'?: string[] }
+      }).catch(() => null)
+      const outcome = verifyRes
+        ? ((await verifyRes.json().catch(() => ({ success: false }))) as { success: boolean; 'error-codes'?: string[] })
+        : { success: false }
       if (!outcome.success) {
         return c.json({ ok: false, code: 'TURNSTILE_FAILED', error: 'การตรวจสอบ Turnstile ไม่ถูกต้อง' }, 400)
       }
@@ -77,7 +79,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any
     const donor = String(body.donor || 'TEST DONOR').trim().slice(0, 50)
-    const amount = Math.min(1_000_000, Math.max(10, Number(body.amount) || 99))
+    const rawAmt = Number(body.amount)
+    const amount = Math.min(1_000_000, Math.max(10, Number.isFinite(rawAmt) ? rawAmt : 99))
     const message = String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!').trim().slice(0, 200)
     const tts = await generateGeminiTTS(`${donor} โดเนท ${amount} บาท ${message}`, cfg.geminiKey)
 

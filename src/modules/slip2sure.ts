@@ -16,9 +16,8 @@ function matchMaskedDigits(masked: string, expected: string): boolean {
     .replace(/[^0-9xX*]/g, '')
     .replace(/^(00)?66/, exp.startsWith('0') ? '0' : '66')
   const visible = digitsOnly(cleanMask)
-  if (!exp || visible.length < 4) return false
-  const len = Math.min(cleanMask.length, exp.length)
-  for (let i = 1; i <= len; i++) {
+  if (!exp || visible.length < 3 || cleanMask.length > exp.length) return false
+  for (let i = 1; i <= cleanMask.length; i++) {
     const mc = cleanMask[cleanMask.length - i]
     if (mc >= '0' && mc <= '9' && mc !== exp[exp.length - i]) return false
   }
@@ -58,13 +57,16 @@ export async function verifySlip(
     method: 'POST',
     headers: { 'x-api-key': cfg.s2sKey },
     body: upstream
-  })
+  }).catch(() => null)
+  if (!s2sRes) {
+    return { ok: false, status: 502, code: 'UPSTREAM_ERROR', error: 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้' }
+  }
 
-  const s2sData = (await s2sRes.json()) as any
+  const s2sData = (await s2sRes.json().catch(() => ({}))) as any
   if (!s2sRes.ok) {
     return {
       ok: false,
-      status: s2sRes.status,
+      status: s2sRes.status >= 400 && s2sRes.status < 600 ? s2sRes.status : 400,
       code: s2sData?.result || 'ERROR',
       error: s2sData?.message || 'ตรวจสอบสลิปไม่สำเร็จ'
     }
@@ -72,7 +74,7 @@ export async function verifySlip(
 
   const info = s2sData.info || {}
   const amount = Number(info.amount || 0)
-  if (amount < 10) {
+  if (!Number.isFinite(amount) || amount < 10) {
     return { ok: false, status: 400, code: 'MIN_AMOUNT', error: 'จำนวนเงินโดเนทขั้นต่ำ 10 บาท' }
   }
 
@@ -84,8 +86,12 @@ export async function verifySlip(
   } else if (type !== 'truemoney' && (cfg.bankAccount || cfg.promptpayId)) {
     const recvAcc = String(info?.receiver?.account?.value || '')
     const recvProxy = String(info?.receiver?.proxy?.value || '')
-    const bankOk = cfg.bankAccount ? matchMaskedDigits(recvAcc || recvProxy, cfg.bankAccount) : false
-    const ppOk = cfg.promptpayId ? matchMaskedDigits(recvProxy || recvAcc, cfg.promptpayId) : false
+    const bankOk = cfg.bankAccount
+      ? matchMaskedDigits(recvAcc, cfg.bankAccount) || matchMaskedDigits(recvProxy, cfg.bankAccount)
+      : false
+    const ppOk = cfg.promptpayId
+      ? matchMaskedDigits(recvProxy, cfg.promptpayId) || matchMaskedDigits(recvAcc, cfg.promptpayId)
+      : false
     if ((!recvAcc && !recvProxy) || (!bankOk && !ppOk)) {
       return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: 'บัญชีหรือพร้อมเพย์ผู้รับไม่ตรงกับระบบ' }
     }

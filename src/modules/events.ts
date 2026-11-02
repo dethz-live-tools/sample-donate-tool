@@ -57,6 +57,11 @@ export function broadcastOverlayStatus() {
 }
 
 export function broadcastControl(cmd: OverlayCommand) {
+  if (cmd.action === 'disconnect') {
+    overlayConnections.clear()
+    lastOverlayHeartbeat = 0
+    broadcastOverlayStatus()
+  }
   controlListeners.forEach((fn) => {
     try {
       fn(cmd)
@@ -119,6 +124,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
     statusListeners.add(sendStatus)
 
     const sendControl = (cmd: OverlayCommand) => {
+      if (!isOverlay && !isAdmin) return
       try {
         stream.writeSSE({
           event: 'control',
@@ -193,7 +199,8 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
       touchOverlayHeartbeat()
     }
     const minSince = Date.now() - 60_000
-    const since = Math.max(Number(c.req.query('since') || 0), minSince)
+    const rawSince = Number(c.req.query('since'))
+    const since = Number.isFinite(rawSince) ? Math.max(rawSince, minSince) : minSince
     const items = await listDonations(c.env?.DB, 20, since, true)
     return c.json({
       ok: true,
@@ -205,12 +212,12 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/status', (c) => {
     return c.json({ ok: true, ...getOverlayStatus() })
   })
-  .get('/heartbeat', (c) => {
+  .get('/heartbeat', dashboardAuth, (c) => {
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
     return c.json({ ok: true, ...getOverlayStatus() })
   })
-  .post('/heartbeat', (c) => {
+  .post('/heartbeat', dashboardAuth, (c) => {
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
     return c.json({ ok: true, ...getOverlayStatus() })
@@ -220,12 +227,6 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     const action = String(body.action || '').trim()
     if (!action) {
       return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
-    }
-
-    if (action === 'disconnect') {
-      overlayConnections.clear()
-      lastOverlayHeartbeat = 0
-      broadcastOverlayStatus()
     }
 
     const payload = { ...body, action, timestamp: Date.now() }

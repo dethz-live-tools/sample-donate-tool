@@ -46,13 +46,48 @@ export async function getAdmin(db: D1Binding | undefined): Promise<AdminRecord |
 export async function createAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
   if (!db) return false
   await ensureSchema(db)
-  const existing = await getAdmin(db)
-  if (existing) return false
-  await db
-    .prepare('INSERT INTO admins (id, username, password_hash, created_at) VALUES (1, ?, ?, ?)')
-    .bind(username, passwordHash, Date.now())
-    .run()
-  return true
+  try {
+    await db
+      .prepare('INSERT INTO admins (id, username, password_hash, created_at) VALUES (1, ?, ?, ?)')
+      .bind(username, passwordHash, Date.now())
+      .run()
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function updateAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
+  if (!db) return false
+  await ensureSchema(db)
+  try {
+    const res = await db
+      .prepare('UPDATE admins SET username = ?, password_hash = ? WHERE id = 1')
+      .bind(username, passwordHash)
+      .run()
+    return (res?.meta?.changes ?? 1) > 0
+  } catch {
+    return false
+  }
+}
+
+export async function deleteDonation(db: D1Binding | undefined, id: string): Promise<boolean> {
+  if (!db || !id) return false
+  await ensureSchema(db)
+  const res = await db.prepare('DELETE FROM donations WHERE id = ?').bind(id).run()
+  return (res?.meta?.changes ?? 1) > 0
+}
+
+export async function getDonationStats(db: D1Binding | undefined): Promise<{ count: number; totalAmount: number }> {
+  if (!db) return { count: 0, totalAmount: 0 }
+  await ensureSchema(db)
+  const row = (await db
+    .prepare("SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as totalAmount FROM donations WHERE type != 'test'")
+    .first()) as any
+  return {
+    count: Number(row?.count || 0),
+    totalAmount: Number(row?.totalAmount || 0)
+  }
 }
 
 export async function isSlipUsed(db: D1Binding | undefined, transRef: string): Promise<boolean> {
@@ -66,9 +101,9 @@ export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent)
   if (!db) return true
   await ensureSchema(db)
   try {
-    await db
+    const res = await db
       .prepare(
-        'INSERT INTO donations (id, donor, amount, message, type, trans_ref, created_at, audio_base64, sample_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT OR IGNORE INTO donations (id, donor, amount, message, type, trans_ref, created_at, audio_base64, sample_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
       .bind(
         ev.id,
@@ -82,7 +117,7 @@ export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent)
         ev.sampleRate || 24000
       )
       .run()
-    return true
+    return (res?.meta?.changes ?? 1) > 0
   } catch {
     return false
   }

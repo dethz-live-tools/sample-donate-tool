@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
-import { authRoute, dashboardAuth } from './modules/auth'
+import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
@@ -17,9 +17,14 @@ import { renderer } from './renderer'
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.use(secureHeaders())
-app.use(csrf())
+app.use('*', async (c, next) => {
+  if (c.req.header('authorization')?.toLowerCase().startsWith('bearer ')) return next()
+  if (c.req.path === '/api/manage/login' || c.req.path === '/api/manage/setup') return next()
+  return csrf()(c, next)
+})
 app.use(renderer)
 app.route('/', authRoute)
+app.route('/api/manage', manageRoute)
 app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
 

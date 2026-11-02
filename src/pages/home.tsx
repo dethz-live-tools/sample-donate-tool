@@ -94,7 +94,7 @@ export function HomePage({
                 type="file"
                 name="image"
                 id="slipFile"
-                accept="image/png,image/jpeg"
+                accept="image/png,image/jpeg,image/webp"
                 required
               />
               <div id="dropzoneText">

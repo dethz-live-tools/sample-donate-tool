@@ -286,7 +286,7 @@ Create the initial administrator account (only allowed when no admin row exists 
   - `302 Found -> /login` (if admin already exists)
 
 ### `POST /login`
-Authenticate administrator and issue a `dash_token` cookie. Rate-limited to 5 failed attempts per 60 seconds per client IP (`cf-connecting-ip` / `x-forwarded-for`).
+Authenticate administrator and issue a `dash_token` cookie. Rate-limited to 3 failed attempts per 60 seconds per client IP (`cf-connecting-ip`).
 
 - **Content-Type**: `application/x-www-form-urlencoded` or `multipart/form-data`
 - **Form Fields**:
@@ -302,3 +302,66 @@ Clear the `dash_token` session cookie.
 
 - **Responses**:
   - `302 Found -> /login`
+
+---
+
+## 4. Management JSON API (`/api/manage`)
+
+Headless JSON API for programmatic administration. Supports both the `dash_token` session cookie and `Authorization: Bearer <token>` header.
+
+### `POST /api/manage/setup`
+Initialize the admin account when none exists in D1.
+
+- **Body**: `{"username": "admin", "password": "yourpassword"}` (password min 8 chars)
+- **Response (`200 OK`)**: `{"ok": true, "username": "admin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
+
+### `POST /api/manage/login`
+Authenticate with `username` and `password` to receive a signed bearer token (also sets `dash_token` cookie). Rate-limited to 3 failed attempts per 60s per IP.
+
+- **Body**: `{"username": "admin", "password": "yourpassword"}`
+- **Response (`200 OK`)**: `{"ok": true, "username": "admin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
+- **Error (`401` / `429`)**: `{"ok": false, "error": "INVALID_CREDENTIALS" | "RATE_LIMITED"}`
+
+### `POST /api/manage/logout`
+Clear the `dash_token` cookie.
+
+- **Response (`200 OK`)**: `{"ok": true}`
+
+### `GET /api/manage/me`
+Return current admin username, donation totals, and live overlay status.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Response (`200 OK`)**:
+```json
+{
+  "ok": true,
+  "username": "admin",
+  "stats": { "count": 42, "totalAmount": 5400 },
+  "overlayStatus": { "online": true, "count": 1, "timestamp": 1793335000000 }
+}
+```
+
+### `PUT /api/manage/credentials`
+Update admin `username` and/or `password` (rotates and returns a fresh token; invalidates previous tokens immediately).
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Body**: `{"currentPassword": "oldpassword", "username": "newadmin", "newPassword": "newpassword123"}`
+- **Response (`200 OK`)**: `{"ok": true, "username": "newadmin", "token": "<exp>.<sig>", "expiresAt": 1793940000000}`
+
+### `GET /api/manage/donations`
+List donations and aggregate stats.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Query Params**: `limit` (1–500, default `100`), `since` (timestamp ms, default `0`), `includeTest` (`true` | `1`)
+- **Response (`200 OK`)**: `{"ok": true, "stats": {"count": 42, "totalAmount": 5400}, "items": [...]}`
+
+### `DELETE /api/manage/donations/:id`
+Delete a donation record by ID from D1.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Response (`200 OK`)**: `{"ok": true, "id": "..."}`
+
+### `GET /api/manage/overlay` & `POST /api/manage/overlay/control`
+Inspect overlay connection status or broadcast control commands (`reload`, `clear`, `disconnect`, `heartbeat`).
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie

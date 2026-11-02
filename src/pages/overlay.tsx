@@ -14,10 +14,12 @@ export function OverlayPage() {
           __html: `
           document.body.classList.add('overlay-body');
           let audioCtx;
+          let activeSource = null;
           const queue = [];
           const seenIds = new Set();
           let lastSeen = Date.now();
           let playing = false;
+          let runId = 0;
 
           function getAudioCtx() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -43,9 +45,13 @@ export function OverlayPage() {
             }
             return new Promise((resolve) => {
               const src = ctx.createBufferSource();
+              activeSource = src;
               src.buffer = buf;
               src.connect(ctx.destination);
-              src.onended = resolve;
+              src.onended = () => {
+                if (activeSource === src) activeSource = null;
+                resolve();
+              };
               src.start();
             });
           }
@@ -64,6 +70,7 @@ export function OverlayPage() {
           async function processQueue() {
             if (playing || queue.length === 0) return;
             playing = true;
+            const myRun = ++runId;
             const ev = queue.shift();
             const box = document.getElementById('alertBox');
             document.getElementById('alertDonor').textContent = ev.donor;
@@ -80,10 +87,13 @@ export function OverlayPage() {
             } catch (e) {
               console.error(e);
             }
+            if (myRun !== runId) return;
 
             await new Promise(r => setTimeout(r, 2500));
+            if (myRun !== runId) return;
             box.classList.remove('show');
             await new Promise(r => setTimeout(r, 400));
+            if (myRun !== runId) return;
             playing = false;
             processQueue();
           }
@@ -107,7 +117,15 @@ export function OverlayPage() {
               if (cmd.action === 'reload') {
                 window.location.reload();
               } else if (cmd.action === 'clear') {
+                runId++;
                 queue.length = 0;
+                if (activeSource) {
+                  try { activeSource.stop(); } catch (_) {}
+                  activeSource = null;
+                }
+                if ('speechSynthesis' in window) {
+                  try { speechSynthesis.cancel(); } catch (_) {}
+                }
                 const box = document.getElementById('alertBox');
                 if (box) box.classList.remove('show');
                 playing = false;

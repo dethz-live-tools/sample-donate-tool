@@ -153,17 +153,24 @@ export function DashboardPage({
             const tr = document.createElement('tr');
             const label = h.type === 'truemoney' ? 'TRUEMONEY' : 'BANK/PP';
             const cells = [
-              [new Date(h.createdAt).toLocaleTimeString('th-TH'), 'font-family:var(--font-mono);font-size:14px;white-space:nowrap;'],
-              [h.donor, 'font-weight:700;'],
-              [Number(h.amount).toLocaleString() + ' THB', 'font-family:var(--font-mono);font-weight:700;'],
-              [label, 'font-family:var(--font-mono);font-size:12px;'],
-              [h.transRef || '-', 'font-family:var(--font-mono);font-size:13px;'],
-              [h.message || '-', '']
+              [new Date(h.createdAt).toLocaleTimeString('th-TH'), 'font-family:var(--font-mono);font-size:14px;white-space:nowrap;', false],
+              [h.donor, 'font-weight:700;', false],
+              [Number(h.amount).toLocaleString() + ' THB', 'font-family:var(--font-mono);font-weight:700;', false],
+              [label, '', true],
+              [h.transRef || '-', 'font-family:var(--font-mono);font-size:13px;', false],
+              [h.message || '-', '', false]
             ];
-            for (const [text, style] of cells) {
+            for (const [text, style, isChip] of cells) {
               const td = document.createElement('td');
               td.style.cssText = style;
-              td.textContent = text;
+              if (isChip) {
+                const span = document.createElement('span');
+                span.className = 'chip';
+                span.textContent = text;
+                td.appendChild(span);
+              } else {
+                td.textContent = text;
+              }
               tr.appendChild(td);
             }
             tbody.prepend(tr);

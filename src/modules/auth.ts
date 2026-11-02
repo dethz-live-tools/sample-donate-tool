@@ -1,7 +1,8 @@
 import { Hono, type Context, type Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { Bindings } from './config'
-import { createAdmin, getAdmin } from './db'
+import { createAdmin, deleteDonation, getAdmin, getDonationStats, listDonations, updateAdmin } from './db'
+import { broadcastControl, broadcastOverlayStatus, getOverlayStatus, touchOverlayHeartbeat, type OverlayCommand } from './events'
 
 const COOKIE_NAME = 'dash_token'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
@@ -66,11 +67,13 @@ async function createSessionToken(env: Bindings | undefined, username: string, p
 export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
   const admin = await getAdmin(c.env?.DB)
   if (!admin) return false
-  const token = getCookie(c, COOKIE_NAME)
+  const authHeader = c.req.header('authorization') || ''
+  const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
+  const token = bearer || getCookie(c, COOKIE_NAME)
   if (!token || !token.includes('.')) return false
   const [expStr, sig] = token.split('.')
   const exp = Number(expStr)
-  if (!exp || Date.now() > exp) return false
+  if (!Number.isFinite(exp) || Date.now() > exp) return false
   const expected = await hmacSign(getSecret(c.env, admin.passwordHash), `${admin.username}:${exp}`)
   const a = new TextEncoder().encode(sig)
   const b = new TextEncoder().encode(expected)
@@ -81,9 +84,10 @@ export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promis
 }
 
 export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
+  const isApi = c.req.path.startsWith('/api/')
   const admin = await getAdmin(c.env?.DB)
-  if (!admin) return c.redirect('/setup')
-  if (!(await isValidSession(c))) return c.redirect('/login')
+  if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
+  if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
   await next()
 }
 
@@ -120,10 +124,13 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     const admin = await getAdmin(c.env?.DB)
     if (!admin) return c.redirect('/setup')
 
-    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'local'
+    const ip = c.req.header('cf-connecting-ip') || 'local'
     const now = Date.now()
+    if (loginAttempts.size > 500) {
+      for (const [k, v] of loginAttempts) if (now >= v.resetAt) loginAttempts.delete(k)
+    }
     const rate = loginAttempts.get(ip)
-    if (rate && now < rate.resetAt && rate.count >= 5) {
+    if (rate && now < rate.resetAt && rate.count >= 3) {
       return c.redirect('/login?error=1')
     }
 
@@ -153,4 +160,141 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
   .post('/logout', (c) => {
     deleteCookie(c, COOKIE_NAME, { path: '/' })
     return c.redirect('/login')
+  })
+
+function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string) {
+  setCookie(c, COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === 'https:',
+    path: '/',
+    sameSite: 'Lax',
+    maxAge: SESSION_TTL_MS / 1000
+  })
+}
+
+// ponytail: single Hono router for JSON management API using existing PBKDF2 + HMAC token (cookie or Bearer)
+export const manageRoute = new Hono<{ Bindings: Bindings }>()
+  .post('/setup', async (c) => {
+    const existing = await getAdmin(c.env?.DB)
+    if (existing) return c.json({ ok: false, error: 'ADMIN_ALREADY_EXISTS' }, 409)
+
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const username = String(body.username || '').trim().slice(0, 50)
+    const password = String(body.password || '')
+    if (!username || password.length < 8) {
+      return c.json({ ok: false, error: 'INVALID_CREDENTIALS_FORMAT' }, 400)
+    }
+
+    const passwordHash = await hashPassword(password)
+    if (!(await createAdmin(c.env?.DB, username, passwordHash))) {
+      return c.json({ ok: false, error: 'SETUP_FAILED' }, 409)
+    }
+
+    const token = await createSessionToken(c.env, username, passwordHash)
+    setSessionCookie(c, token)
+    return c.json({ ok: true, username, token, expiresAt: Number(token.split('.')[0]) })
+  })
+  .post('/login', async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+
+    const ip = c.req.header('cf-connecting-ip') || 'local'
+    const now = Date.now()
+    if (loginAttempts.size > 500) {
+      for (const [k, v] of loginAttempts) if (now >= v.resetAt) loginAttempts.delete(k)
+    }
+    const rate = loginAttempts.get(ip)
+    if (rate && now < rate.resetAt && rate.count >= 3) {
+      return c.json({ ok: false, error: 'RATE_LIMITED' }, 429)
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const username = String(body.username || '').trim()
+    const password = String(body.password || '')
+
+    if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
+      loginAttempts.delete(ip)
+      const token = await createSessionToken(c.env, admin.username, admin.passwordHash)
+      setSessionCookie(c, token)
+      return c.json({ ok: true, username: admin.username, token, expiresAt: Number(token.split('.')[0]) })
+    }
+
+    loginAttempts.set(ip, {
+      count: rate && now < rate.resetAt ? rate.count + 1 : 1,
+      resetAt: rate && now < rate.resetAt ? rate.resetAt : now + 60_000
+    })
+    return c.json({ ok: false, error: 'INVALID_CREDENTIALS' }, 401)
+  })
+  .post('/logout', (c) => {
+    deleteCookie(c, COOKIE_NAME, { path: '/' })
+    return c.json({ ok: true })
+  })
+  .get('/me', dashboardAuth, async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    const stats = await getDonationStats(c.env?.DB)
+    return c.json({
+      ok: true,
+      username: admin?.username,
+      stats,
+      overlayStatus: getOverlayStatus()
+    })
+  })
+  .put('/credentials', dashboardAuth, async (c) => {
+    const admin = await getAdmin(c.env?.DB)
+    if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
+
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const currentPassword = String(body.currentPassword || '')
+    const newUsername = String(body.username || admin.username).trim().slice(0, 50)
+    const newPassword = String(body.newPassword || '')
+
+    if (!(await verifyPassword(admin.username, currentPassword, admin.passwordHash))) {
+      return c.json({ ok: false, error: 'INVALID_CURRENT_PASSWORD' }, 401)
+    }
+    if (!newUsername || (newPassword && newPassword.length < 8)) {
+      return c.json({ ok: false, error: 'INVALID_CREDENTIALS_FORMAT' }, 400)
+    }
+
+    const nextHash = newPassword ? await hashPassword(newPassword) : admin.passwordHash
+    if (!(await updateAdmin(c.env?.DB, newUsername, nextHash))) {
+      return c.json({ ok: false, error: 'UPDATE_FAILED' }, 500)
+    }
+
+    const token = await createSessionToken(c.env, newUsername, nextHash)
+    setSessionCookie(c, token)
+    return c.json({ ok: true, username: newUsername, token, expiresAt: Number(token.split('.')[0]) })
+  })
+  .get('/donations', dashboardAuth, async (c) => {
+    const rawLimit = Number(c.req.query('limit') || 100)
+    const limit = Math.min(500, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 100))
+    const rawSince = Number(c.req.query('since') || 0)
+    const since = Number.isFinite(rawSince) ? Math.max(0, rawSince) : 0
+    const includeTest = c.req.query('includeTest') === '1' || c.req.query('includeTest') === 'true'
+    const [items, stats] = await Promise.all([
+      listDonations(c.env?.DB, limit, since, includeTest),
+      getDonationStats(c.env?.DB)
+    ])
+    return c.json({ ok: true, stats, items })
+  })
+  .delete('/donations/:id', dashboardAuth, async (c) => {
+    const id = c.req.param('id')
+    const deleted = await deleteDonation(c.env?.DB, id)
+    if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
+    return c.json({ ok: true, id })
+  })
+  .get('/overlay', dashboardAuth, (c) => {
+    return c.json({ ok: true, ...getOverlayStatus() })
+  })
+  .post('/overlay/control', dashboardAuth, async (c) => {
+    const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
+    const action = String(body.action || '').trim()
+    if (!action) return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
+    if (action === 'heartbeat') {
+      touchOverlayHeartbeat()
+      broadcastOverlayStatus()
+      return c.json({ ok: true, status: getOverlayStatus() })
+    }
+    const payload = { ...body, action, timestamp: Date.now() }
+    broadcastControl(payload)
+    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
   })
