@@ -177,6 +177,33 @@ Retrieve current overlay online state and active SSE connection count.
 
 ---
 
+### `GET /api/events/leaderboard`
+Retrieve ranked list of top donors aggregated by cumulative donation sum from Cloudflare D1 (excluding simulated test donations).
+
+- **Query Parameters**:
+  - `limit` (`number`, optional): Max ranks returned (clamped between `1` and `50`, default `5`).
+- **Authentication**: None
+- **Success Response (`200 OK`)**:
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "donor": "SOMCHAI",
+      "total": 5000,
+      "count": 12
+    },
+    {
+      "donor": "ALICE",
+      "total": 3500,
+      "count": 4
+    }
+  ]
+}
+```
+
+---
+
 ### `GET /api/events/poll`
 Fallback JSON polling endpoint for recent donations (within the last 60 seconds) and current overlay status.
 
@@ -246,6 +273,7 @@ Dispatch a remote command to all connected OBS overlay clients over the SSE `con
 | `clear` | Empties the overlay's client-side alert queue, stops active TTS playback, and hides the alert card. |
 | `disconnect` | Clears `overlayConnections` and resets `lastOverlayHeartbeat` on the server, then broadcasts `disconnect` so overlays close and reconnect after 2 seconds. |
 | `tts` | Toggles TTS voice on/off (or sets `enabled: boolean` if provided), persists to D1, and immediately mutes/enables overlay audio. |
+| `countdown` | Controls `/overlay/countdown` timer (`cmd`: `'start'`, `'pause'`, `'reset'`, `'set'`, `'adjust'`; `seconds` or `minutes`; `delta` in seconds; `title`). |
 
 #### Success Response (`200 OK`)
 ```json

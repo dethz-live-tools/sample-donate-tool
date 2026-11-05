@@ -74,31 +74,85 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
 
         <div class="inverted-block">
           <label style="color:var(--ctp-lavender); margin-bottom:8px;">OBS BROWSER SOURCE CONFIGURATION</label>
-          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-            <input
-              type="text"
-              id="obsUrlInput"
-              readOnly
-              value=""
-              style="margin-bottom:0; background:var(--ctp-mantle);"
-            />
-            <button
-              type="button"
-              id="copyUrlBtn"
-              style="width:auto; padding:10px 20px; font-size:14px; white-space:nowrap;"
-            >
-              COPY OBS URL
-            </button>
+
+          <div style="margin-bottom:14px;">
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-bottom:4px;">
+              1. DONATION ALERT OVERLAY (800 x 400)
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-mantle);"
+              />
+              <button
+                type="button"
+                id="copyUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">TEST</a>
+            </div>
           </div>
+
+          <div style="margin-bottom:14px;">
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-bottom:4px;">
+              2. TOP DONORS LEADERBOARD OVERLAY (450 x 500)
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsLbUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-mantle);"
+              />
+              <button
+                type="button"
+                id="copyLbUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a href="/overlay/leaderboard" target="_blank" style="white-space:nowrap; font-size:12px;">TEST</a>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px;">
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-bottom:4px;">
+              3. COUNTDOWN TIMER OVERLAY (450 x 250)
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsCdUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-mantle);"
+              />
+              <button
+                type="button"
+                id="copyCdUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a href="/overlay/countdown?minutes=10" target="_blank" style="white-space:nowrap; font-size:12px;">TEST</a>
+            </div>
+          </div>
+
           <div style="font-size:13px; color:var(--ctp-subtext0); line-height:1.6;">
-            Recommended OBS settings: Width <strong>800</strong>, Height <strong>400</strong>, Check <strong>Control audio via OBS</strong>. Background is transparent.
+            Recommended OBS settings: Check <strong>Control audio via OBS</strong>. Background is transparent.
           </div>
         </div>
 
         <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:12px; text-transform:uppercase;">
           COMMAND BUS ACTIONS
         </h3>
-        <div class="grid-actions">
+        <div class="grid-actions" style="margin-bottom:24px;">
           <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
             FORCE RELOAD OVERLAY
           </button>
@@ -126,6 +180,36 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           >
             TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
           </button>
+        </div>
+
+        <div class="card" style="margin-bottom:24px;">
+          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:16px; text-transform:uppercase;">
+            COUNTDOWN TIMER REMOTE
+          </h3>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+            <button type="button" id="cdQuick3Btn" style="width:auto; padding:10px 16px; font-size:13px;">START 3M</button>
+            <button type="button" id="cdQuick5Btn" style="width:auto; padding:10px 16px; font-size:13px;">START 5M</button>
+            <button type="button" id="cdQuick10Btn" style="width:auto; padding:10px 16px; font-size:13px;">START 10M</button>
+            <button type="button" id="cdQuick15Btn" style="width:auto; padding:10px 16px; font-size:13px;">START 15M</button>
+            <button type="button" id="cdPauseBtn" style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-yellow); border-color:var(--ctp-yellow); color:var(--ctp-crust);">PAUSE</button>
+            <button type="button" id="cdResumeBtn" style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust);">RESUME</button>
+            <button type="button" id="cdResetBtn" style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-peach); border-color:var(--ctp-peach); color:var(--ctp-crust);">RESET</button>
+            <button type="button" id="cdPlus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">+1 MIN</button>
+            <button type="button" id="cdMinus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">-1 MIN</button>
+          </div>
+          <form id="cdCustomForm" style="display:flex; gap:12px; align-items:flex-end;">
+            <div style="flex:1;">
+              <label>CUSTOM TITLE</label>
+              <input type="text" id="cdCustomTitle" value="STARTING SOON" style="margin-bottom:0;" />
+            </div>
+            <div style="width:120px;">
+              <label>MINUTES</label>
+              <input type="number" id="cdCustomMinutes" value="10" min="1" max="180" style="margin-bottom:0;" />
+            </div>
+            <button type="submit" style="width:auto; padding:12px 20px; font-size:14px; white-space:nowrap;">
+              SET TIMER
+            </button>
+          </form>
         </div>
 
         <div class="card" style="margin-bottom:24px;">
@@ -179,23 +263,32 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           const busLog = document.getElementById('busLog');
           const obsInput = document.getElementById('obsUrlInput');
           const copyBtn = document.getElementById('copyUrlBtn');
+          const obsLbInput = document.getElementById('obsLbUrlInput');
+          const copyLbBtn = document.getElementById('copyLbUrlBtn');
+          const obsCdInput = document.getElementById('obsCdUrlInput');
+          const copyCdBtn = document.getElementById('copyCdUrlBtn');
 
-          if (obsInput) {
-            obsInput.value = window.location.origin + '/overlay';
+          function bindCopy(inputEl, btnEl, path) {
+            if (!inputEl) return;
+            inputEl.value = window.location.origin + path;
+            if (btnEl) {
+              btnEl.addEventListener('click', async () => {
+                try {
+                  await navigator.clipboard.writeText(inputEl.value);
+                  const orig = btnEl.textContent;
+                  btnEl.textContent = 'COPIED!';
+                  setTimeout(() => { btnEl.textContent = orig; }, 2000);
+                } catch {
+                  inputEl.select();
+                  document.execCommand('copy');
+                }
+              });
+            }
           }
 
-          if (copyBtn && obsInput) {
-            copyBtn.addEventListener('click', async () => {
-              try {
-                await navigator.clipboard.writeText(obsInput.value);
-                copyBtn.textContent = 'COPIED!';
-                setTimeout(() => { copyBtn.textContent = 'COPY OBS URL'; }, 2000);
-              } catch {
-                obsInput.select();
-                document.execCommand('copy');
-              }
-            });
-          }
+          bindCopy(obsInput, copyBtn, '/overlay');
+          bindCopy(obsLbInput, copyLbBtn, '/overlay/leaderboard?limit=5');
+          bindCopy(obsCdInput, copyCdBtn, '/overlay/countdown?minutes=10');
 
           function log(msg, type = 'info') {
             if (!busLog) return;
@@ -263,14 +356,14 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
             }
           }, 1000);
 
-          async function sendCommand(action) {
+          async function sendCommand(action, extra = {}) {
             showStatus('DISPATCHING: ' + action.toUpperCase() + '...');
-            log('Sending command: ' + action, 'warn');
+            log('Sending command: ' + action + (extra.cmd ? ' (' + extra.cmd + ')' : ''), 'warn');
             try {
               const res = await fetch('/api/events/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action })
+                body: JSON.stringify({ action, ...extra })
               });
               const data = await res.json();
               if (!res.ok || !data.ok) throw new Error(data.error || 'COMMAND_FAILED');
@@ -299,6 +392,23 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
               showStatus('ERROR // ' + err.message, true);
               log('Heartbeat ping failed: ' + err.message, 'err');
             }
+          });
+
+          // Countdown remote triggers
+          document.getElementById('cdQuick3Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'set', minutes: 3 }));
+          document.getElementById('cdQuick5Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'set', minutes: 5 }));
+          document.getElementById('cdQuick10Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'set', minutes: 10 }));
+          document.getElementById('cdQuick15Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'set', minutes: 15 }));
+          document.getElementById('cdPauseBtn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'pause' }));
+          document.getElementById('cdResumeBtn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'start' }));
+          document.getElementById('cdResetBtn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'reset' }));
+          document.getElementById('cdPlus1Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'adjust', delta: 60 }));
+          document.getElementById('cdMinus1Btn')?.addEventListener('click', () => sendCommand('countdown', { cmd: 'adjust', delta: -60 }));
+          document.getElementById('cdCustomForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const mins = Number(document.getElementById('cdCustomMinutes')?.value || 10);
+            const title = document.getElementById('cdCustomTitle')?.value || 'STARTING SOON';
+            sendCommand('countdown', { cmd: 'set', minutes: mins, title });
           });
 
           document.getElementById('clearLogBtn')?.addEventListener('click', () => {

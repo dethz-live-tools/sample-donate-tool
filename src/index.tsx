@@ -3,12 +3,14 @@ import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
 import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
-import { getAdmin, listDonations } from './modules/db'
+import { getAdmin, getLeaderboard, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
 import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveTtsEnabled } from './modules/events'
 import { OverlayControlPage } from './pages/control'
+import { CountdownOverlayPage } from './pages/countdown'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
+import { LeaderboardOverlayPage } from './pages/leaderboard'
 import { LoginPage } from './pages/login'
 import { OverlayPage } from './pages/overlay'
 import { SetupPage } from './pages/setup'
@@ -51,6 +53,29 @@ app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
 app.get('/overlay', async (c) => {
   const ttsEnabled = await resolveTtsEnabled(c.env)
   return c.render(<OverlayPage ttsEnabled={ttsEnabled} />)
+})
+app.get('/overlay/leaderboard', async (c) => {
+  const rawLimit = Number(c.req.query('limit'))
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
+  const title = c.req.query('title') || 'TOP DONORS'
+  const items = await getLeaderboard(c.env?.DB, limit)
+  return c.render(<LeaderboardOverlayPage initialItems={items} limit={limit} title={title} />)
+})
+app.get('/overlay/countdown', (c) => {
+  const title = c.req.query('title') || 'STARTING SOON'
+  const minutes = Number(c.req.query('minutes')) || 0
+  const seconds = Number(c.req.query('seconds')) || 0
+  const target = c.req.query('target') || ''
+  const endMsg = c.req.query('end') || 'LIVE NOW'
+  return c.render(
+    <CountdownOverlayPage
+      title={title}
+      minutes={minutes}
+      seconds={seconds}
+      target={target}
+      endMsg={endMsg}
+    />
+  )
 })
 
 export default app

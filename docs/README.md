@@ -48,8 +48,10 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 - `GET /setup`: Initial administrator account creation (redirects to `/login` once an admin exists in D1).
 - `GET /login`: Administrator login page (rate-limited to 3 attempts per minute per IP).
 - `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, and transaction log (Admin only).
-- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS voice on/off toggle, remote command bus (`reload`, `clear`, `disconnect`, `tts`), heartbeat ping, and real-time event terminal (Admin only).
-- `GET /overlay`: Transparent OBS Browser Source alert overlay.
+- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS voice on/off toggle, remote command bus (`reload`, `clear`, `disconnect`, `tts`, `countdown`), heartbeat ping, and real-time event terminal (Admin only).
+- `GET /overlay`: Transparent OBS Browser Source alert overlay (Width: 800, Height: 400).
+- `GET /overlay/leaderboard`: Transparent OBS Browser Source top donors leaderboard overlay (Width: 450, Height: 500, `?limit=5&title=TOP+DONORS`).
+- `GET /overlay/countdown`: Transparent OBS Browser Source countdown timer overlay (Width: 450, Height: 250, `?minutes=10&title=STARTING+SOON`).
 
 ### API Endpoints
 - `POST /api/donate`: Verify Turnstile & slip image, synthesize Gemini TTS (when enabled), store in D1, and broadcast donation event.
@@ -99,11 +101,22 @@ All upstream requests use header `x-api-key: <SLIP2SURE_API_KEY>`.
 
 ## 4. OBS Studio Setup
 
-1. In OBS Studio, add a **Browser** source.
-2. Set **URL** to `http://localhost:5173/overlay` (or your deployed Worker URL `/overlay`).
+### 1. Donation Alert Overlay
+1. In OBS Studio, add a **Browser** source named `Donate Alert`.
+2. Set **URL** to `http://localhost:5173/overlay` (or `https://<your-worker>.workers.dev/overlay`).
 3. Set **Width** to `800` and **Height** to `400`.
-4. Check **Control audio via OBS** if you want to route TTS audio through the OBS audio mixer.
-5. Open `/overlay/control` in your browser to verify that **CONNECTION** shows `ONLINE` and use the **TEST DONATION ALERT** or **REMOTE COMMAND BUS** (`CLEAR QUEUE`, `FORCE RELOAD`, `RESET SOCKETS`, `TTS VOICE`) to manage the overlay live during streams.
+4. Check **Control audio via OBS** to route TTS audio through OBS mixer.
+
+### 2. Top Donors Leaderboard Overlay
+1. In OBS Studio, add a **Browser** source named `Top Donors`.
+2. Set **URL** to `http://localhost:5173/overlay/leaderboard?limit=5` (customizable with `?limit=10&title=CHAMPIONS`).
+3. Set **Width** to `450` and **Height** to `500`.
+
+### 3. Countdown Timer Overlay
+1. In OBS Studio, add a **Browser** source named `Stream Countdown`.
+2. Set **URL** to `http://localhost:5173/overlay/countdown?minutes=10&title=STARTING+SOON`.
+3. Set **Width** to `450` and **Height** to `250`.
+4. Use `/overlay/control` to remotely start, pause, reset, or adjust countdown times live during the stream.
 
 ---
 

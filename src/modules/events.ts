@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { dashboardAuth, isValidSession } from './auth'
 import { getConfig, type Bindings } from './config'
-import { getTtsSetting, listDonations, setTtsSetting } from './db'
+import { getTtsSetting, listDonations, setTtsSetting, getLeaderboard } from './db'
 
 export type DonateEvent = {
   id: string
@@ -37,7 +37,7 @@ const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
 let runtimeTtsEnabled: boolean | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
-const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown'])
 
 export async function resolveTtsEnabled(env?: Bindings): Promise<boolean> {
   const cfg = getConfig(env)
@@ -235,6 +235,12 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/status', async (c) => {
     await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
+  })
+  .get('/leaderboard', async (c) => {
+    const rawLimit = Number(c.req.query('limit'))
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
+    const items = await getLeaderboard(c.env?.DB, limit)
+    return c.json({ ok: true, items })
   })
   .get('/heartbeat', dashboardAuth, (c) => {
     touchOverlayHeartbeat()

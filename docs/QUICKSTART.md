@@ -70,7 +70,9 @@ Navigate to:
 - **Admin Login**: `http://localhost:5173/login`
 - **Streamer Dashboard**: `http://localhost:5173/dashboard`
 - **Overlay Controller**: `http://localhost:5173/overlay/control`
-- **OBS Browser Source**: `http://localhost:5173/overlay`
+- **OBS Donation Alert Overlay**: `http://localhost:5173/overlay`
+- **OBS Leaderboard Overlay**: `http://localhost:5173/overlay/leaderboard?limit=5`
+- **OBS Countdown Overlay**: `http://localhost:5173/overlay/countdown?minutes=10`
 
 ---
 

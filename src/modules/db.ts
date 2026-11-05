@@ -208,3 +208,29 @@ export async function listDonations(
     }
   })
 }
+
+export type LeaderboardEntry = {
+  donor: string
+  total: number
+  count: number
+}
+
+export async function getLeaderboard(
+  db: D1Binding | undefined,
+  limit = 5
+): Promise<LeaderboardEntry[]> {
+  if (!db) return []
+  await ensureSchema(db)
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 5))
+  const { results } = await db
+    .prepare(
+      "SELECT donor, SUM(amount) as total, COUNT(*) as count FROM donations WHERE type != 'test' GROUP BY donor ORDER BY total DESC LIMIT ?"
+    )
+    .bind(safeLimit)
+    .all()
+  return (results || []).map((r: any) => ({
+    donor: String(r.donor || 'Anonymous'),
+    total: Number(r.total || 0),
+    count: Number(r.count || 0)
+  }))
+}
