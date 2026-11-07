@@ -1,4 +1,4 @@
-import type { LeaderboardEntry } from '../modules/db'
+import type { LeaderboardEntry } from '../../modules/db'
 
 export function LeaderboardOverlayPage({
   initialItems = [],

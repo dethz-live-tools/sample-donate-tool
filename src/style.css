@@ -610,3 +610,42 @@ tr:hover td {
   color: var(--ctp-yellow);
   font-weight: 700;
 }
+
+.countdown-card.subathon {
+  border-color: var(--ctp-mauve);
+}
+
+.countdown-card.pulse {
+  animation: cdPulse 0.8s ease-in-out;
+}
+
+@keyframes cdPulse {
+  0% { transform: scale(1); border-color: var(--ctp-green); box-shadow: 0 0 30px rgba(166, 227, 161, 0.4); }
+  50% { transform: scale(1.03); border-color: var(--ctp-yellow); box-shadow: 0 0 50px rgba(249, 226, 175, 0.7); }
+  100% { transform: scale(1); }
+}
+
+.countdown-added {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ctp-crust);
+  background: var(--ctp-green);
+  padding: 4px 12px;
+  margin: 6px auto 8px auto;
+  letter-spacing: 1px;
+}
+
+.countdown-added.show {
+  display: inline-block;
+}
+
+.countdown-stats {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+  letter-spacing: 1px;
+  margin-top: 6px;
+  text-transform: uppercase;
+}

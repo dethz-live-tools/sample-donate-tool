@@ -1,6 +1,6 @@
 export function CountdownOverlayPage({
   title = 'STARTING SOON',
-  minutes = 0,
+  minutes = 10,
   seconds = 0,
   target = '',
   endMsg = 'LIVE NOW'
@@ -20,7 +20,7 @@ export function CountdownOverlayPage({
           <span class="countdown-badge" id="cdBadge">TIMER</span>
           <span class="countdown-title" id="cdTitle">{title}</span>
         </div>
-        <div class="countdown-display" id="cdDisplay">--:--</div>
+        <div class="countdown-display" id="cdDisplay">--:--:--</div>
         <div class="countdown-status" id="cdStatus">STANDBY</div>
       </div>
 
@@ -47,8 +47,8 @@ export function CountdownOverlayPage({
           }
 
           if (remaining === 0 && !targetEpoch) {
-            remaining = 300; // default 5 minutes if nothing supplied
-            initialSecs = 300;
+            remaining = 600;
+            initialSecs = 600;
           }
 
           const box = document.getElementById('countdownBox');
@@ -57,24 +57,24 @@ export function CountdownOverlayPage({
           const statusEl = document.getElementById('cdStatus');
           const badgeEl = document.getElementById('cdBadge');
 
+          function pad(n) {
+            return String(n).padStart(2, '0');
+          }
+
           function formatTime(totalSecs) {
-            if (totalSecs <= 0) return '00:00';
+            if (totalSecs <= 0) return '00:00:00';
             const h = Math.floor(totalSecs / 3600);
             const m = Math.floor((totalSecs % 3600) / 60);
             const s = totalSecs % 60;
-            const pad = (n) => String(n).padStart(2, '0');
-            if (h > 0) {
-              return pad(h) + ':' + pad(m) + ':' + pad(s);
-            }
-            return pad(m) + ':' + pad(s);
+            return pad(h) + ':' + pad(m) + ':' + pad(s);
           }
 
           function render() {
             if (remaining <= 0) {
-              displayEl.textContent = '00:00';
+              displayEl.textContent = '00:00:00';
               statusEl.textContent = endText;
               box.classList.add('ended');
-              badgeEl.textContent = 'ZERO';
+              badgeEl.textContent = 'ENDED';
               return;
             }
             box.classList.remove('ended');
@@ -108,41 +108,29 @@ export function CountdownOverlayPage({
                 window.location.reload();
               } else if (cmd.action === 'countdown') {
                 const sub = cmd.cmd || 'set';
-                if (sub === 'pause') {
+                if (sub === 'set') {
+                  if (typeof cmd.minutes === 'number') {
+                    remaining = Math.max(0, cmd.minutes * 60 + (cmd.seconds || 0));
+                    initialSecs = remaining;
+                    targetEpoch = null;
+                  }
+                  if (cmd.title && titleEl) titleEl.textContent = cmd.title;
+                  isRunning = true;
+                  render();
+                } else if (sub === 'pause') {
                   isRunning = false;
                   render();
                 } else if (sub === 'start' || sub === 'resume') {
-                  if (remaining <= 0 && initialSecs > 0) {
-                    remaining = initialSecs;
-                  }
-                  isRunning = true;
+                  if (remaining > 0) isRunning = true;
                   render();
                 } else if (sub === 'reset') {
                   remaining = initialSecs;
-                  if (targetStr && targetEpoch) {
-                    targetEpoch = Date.now() + initialSecs * 1000;
-                  }
-                  isRunning = true;
-                  render();
-                } else if (sub === 'set') {
-                  if (typeof cmd.seconds === 'number' && cmd.seconds >= 0) {
-                    remaining = Math.round(cmd.seconds);
-                    initialSecs = remaining;
-                    targetEpoch = null;
-                  } else if (typeof cmd.minutes === 'number' && cmd.minutes >= 0) {
-                    remaining = Math.round(cmd.minutes * 60);
-                    initialSecs = remaining;
-                    targetEpoch = null;
-                  }
-                  if (cmd.title) {
-                    titleEl.textContent = String(cmd.title);
-                  }
+                  targetEpoch = null;
                   isRunning = true;
                   render();
                 } else if (sub === 'adjust') {
-                  const delta = Number(cmd.delta || 0);
+                  const delta = Number(cmd.delta) || 0;
                   remaining = Math.max(0, remaining + delta);
-                  if (targetEpoch) targetEpoch += delta * 1000;
                   render();
                 }
               }

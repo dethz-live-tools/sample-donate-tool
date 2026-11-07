@@ -2,9 +2,10 @@ import { Hono } from 'hono'
 import { dashboardAuth } from './auth'
 import { getConfig, type Bindings } from './config'
 import { insertDonation } from './db'
-import { broadcast, resolveTtsEnabled, type DonateEvent } from './events'
+import { broadcast, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
+import { filterWordContent } from './filter'
 import { verifySlip } from './slip2sure'
-import { generateGeminiTTS } from './tts'
+import { generateEdgeTTS } from './tts'
 
 const inflightRefs = new Set<string>()
 
@@ -58,22 +59,48 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
 
     try {
       const type = form.get('type') === 'truemoney' ? 'truemoney' : 'bank-image'
-      const donor = (donorInput || verified.senderName).slice(0, 50)
-      const ttsEnabled = await resolveTtsEnabled(c.env)
-      const tts = ttsEnabled
-        ? await generateGeminiTTS(`${donor} โดเนท ${verified.amount} บาท ${message}`, cfg.geminiKey)
+      let donor = (donorInput || verified.senderName).slice(0, 50)
+      let msg = message
+
+      const filterConfig = await resolveFilterConfig(c.env)
+      let shouldMuteTts = false
+      let speechDonor = donor
+      let speechMsg = msg
+      if (filterConfig.enabled) {
+        const fDonor = filterWordContent(donor, filterConfig)
+        const fMsg = filterWordContent(msg, filterConfig)
+        donor = fDonor.cleanText
+        msg = fMsg.cleanText
+        speechDonor = fDonor.speechText || 'ผู้บริจาค'
+        speechMsg = fMsg.speechText
+        if (fDonor.shouldMuteTts || fMsg.shouldMuteTts) {
+          shouldMuteTts = true
+        }
+      }
+
+      const ttsConfig = await resolveTtsConfig(c.env)
+      const ttsActive = ttsConfig.enabled && !shouldMuteTts
+      const speechText = speechMsg
+        ? `${speechDonor} โดเนท ${verified.amount} บาท ${speechMsg}`
+        : `${speechDonor} โดเนท ${verified.amount} บาท`
+      const tts = ttsActive
+        ? await generateEdgeTTS(speechText, {
+            voice: ttsConfig.voice,
+            rate: ttsConfig.rate,
+            pitch: ttsConfig.pitch
+          })
         : { sampleRate: 0 }
 
       const ev: DonateEvent = {
         id: crypto.randomUUID(),
         donor,
         amount: verified.amount,
-        message,
+        message: msg,
         type,
         transRef: verified.transRef,
         audioBase64: tts.audioBase64,
         sampleRate: tts.sampleRate || 24000,
-        ttsEnabled,
+        ttsEnabled: ttsActive,
         createdAt: Date.now()
       }
 
@@ -89,13 +116,37 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/test', dashboardAuth, async (c) => {
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any
-    const donor = sanitizeInput(String(body.donor || 'TEST DONOR'), 50) || 'TEST DONOR'
+    const rawDonor = sanitizeInput(String(body.donor || 'TEST DONOR'), 50) || 'TEST DONOR'
     const rawAmt = Number(body.amount)
     const amount = Math.min(1_000_000, Math.max(10, Number.isFinite(rawAmt) ? rawAmt : 99))
-    const message = sanitizeInput(String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!'), 200)
-    const ttsEnabled = typeof body.ttsEnabled === 'boolean' ? body.ttsEnabled : await resolveTtsEnabled(c.env)
+    const rawMsg = sanitizeInput(String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!'), 200)
+
+    const filterConfig = await resolveFilterConfig(c.env)
+    let donor = rawDonor
+    let message = rawMsg
+    let shouldMuteTts = false
+    let speechDonor = rawDonor
+    let speechMsg = rawMsg
+    if (filterConfig.enabled) {
+      const fDonor = filterWordContent(donor, filterConfig)
+      const fMsg = filterWordContent(message, filterConfig)
+      donor = fDonor.cleanText
+      message = fMsg.cleanText
+      speechDonor = fDonor.speechText || 'ผู้บริจาค'
+      speechMsg = fMsg.speechText
+      if (fDonor.shouldMuteTts || fMsg.shouldMuteTts) {
+        shouldMuteTts = true
+      }
+    }
+
+    const ttsConfig = await resolveTtsConfig(c.env)
+    const ttsEnabled = (typeof body.ttsEnabled === 'boolean' ? body.ttsEnabled : ttsConfig.enabled) && !shouldMuteTts
+    const voice = typeof body.voice === 'string' && body.voice ? body.voice : ttsConfig.voice
+    const rate = typeof body.rate === 'string' ? body.rate : ttsConfig.rate
+    const pitch = typeof body.pitch === 'string' ? body.pitch : ttsConfig.pitch
+    const speechText = speechMsg ? `${speechDonor} โดเนท ${amount} บาท ${speechMsg}` : `${speechDonor} โดเนท ${amount} บาท`
     const tts = ttsEnabled
-      ? await generateGeminiTTS(`${donor} โดเนท ${amount} บาท ${message}`, cfg.geminiKey)
+      ? await generateEdgeTTS(speechText, { voice, rate, pitch })
       : { sampleRate: 0 }
 
     const ev: DonateEvent = {

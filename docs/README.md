@@ -9,7 +9,6 @@ Copy `.env.example` to `.env` for local development:
 | Variable | Required | Description |
 | :--- | :---: | :--- |
 | `SLIP2SURE_API_KEY` / `VITE_SLIP2SURE_API_KEY` | Yes | Application API Key from [Slip2Sure Dashboard](https://app.slip2sure.com) ("แอพของฉัน" -> Key icon). Ensure your server/Worker IP is whitelisted if IP restriction is enabled. |
-| `GEMINI_API_KEY` / `VITE_GEMINI_API_KEY` | Optional | Google Gemini API Key for `gemini-2.5-flash-preview-tts` (fixed `Aoede` voice). Falls back to browser `speechSynthesis` (`th-TH`) if omitted. |
 | `TTS_ENABLED` / `VITE_TTS_ENABLED` | Optional | Default TTS voice toggle (`true` or `false`, default `true`). Can also be toggled live via `/overlay/control` or `PUT /api/manage/tts` (persisted in D1). |
 | `SESSION_SECRET` | Optional | Secret key used for HMAC-SHA256 signing of the `dash_token` admin session cookie. Falls back to `SLIP2SURE_API_KEY` if omitted. |
 | `BANK_NAME` / `VITE_BANK_NAME` | Optional | Bank name/code displayed on the donation page (e.g., `KBANK`, `SCB`). |
@@ -26,7 +25,6 @@ Public variables can be placed in `wrangler.jsonc` under `"vars"`. Set sensitive
 
 ```sh
 bunx wrangler secret put SLIP2SURE_API_KEY
-bunx wrangler secret put GEMINI_API_KEY
 bunx wrangler secret put SESSION_SECRET
 bunx wrangler secret put TURNSTILE_SECRET_KEY
 ```
@@ -47,26 +45,28 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 - `GET /`: Public donation form with PromptPay QR, bank/TrueMoney slip upload, Turnstile widget, and live overlay status indicator.
 - `GET /setup`: Initial administrator account creation (redirects to `/login` once an admin exists in D1).
 - `GET /login`: Administrator login page (rate-limited to 3 attempts per minute per IP).
-- `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, and transaction log (Admin only).
-- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS voice on/off toggle, remote command bus (`reload`, `clear`, `disconnect`, `tts`, `countdown`), heartbeat ping, and real-time event terminal (Admin only).
-- `GET /overlay`: Transparent OBS Browser Source alert overlay (Width: 800, Height: 400).
+- `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, TTS and filter toggles, and transaction log (Admin only).
+- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS settings, bad words filter config, remote command bus (`reload`, `clear`, `disconnect`, `tts`, `countdown`), heartbeat ping, and real-time event terminal (Admin only).
+- `GET /overlay` (alias `GET /overlay/alert`): Transparent OBS Browser Source alert overlay (Width: 800, Height: 400).
 - `GET /overlay/leaderboard`: Transparent OBS Browser Source top donors leaderboard overlay (Width: 450, Height: 500, `?limit=5&title=TOP+DONORS`).
 - `GET /overlay/countdown`: Transparent OBS Browser Source countdown timer overlay (Width: 450, Height: 250, `?minutes=10&title=STARTING+SOON`).
+- `GET /overlay/subathon` (alias `GET /overlay/submatron`): Transparent OBS Browser Source subathon marathon timer overlay (Width: 450, Height: 250, `?hours=2&sec_per_thb=6&cap_hours=24`).
 
 ### API Endpoints
-- `POST /api/donate`: Verify Turnstile & slip image, synthesize Gemini TTS (when enabled), store in D1, and broadcast donation event.
+- `POST /api/donate`: Verify Turnstile & slip image, sanitize & filter profanity, synthesize Edge TTS (when enabled), store in D1, and broadcast donation event.
 - `POST /api/donate/test`: Trigger a simulated donation alert with TTS (Admin only).
 - `GET /api/events`: Unified SSE stream (`heartbeat`, `overlay_status`, `donate`, `control`, `ping`).
 - `GET /api/events/overlay`: Dedicated SSE stream for OBS `/overlay` that tracks active overlay connections.
-- `GET /api/events/status`: Current overlay connection status (`online`, `count`, `ttsEnabled`, `timestamp`).
+- `GET /api/events/status`: Current overlay connection status (`online`, `count`, `ttsEnabled`, `ttsVoice`, `ttsRate`, `ttsPitch`, `filterEnabled`, `filterAction`, `timestamp`).
 - `GET /api/events/poll`: Fallback polling for recent donations and overlay status (`?since=<ms>&client=overlay`).
 - `GET /api/events/heartbeat` & `POST /api/events/heartbeat`: Touch/renew overlay heartbeat and broadcast status (Admin only).
-- `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`, `tts`) to connected overlays (Admin only).
+- `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`, `tts`, `countdown`) to connected overlays (Admin only).
 - `POST /setup`, `POST /login`, `POST /logout`: Admin authentication form handlers.
 - `POST /api/manage/setup`, `POST /api/manage/login`, `POST /api/manage/logout`: Headless JSON authentication (issues `Bearer` token and `dash_token` cookie).
 - `GET /api/manage/auth/status`, `POST /api/manage/auth/refresh`, `POST /api/manage/auth/revoke`, `PUT /api/manage/auth/config`: Inspect auth state, refresh tokens, revoke all active tokens (`token_version`), toggle Bearer API access (`apiEnabled`), and clear login rate-limit lockouts.
 - `GET /api/manage/me`, `PUT /api/manage/credentials`: Inspect admin profile/stats and rotate admin username/password.
-- `GET /api/manage/tts`, `PUT /api/manage/tts`: Query or toggle TTS voice alerts (`enabled: boolean`), persisted in D1.
+- `GET /api/manage/tts`, `PUT /api/manage/tts`: Query or update TTS settings (`enabled`, `voice`, `rate`, `pitch`), persisted in D1.
+- `GET /api/manage/filter`, `PUT /api/manage/filter`: Query or update word filter settings (`enabled`, `action: censor|mute`, `words`), persisted in D1.
 - `GET /api/manage/donations`, `DELETE /api/manage/donations/:id`: Query and delete recorded D1 donations.
 - `GET /api/manage/overlay`, `POST /api/manage/overlay/control`: Query and control OBS overlays via JSON API.
 
@@ -118,6 +118,12 @@ All upstream requests use header `x-api-key: <SLIP2SURE_API_KEY>`.
 3. Set **Width** to `450` and **Height** to `250`.
 4. Use `/overlay/control` to remotely start, pause, reset, or adjust countdown times live during the stream.
 
+### 4. Subathon Marathon Timer Overlay
+1. In OBS Studio, add a **Browser** source named `Subathon Timer`.
+2. Set **URL** to `http://localhost:5173/overlay/subathon?hours=2&sec_per_thb=6&cap_hours=24`.
+3. Set **Width** to `450` and **Height** to `250`.
+4. Automatically extends timer on donation based on `sec_per_thb` (default 6 seconds per 1 THB). Remote adjustments (+1m, +5m, +10m, -1m, pause, resume, reset) handled via `/overlay/control`.
+
 ---
 
 ## 5. Security Architecture & Threat Model
@@ -135,8 +141,10 @@ See [API Reference](./API.md) for full endpoint specifications.
   - `secureHeaders()` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and strict transport security.
 - **Input Sanitization & Injection Defense**:
   - Text inputs (`donor`, `message`) sanitized by stripping C0/C1 control codes and Unicode directionality/bidi overrides (`\u202A`–`\u202E`, zero-width spaces).
+  - Profanity filtering with 270+ Thai/English words (obbaeiei/bad-words-thai) and safe-words whitelist protection (`สวัสดี`, `อีเมล`, `หีบสมบัติ`).
+  - Asterisk characters (`***`) stripped from TTS spoken audio to prevent pronouncing "ดอกจัน".
   - Slip upload filenames sanitized to alphanumeric and safe characters (`[a-zA-Z0-9._-]`, max 50 chars) before upstream proxying.
-  - Gemini TTS prompt separated into `systemInstruction` parts to protect against donor message prompt injection.
-  - Event bus commands validated against a strict action allowlist (`reload`, `clear`, `disconnect`, `tts`, `heartbeat`).
+  - Microsoft Edge Neural TTS with SSML XML escaping, zero-dependency WebSocket streaming, and automatic voice failover.
+  - Event bus commands validated against a strict action allowlist (`reload`, `clear`, `disconnect`, `tts`, `countdown`, `heartbeat`).
 - **Duplicate Slip Prevention**:
   - Triple-layer guard: Slip2Sure upstream `is_exist` flag + in-memory `inflightRefs` lock Set + D1 `trans_ref` unique constraint (`INSERT OR IGNORE`).

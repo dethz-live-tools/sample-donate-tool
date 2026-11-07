@@ -31,11 +31,35 @@ async function ensureSchema(db: D1Binding) {
     .catch(() => {})
   await db
     .prepare(
-      'CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, tts_enabled INTEGER, token_version INTEGER DEFAULT 1, api_enabled INTEGER DEFAULT 1)'
+      "CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, tts_enabled INTEGER, tts_voice TEXT DEFAULT 'th-TH-NiwatNeural', tts_rate TEXT DEFAULT '+0%', tts_pitch TEXT DEFAULT '+0Hz', filter_enabled INTEGER DEFAULT 1, filter_words TEXT DEFAULT '', filter_action TEXT DEFAULT 'censor', token_version INTEGER DEFAULT 1, api_enabled INTEGER DEFAULT 1)"
     )
     .run()
   await db
     .prepare('ALTER TABLE admins ADD COLUMN tts_enabled INTEGER')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN tts_voice TEXT DEFAULT 'th-TH-NiwatNeural'")
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN tts_rate TEXT DEFAULT '+0%'")
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN tts_pitch TEXT DEFAULT '+0Hz'")
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE admins ADD COLUMN filter_enabled INTEGER DEFAULT 1')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN filter_words TEXT DEFAULT ''")
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN filter_action TEXT DEFAULT 'censor'")
     .run()
     .catch(() => {})
   await db
@@ -49,22 +73,96 @@ async function ensureSchema(db: D1Binding) {
   initialized = true
 }
 
-export async function getTtsSetting(db: D1Binding | undefined, fallback = true): Promise<boolean> {
-  if (!db) return fallback
+export type FilterSettings = {
+  enabled: boolean
+  words: string
+  action: 'censor' | 'mute'
+}
+
+export async function getFilterConfig(db: D1Binding | undefined): Promise<FilterSettings> {
+  const def: FilterSettings = {
+    enabled: true,
+    words: '',
+    action: 'censor'
+  }
+  if (!db) return def
   await ensureSchema(db)
-  const row = (await db.prepare('SELECT tts_enabled FROM admins WHERE id = 1').first()) as any
-  if (!row || row.tts_enabled === null || row.tts_enabled === undefined) return fallback
-  return Number(row.tts_enabled) !== 0
+  const row = (await db.prepare('SELECT filter_enabled, filter_words, filter_action FROM admins WHERE id = 1').first()) as any
+  if (!row) return def
+  return {
+    enabled: row.filter_enabled === null || row.filter_enabled === undefined ? true : Number(row.filter_enabled) !== 0,
+    words: String(row.filter_words || ''),
+    action: row.filter_action === 'mute' ? 'mute' : 'censor'
+  }
+}
+
+export async function setFilterConfig(db: D1Binding | undefined, config: Partial<FilterSettings>): Promise<FilterSettings> {
+  const current = await getFilterConfig(db)
+  const updated: FilterSettings = {
+    enabled: typeof config.enabled === 'boolean' ? config.enabled : current.enabled,
+    words: typeof config.words === 'string' ? config.words : current.words,
+    action: config.action === 'mute' ? 'mute' : 'censor'
+  }
+  if (!db) return updated
+  await ensureSchema(db)
+  await db
+    .prepare('UPDATE admins SET filter_enabled = ?, filter_words = ?, filter_action = ? WHERE id = 1')
+    .bind(updated.enabled ? 1 : 0, updated.words, updated.action)
+    .run()
+  return updated
+}
+
+export type TtsSettings = {
+  enabled: boolean
+  voice: string
+  rate: string
+  pitch: string
+}
+
+export async function getTtsConfig(db: D1Binding | undefined, fallbackEnabled = true): Promise<TtsSettings> {
+  const def: TtsSettings = {
+    enabled: fallbackEnabled,
+    voice: 'th-TH-NiwatNeural',
+    rate: '+0%',
+    pitch: '+0Hz'
+  }
+  if (!db) return def
+  await ensureSchema(db)
+  const row = (await db.prepare('SELECT tts_enabled, tts_voice, tts_rate, tts_pitch FROM admins WHERE id = 1').first()) as any
+  if (!row) return def
+  return {
+    enabled: row.tts_enabled === null || row.tts_enabled === undefined ? fallbackEnabled : Number(row.tts_enabled) !== 0,
+    voice: row.tts_voice || 'th-TH-NiwatNeural',
+    rate: row.tts_rate || '+0%',
+    pitch: row.tts_pitch || '+0Hz'
+  }
+}
+
+export async function setTtsConfig(db: D1Binding | undefined, config: Partial<TtsSettings>): Promise<TtsSettings> {
+  const current = await getTtsConfig(db)
+  const updated: TtsSettings = {
+    enabled: typeof config.enabled === 'boolean' ? config.enabled : current.enabled,
+    voice: typeof config.voice === 'string' && config.voice ? config.voice : current.voice,
+    rate: typeof config.rate === 'string' ? config.rate : current.rate,
+    pitch: typeof config.pitch === 'string' ? config.pitch : current.pitch
+  }
+  if (!db) return updated
+  await ensureSchema(db)
+  await db
+    .prepare('UPDATE admins SET tts_enabled = ?, tts_voice = ?, tts_rate = ?, tts_pitch = ? WHERE id = 1')
+    .bind(updated.enabled ? 1 : 0, updated.voice, updated.rate, updated.pitch)
+    .run()
+  return updated
+}
+
+export async function getTtsSetting(db: D1Binding | undefined, fallback = true): Promise<boolean> {
+  const cfg = await getTtsConfig(db, fallback)
+  return cfg.enabled
 }
 
 export async function setTtsSetting(db: D1Binding | undefined, enabled: boolean): Promise<boolean> {
-  if (!db) return enabled
-  await ensureSchema(db)
-  await db
-    .prepare('UPDATE admins SET tts_enabled = ? WHERE id = 1')
-    .bind(enabled ? 1 : 0)
-    .run()
-  return enabled
+  const updated = await setTtsConfig(db, { enabled })
+  return updated.enabled
 }
 
 export async function getAdmin(db: D1Binding | undefined): Promise<AdminRecord | null> {

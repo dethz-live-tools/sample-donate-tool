@@ -15,11 +15,17 @@ import {
   broadcastControl,
   broadcastOverlayStatus,
   getOverlayStatus,
+  resolveFilterConfig,
+  resolveTtsConfig,
   resolveTtsEnabled,
   touchOverlayHeartbeat,
+  updateFilterConfig,
+  updateTtsConfig,
   updateTtsEnabled,
   type OverlayCommand
 } from './events'
+import { DEFAULT_BLOCKED_WORDS } from './filter'
+import { EDGE_TTS_VOICES } from './tts'
 
 const COOKIE_NAME = 'dash_token'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
@@ -197,6 +203,33 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     deleteCookie(c, COOKIE_NAME, { path: '/' })
     return c.redirect('/login')
   })
+  .get('/tts', dashboardAuth, async (c) => {
+    const ttsConfig = await resolveTtsConfig(c.env)
+    return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
+  })
+  .put('/tts', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveTtsConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+    const rate = typeof body.rate === 'string' ? body.rate : current.rate
+    const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+    const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+  })
+  .get('/filter', dashboardAuth, async (c) => {
+    const filterConfig = await resolveFilterConfig(c.env)
+    return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
+  })
+  .put('/filter', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveFilterConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const words = typeof body.words === 'string' ? body.words : current.words
+    const action = body.action === 'mute' ? 'mute' : 'censor'
+    const updated = await updateFilterConfig(c.env, { enabled: nextEnabled, words, action })
+    return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
+  })
 
 function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string) {
   setCookie(c, COOKIE_NAME, token, {
@@ -362,15 +395,31 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/tts', dashboardAuth, async (c) => {
-    const ttsEnabled = await resolveTtsEnabled(c.env)
-    return c.json({ ok: true, ttsEnabled })
+    const ttsConfig = await resolveTtsConfig(c.env)
+    return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
   })
   .put('/tts', dashboardAuth, async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
-    const current = await resolveTtsEnabled(c.env)
-    const next = typeof body.enabled === 'boolean' ? body.enabled : !current
-    const ttsEnabled = await updateTtsEnabled(c.env, next)
-    return c.json({ ok: true, ttsEnabled, overlayStatus: getOverlayStatus() })
+    const current = await resolveTtsConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+    const rate = typeof body.rate === 'string' ? body.rate : current.rate
+    const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+    const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+  })
+  .get('/filter', dashboardAuth, async (c) => {
+    const filterConfig = await resolveFilterConfig(c.env)
+    return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
+  })
+  .put('/filter', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveFilterConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const words = typeof body.words === 'string' ? body.words : current.words
+    const action = body.action === 'mute' ? 'mute' : 'censor'
+    const updated = await updateFilterConfig(c.env, { enabled: nextEnabled, words, action })
+    return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
   })
   .put('/credentials', dashboardAuth, async (c) => {
     const admin = await getAdmin(c.env?.DB)
@@ -438,10 +487,24 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       return c.json({ ok: true, status: getOverlayStatus() })
     }
     if (action === 'tts') {
-      const current = await resolveTtsEnabled(c.env)
-      const next = typeof body.enabled === 'boolean' ? body.enabled : !current
-      await updateTtsEnabled(c.env, next)
-      return c.json({ ok: true, command: { action: 'tts', enabled: next, timestamp: Date.now() }, status: getOverlayStatus() })
+      const current = await resolveTtsConfig(c.env)
+      const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !current.enabled
+      const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+      const rate = typeof body.rate === 'string' ? body.rate : current.rate
+      const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+      const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+      return c.json({
+        ok: true,
+        command: {
+          action: 'tts',
+          enabled: updated.enabled,
+          voice: updated.voice,
+          rate: updated.rate,
+          pitch: updated.pitch,
+          timestamp: Date.now()
+        },
+        status: getOverlayStatus()
+      })
     }
     const payload = { ...body, action, timestamp: Date.now() }
     broadcastControl(payload)

@@ -5,18 +5,23 @@ import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, getLeaderboard, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveTtsEnabled } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
+import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
+import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
 import { OverlayControlPage } from './pages/control'
-import { CountdownOverlayPage } from './pages/countdown'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
-import { LeaderboardOverlayPage } from './pages/leaderboard'
 import { LoginPage } from './pages/login'
-import { OverlayPage } from './pages/overlay'
+import { AlertOverlayPage, CountdownOverlayPage, LeaderboardOverlayPage, SubathonOverlayPage } from './pages/overlays'
 import { SetupPage } from './pages/setup'
 import { renderer } from './renderer'
 
 const app = new Hono<{ Bindings: Bindings }>()
+
+app.onError((err, c) => {
+  console.error('[app] Unhandled error:', err)
+  return c.text('Internal Server Error', 500)
+})
 
 app.use(secureHeaders())
 app.use('*', async (c, next) => {
@@ -30,6 +35,43 @@ app.route('/api/manage', manageRoute)
 app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
 
+app.get('/api/tts', async (c) => {
+  const text = c.req.query('text') || ''
+  if (!text.trim()) return c.text('Text is required', 400)
+  const ttsConfig = await resolveTtsConfig(c.env)
+  const voice = c.req.query('voice') || ttsConfig.voice
+  const rate = c.req.query('rate') || ttsConfig.rate
+  const pitch = c.req.query('pitch') || ttsConfig.pitch
+  try {
+    const res = await synthesizeEdgeTTS(text, { voice, rate, pitch })
+    return new Response(res.audio, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*'
+      }
+    })
+  } catch (err: any) {
+    return c.text(err?.message || 'TTS synthesis failed', 500)
+  }
+})
+
+app.get('/tts', dashboardAuth, async (c) => {
+  const ttsConfig = await resolveTtsConfig(c.env)
+  return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
+})
+
+app.put('/tts', dashboardAuth, async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as any
+  const current = await resolveTtsConfig(c.env)
+  const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+  const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+  const rate = typeof body.rate === 'string' ? body.rate : current.rate
+  const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+  const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+  return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+})
+
 app.get('/', (c) => c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} />))
 app.get('/setup', async (c) => {
   const admin = await getAdmin(c.env?.DB)
@@ -42,17 +84,21 @@ app.get('/login', async (c) => {
   return c.render(<LoginPage error={c.req.query('error') === '1'} />)
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
-  const [items] = await Promise.all([listDonations(c.env?.DB), resolveTtsEnabled(c.env)])
+  const [items] = await Promise.all([listDonations(c.env?.DB), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
 })
 app.get('/overlay/control', dashboardAuth, async (c) => {
-  await resolveTtsEnabled(c.env)
+  await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} />)
 })
 app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
 app.get('/overlay', async (c) => {
   const ttsEnabled = await resolveTtsEnabled(c.env)
-  return c.render(<OverlayPage ttsEnabled={ttsEnabled} />)
+  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} />)
+})
+app.get('/overlay/alert', async (c) => {
+  const ttsEnabled = await resolveTtsEnabled(c.env)
+  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} />)
 })
 app.get('/overlay/leaderboard', async (c) => {
   const rawLimit = Number(c.req.query('limit'))
@@ -62,11 +108,11 @@ app.get('/overlay/leaderboard', async (c) => {
   return c.render(<LeaderboardOverlayPage initialItems={items} limit={limit} title={title} />)
 })
 app.get('/overlay/countdown', (c) => {
-  const title = c.req.query('title') || 'STARTING SOON'
-  const minutes = Number(c.req.query('minutes')) || 0
+  const title = c.req.query('title') || 'COUNTDOWN'
+  const minutes = c.req.query('minutes') !== undefined ? Number(c.req.query('minutes')) : 10
   const seconds = Number(c.req.query('seconds')) || 0
   const target = c.req.query('target') || ''
-  const endMsg = c.req.query('end') || 'LIVE NOW'
+  const endMsg = c.req.query('end') || 'TIME UP'
   return c.render(
     <CountdownOverlayPage
       title={title}
@@ -77,5 +123,26 @@ app.get('/overlay/countdown', (c) => {
     />
   )
 })
+app.get('/overlay/subathon', (c) => {
+  const title = c.req.query('title') || 'SUBATHON'
+  const minutes = c.req.query('minutes') !== undefined ? Number(c.req.query('minutes')) : 10
+  const seconds = Number(c.req.query('seconds')) || 0
+  const target = c.req.query('target') || ''
+  const endMsg = c.req.query('end') || 'TIME UP'
+  const secPerThb = Number(c.req.query('sec_per_thb') || c.req.query('rate')) || 6
+  const maxHours = Number(c.req.query('max_hours')) || 24
+  return c.render(
+    <SubathonOverlayPage
+      title={title}
+      minutes={minutes}
+      seconds={seconds}
+      target={target}
+      endMsg={endMsg}
+      secPerThb={secPerThb}
+      maxHours={maxHours}
+    />
+  )
+})
+app.get('/overlay/submatron', (c) => c.redirect('/overlay/subathon'))
 
 export default app
