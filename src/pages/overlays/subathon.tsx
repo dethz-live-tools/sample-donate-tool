@@ -21,7 +21,8 @@ export function SubathonOverlayPage({
 }) {
   const resolvedTitle = initialState?.title || title || 'SUBATHON'
   const resolvedEndMsg = initialState?.endMsg || endMsg || 'TIME UP'
-  const resolvedSecPerThb = initialState?.secPerThb ?? (Number(secPerThb) || 6)
+  const resolvedRateCoins = initialState?.rateCoins ?? 10
+  const resolvedRateSeconds = initialState?.rateSeconds ?? ((Number(secPerThb) || 6) * resolvedRateCoins)
   const resolvedMaxHours = initialState?.maxHours ?? (Number(maxHours) || 24)
   const fallbackDuration = Math.max(0, (Number(minutes) || 0) * 60 + (Number(seconds) || 0)) || 600
   const resolvedInitialSecs = initialState?.initialSeconds ?? fallbackDuration
@@ -32,27 +33,29 @@ export function SubathonOverlayPage({
   const resolvedTotalDonations = initialState?.totalDonations ?? 0
 
   return (
-    <div>
+    <div class="subathon-wrapper">
       <div class="countdown-card subathon" id="subathonBox">
-        <div class="countdown-header">
-          <span class="countdown-badge" id="subBadge">SUBATHON</span>
-          <span class="countdown-title" id="subTitle">{resolvedTitle}</span>
+        <div class="countdown-header" style="margin-bottom:10px;">
+          <div class="subathon-rate-banner" id="subRateBanner">
+            {resolvedRateCoins} COINS ➔ +{resolvedRateSeconds}S
+          </div>
         </div>
-        <div class="countdown-added" id="subAdded"></div>
         <div class="countdown-display" id="subDisplay">--:--:--</div>
         <div class="countdown-status" id="subStatus">STANDBY</div>
         <div class="countdown-stats" id="subStats"></div>
       </div>
+      <div class="countdown-added" id="subAdded"></div>
 
       <script
         dangerouslySetInnerHTML={{
           __html: `
-          document.body.classList.add('overlay-body');
+          document.body.classList.add('overlay-body', 'subathon-overlay-body');
 
           let initialSecs = ${resolvedInitialSecs};
           const targetStr = ${JSON.stringify(target || '')};
           let endText = ${JSON.stringify(resolvedEndMsg)};
-          let secPerThb = ${resolvedSecPerThb};
+          let rateCoins = ${resolvedRateCoins};
+          let rateSeconds = ${resolvedRateSeconds};
           let maxCapSecs = ${Math.max(1, resolvedMaxHours)} * 3600;
 
           let remaining = ${resolvedRemainingSecs};
@@ -77,9 +80,8 @@ export function SubathonOverlayPage({
 
           const box = document.getElementById('subathonBox');
           const displayEl = document.getElementById('subDisplay');
-          const titleEl = document.getElementById('subTitle');
+          const rateBannerEl = document.getElementById('subRateBanner');
           const statusEl = document.getElementById('subStatus');
-          const badgeEl = document.getElementById('subBadge');
           const statsEl = document.getElementById('subStats');
           const addedEl = document.getElementById('subAdded');
 
@@ -99,38 +101,47 @@ export function SubathonOverlayPage({
             const h = Math.floor(totalSecs / 3600);
             const m = Math.floor((totalSecs % 3600) / 60);
             const s = totalSecs % 60;
-            if (h > 0) return h + 'h ' + m + 'm';
-            if (m > 0) return m + 'm ' + s + 's';
+            if (h > 0) return h + 'h ' + (m > 0 ? m + 'm' : '');
+            if (m > 0) return m + 'm' + (s > 0 ? ' ' + s + 's' : '');
             return s + 's';
           }
 
+          function formatRateLabel() {
+            return rateCoins + ' COINS ➔ +' + rateSeconds + ' SEC';
+          }
+
           function render() {
+            if (rateBannerEl) {
+              rateBannerEl.textContent = formatRateLabel();
+            }
             if (remaining <= 0) {
               displayEl.textContent = '00:00:00';
               statusEl.textContent = endText;
               box.classList.add('ended');
-              badgeEl.textContent = 'ENDED';
               if (statsEl) {
-                statsEl.textContent = 'RATE: +' + secPerThb + 'S/THB // ADDED: +' + formatHuman(totalAddedSecs) + ' (' + totalDonations.toLocaleString() + ' THB)';
+                statsEl.textContent = 'ADDED: +' + formatHuman(totalAddedSecs) + ' // TOTAL: ' + totalDonations.toLocaleString() + ' COINS';
               }
               return;
             }
             box.classList.remove('ended');
             displayEl.textContent = formatTime(remaining);
             statusEl.textContent = isRunning ? 'SUBATHON LIVE' : 'PAUSED';
-            badgeEl.textContent = isRunning ? 'SUBATHON' : 'HOLD';
 
             if (statsEl) {
-              statsEl.textContent = 'RATE: +' + secPerThb + 'S/THB // ADDED: +' + formatHuman(totalAddedSecs) + ' (' + totalDonations.toLocaleString() + ' THB)';
+              statsEl.textContent = 'ADDED: +' + formatHuman(totalAddedSecs) + ' // TOTAL: ' + totalDonations.toLocaleString() + ' COINS';
             }
           }
 
           function applyPersistedState(st) {
             if (!st || typeof st !== 'object') return;
-            if (st.title && titleEl) titleEl.textContent = st.title;
             if (st.endMsg) endText = st.endMsg;
             if (typeof st.initialSeconds === 'number') initialSecs = st.initialSeconds;
-            if (typeof st.secPerThb === 'number' && st.secPerThb > 0) secPerThb = st.secPerThb;
+            if (typeof st.rateCoins === 'number' && st.rateCoins > 0) rateCoins = st.rateCoins;
+            if (typeof st.rateSeconds === 'number' && st.rateSeconds > 0) rateSeconds = st.rateSeconds;
+            else if (typeof st.secPerThb === 'number' && st.secPerThb > 0 && !st.rateSeconds) {
+              rateCoins = 1;
+              rateSeconds = Math.round(st.secPerThb);
+            }
             if (typeof st.maxHours === 'number' && st.maxHours > 0) maxCapSecs = st.maxHours * 3600;
             if (typeof st.totalAddedSecs === 'number') totalAddedSecs = st.totalAddedSecs;
             if (typeof st.totalDonations === 'number') totalDonations = st.totalDonations;
@@ -171,47 +182,68 @@ export function SubathonOverlayPage({
 
           render();
           timerInterval = setInterval(tick, 1000);
-          setInterval(syncFromDb, 10000);
+          setInterval(syncFromDb, 5000);
+
+          const seenIds = new Set();
+          let lastSeen = Date.now();
+
+          function handleDonateEvent(d) {
+            if (!d || (d.id && seenIds.has(d.id))) return;
+            if (d.id) seenIds.add(d.id);
+            if (d.createdAt) lastSeen = Math.max(lastSeen, Number(d.createdAt) || Date.now());
+
+            const amt = Number(d.amount) || 0;
+            const donor = String(d.donor || 'ANONYMOUS').trim() || 'ANONYMOUS';
+            const minCoins = Math.max(0.01, rateCoins);
+
+            if (amt >= minCoins) {
+              const addedSecs = Math.round((amt / minCoins) * rateSeconds);
+              if (addedSecs > 0) {
+                remaining = Math.min(maxCapSecs, remaining + addedSecs);
+                totalAddedSecs += addedSecs;
+                totalDonations += amt;
+                isRunning = remaining > 0;
+                if (isRunning) {
+                  targetEpoch = Date.now() + remaining * 1000;
+                }
+
+                box.classList.remove('pulse');
+                void box.offsetWidth;
+                box.classList.add('pulse');
+                setTimeout(() => box.classList.remove('pulse'), 850);
+
+                if (addedEl) {
+                  addedEl.textContent = '+' + formatHuman(addedSecs) + ' // ' + donor + ' (+' + amt.toLocaleString() + ' COINS)';
+                  addedEl.classList.add('show');
+                  clearTimeout(addedTimeout);
+                  addedTimeout = setTimeout(() => {
+                    if (addedEl) addedEl.classList.remove('show');
+                  }, 4500);
+                }
+
+                render();
+                syncFromDb();
+              }
+            }
+          }
 
           const es = new EventSource('/api/events/overlay');
 
           es.addEventListener('donate', (e) => {
             try {
-              const d = JSON.parse(e.data);
-              const amt = Number(d.amount) || 0;
-              const donor = String(d.donor || 'ANONYMOUS').trim() || 'ANONYMOUS';
-
-              if (amt > 0) {
-                const addedSecs = Math.round(amt * secPerThb);
-                if (addedSecs > 0) {
-                  remaining = Math.min(maxCapSecs, remaining + addedSecs);
-                  totalAddedSecs += addedSecs;
-                  totalDonations += amt;
-                  isRunning = remaining > 0;
-                  if (isRunning) {
-                    targetEpoch = Date.now() + remaining * 1000;
-                  }
-
-                  box.classList.remove('pulse');
-                  void box.offsetWidth;
-                  box.classList.add('pulse');
-                  setTimeout(() => box.classList.remove('pulse'), 850);
-
-                  if (addedEl) {
-                    addedEl.textContent = '+' + formatHuman(addedSecs) + ' // ' + donor + ' (+' + amt.toLocaleString() + ' THB)';
-                    addedEl.classList.add('show');
-                    clearTimeout(addedTimeout);
-                    addedTimeout = setTimeout(() => {
-                      if (addedEl) addedEl.classList.remove('show');
-                    }, 4500);
-                  }
-
-                  render();
-                  syncFromDb();
-                }
-              }
+              handleDonateEvent(JSON.parse(e.data));
             } catch (_) {}
           });
+
+          setInterval(async () => {
+            try {
+              const r = await fetch('/api/events/poll?client=overlay&since=' + lastSeen);
+              const d = await r.json();
+              if (d && Array.isArray(d.items)) {
+                d.items.forEach(handleDonateEvent);
+              }
+            } catch (_) {}
+          }, 2000);
 
           es.addEventListener('control', (e) => {
             try {

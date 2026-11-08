@@ -46,6 +46,20 @@ body.overlay-body {
   justify-content: center;
 }
 
+body.overlay-body.subathon-overlay-body {
+  display: block;
+  padding: 0;
+  margin: 0;
+}
+
+.subathon-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+
 a {
   color: var(--ctp-blue);
   text-decoration: underline;
@@ -628,24 +642,45 @@ tr:hover td {
 .countdown-added {
   display: none;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--ctp-crust);
   background: var(--ctp-green);
-  padding: 4px 12px;
-  margin: 6px auto 8px auto;
+  border: 3px solid var(--ctp-crust);
+  box-shadow: 4px 4px 0 var(--ctp-crust);
+  padding: 8px 18px;
+  margin-top: 10px;
   letter-spacing: 1px;
+  text-align: center;
 }
 
 .countdown-added.show {
-  display: inline-block;
+  display: block;
 }
 
 .countdown-stats {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ctp-subtext0);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ctp-subtext1);
   letter-spacing: 1px;
-  margin-top: 6px;
+  margin-top: 8px;
   text-transform: uppercase;
+}
+
+.subathon-rate-banner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-head);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--ctp-crust);
+  background: var(--ctp-yellow);
+  border: 2px solid var(--ctp-yellow);
+  padding: 6px 16px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 var(--ctp-crust);
 }

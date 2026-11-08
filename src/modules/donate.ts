@@ -107,9 +107,9 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       if (!(await insertDonation(c.env?.DB, ev))) {
         return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
       }
-      await addSubathonDonation(c.env?.DB, verified.amount)
+      const subathonState = await addSubathonDonation(c.env?.DB, verified.amount)
       broadcast(ev)
-      return c.json({ ok: true, event: ev })
+      return c.json({ ok: true, event: ev, subathonState })
     } finally {
       inflightRefs.delete(verified.transRef)
     }
@@ -119,7 +119,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     const body = (await c.req.json().catch(() => ({}))) as any
     const rawDonor = sanitizeInput(String(body.donor || 'TEST DONOR'), 50) || 'TEST DONOR'
     const rawAmt = Number(body.amount)
-    const amount = Math.min(1_000_000, Math.max(10, Number.isFinite(rawAmt) ? rawAmt : 99))
+    const amount = Math.min(1_000_000, Math.max(1, Number.isFinite(rawAmt) ? rawAmt : 99))
     const rawMsg = sanitizeInput(String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!'), 200)
 
     const filterConfig = await resolveFilterConfig(c.env)
@@ -163,7 +163,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       createdAt: Date.now()
     }
     await insertDonation(c.env?.DB, ev)
-    await addSubathonDonation(c.env?.DB, amount)
+    const subathonState = await addSubathonDonation(c.env?.DB, amount)
     broadcast(ev)
-    return c.json({ ok: true, event: ev })
+    return c.json({ ok: true, event: ev, subathonState })
   })

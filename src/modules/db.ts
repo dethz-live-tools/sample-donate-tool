@@ -72,9 +72,17 @@ async function ensureSchema(db: D1Binding) {
     .catch(() => {})
   await db
     .prepare(
-      "CREATE TABLE IF NOT EXISTS subathon_state (id INTEGER PRIMARY KEY CHECK (id = 1), title TEXT DEFAULT 'SUBATHON', end_msg TEXT DEFAULT 'TIME UP', initial_seconds INTEGER DEFAULT 600, remaining_seconds INTEGER DEFAULT 600, target_epoch INTEGER DEFAULT 0, is_running INTEGER DEFAULT 1, sec_per_thb INTEGER DEFAULT 6, max_hours INTEGER DEFAULT 24, total_added_secs INTEGER DEFAULT 0, total_donations REAL DEFAULT 0, updated_at INTEGER NOT NULL)"
+      "CREATE TABLE IF NOT EXISTS subathon_state (id INTEGER PRIMARY KEY CHECK (id = 1), title TEXT DEFAULT 'SUBATHON', end_msg TEXT DEFAULT 'TIME UP', initial_seconds INTEGER DEFAULT 600, remaining_seconds INTEGER DEFAULT 600, target_epoch INTEGER DEFAULT 0, is_running INTEGER DEFAULT 1, rate_coins REAL DEFAULT 10, rate_seconds INTEGER DEFAULT 60, sec_per_thb REAL DEFAULT 6, max_hours INTEGER DEFAULT 24, total_added_secs INTEGER DEFAULT 0, total_donations REAL DEFAULT 0, updated_at INTEGER NOT NULL)"
     )
     .run()
+  await db
+    .prepare('ALTER TABLE subathon_state ADD COLUMN rate_coins REAL DEFAULT 10')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE subathon_state ADD COLUMN rate_seconds INTEGER DEFAULT 60')
+    .run()
+    .catch(() => {})
   initialized = true
 }
 
@@ -345,6 +353,8 @@ export type SubathonState = {
   remainingSeconds: number
   targetEpoch: number
   isRunning: boolean
+  rateCoins: number
+  rateSeconds: number
   secPerThb: number
   maxHours: number
   totalAddedSecs: number
@@ -362,6 +372,8 @@ function createDefaultSubathonState(now = Date.now()): SubathonState {
     remainingSeconds: 600,
     targetEpoch: now + 600 * 1000,
     isRunning: true,
+    rateCoins: 10,
+    rateSeconds: 60,
     secPerThb: 6,
     maxHours: 24,
     totalAddedSecs: 0,
@@ -400,6 +412,10 @@ export async function getSubathonState(db: D1Binding | undefined): Promise<Subat
     return def
   }
 
+  const rateCoins = Number(row.rate_coins) > 0 ? Number(row.rate_coins) : 10
+  const rateSeconds = Number(row.rate_seconds) > 0 ? Number(row.rate_seconds) : (Number(row.sec_per_thb || 6) * rateCoins)
+  const secPerThb = Number((rateSeconds / rateCoins).toFixed(4)) || 6
+
   const parsed: SubathonState = {
     title: String(row.title || 'SUBATHON'),
     endMsg: String(row.end_msg || 'TIME UP'),
@@ -407,7 +423,9 @@ export async function getSubathonState(db: D1Binding | undefined): Promise<Subat
     remainingSeconds: Number(row.remaining_seconds ?? 600),
     targetEpoch: Number(row.target_epoch ?? 0),
     isRunning: Number(row.is_running ?? 1) !== 0,
-    secPerThb: Number(row.sec_per_thb || 6),
+    rateCoins,
+    rateSeconds,
+    secPerThb,
     maxHours: Number(row.max_hours || 24),
     totalAddedSecs: Number(row.total_added_secs || 0),
     totalDonations: Number(row.total_donations || 0),
@@ -420,8 +438,14 @@ export async function getSubathonState(db: D1Binding | undefined): Promise<Subat
 
 export async function saveSubathonState(db: D1Binding | undefined, state: SubathonState): Promise<SubathonState> {
   const now = Date.now()
+  const rateCoins = Math.max(0.01, Number(state.rateCoins) || 10)
+  const rateSeconds = Math.max(1, Math.round(Number(state.rateSeconds) || 60))
+  const secPerThb = Number((rateSeconds / rateCoins).toFixed(4)) || 6
   const updated: SubathonState = {
     ...state,
+    rateCoins,
+    rateSeconds,
+    secPerThb,
     updatedAt: now
   }
   memorySubathonState = updated
@@ -430,7 +454,7 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
   await ensureSchema(db)
   await db
     .prepare(
-      'INSERT INTO subathon_state (id, title, end_msg, initial_seconds, remaining_seconds, target_epoch, is_running, sec_per_thb, max_hours, total_added_secs, total_donations, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, end_msg = excluded.end_msg, initial_seconds = excluded.initial_seconds, remaining_seconds = excluded.remaining_seconds, target_epoch = excluded.target_epoch, is_running = excluded.is_running, sec_per_thb = excluded.sec_per_thb, max_hours = excluded.max_hours, total_added_secs = excluded.total_added_secs, total_donations = excluded.total_donations, updated_at = excluded.updated_at'
+      'INSERT INTO subathon_state (id, title, end_msg, initial_seconds, remaining_seconds, target_epoch, is_running, rate_coins, rate_seconds, sec_per_thb, max_hours, total_added_secs, total_donations, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, end_msg = excluded.end_msg, initial_seconds = excluded.initial_seconds, remaining_seconds = excluded.remaining_seconds, target_epoch = excluded.target_epoch, is_running = excluded.is_running, rate_coins = excluded.rate_coins, rate_seconds = excluded.rate_seconds, sec_per_thb = excluded.sec_per_thb, max_hours = excluded.max_hours, total_added_secs = excluded.total_added_secs, total_donations = excluded.total_donations, updated_at = excluded.updated_at'
     )
     .bind(
       updated.title,
@@ -439,6 +463,8 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
       updated.remainingSeconds,
       updated.targetEpoch,
       updated.isRunning ? 1 : 0,
+      updated.rateCoins,
+      updated.rateSeconds,
       updated.secPerThb,
       updated.maxHours,
       updated.totalAddedSecs,
@@ -459,11 +485,28 @@ export async function applySubathonCommand(
   const sub = String(cmd.cmd || 'set')
   const next: SubathonState = { ...current }
 
+  const applyRateFields = () => {
+    if (typeof cmd.rateCoins === 'number' && cmd.rateCoins > 0 && typeof cmd.rateSeconds === 'number' && cmd.rateSeconds > 0) {
+      next.rateCoins = cmd.rateCoins
+      next.rateSeconds = Math.round(cmd.rateSeconds)
+      next.secPerThb = Number((next.rateSeconds / next.rateCoins).toFixed(4))
+    } else if (typeof cmd.secPerThb === 'number' && cmd.secPerThb > 0) {
+      next.rateCoins = 1
+      next.rateSeconds = Math.max(1, Math.round(cmd.secPerThb))
+      next.secPerThb = cmd.secPerThb
+    }
+    if (typeof cmd.maxHours === 'number' && cmd.maxHours > 0) {
+      next.maxHours = cmd.maxHours
+    }
+  }
+
   if (sub === 'set') {
     if (typeof cmd.minutes === 'number') {
       const secs = Math.max(0, Math.round(cmd.minutes * 60 + (Number(cmd.seconds) || 0)))
       next.initialSeconds = secs
-      next.remainingSeconds = secs
+      if (cmd.keepRemaining !== true) {
+        next.remainingSeconds = secs
+      }
     }
     if (typeof cmd.title === 'string' && cmd.title.trim()) {
       next.title = cmd.title.trim()
@@ -471,14 +514,13 @@ export async function applySubathonCommand(
     if (typeof cmd.endMsg === 'string' && cmd.endMsg.trim()) {
       next.endMsg = cmd.endMsg.trim()
     }
-    if (typeof cmd.secPerThb === 'number' && cmd.secPerThb > 0) {
-      next.secPerThb = cmd.secPerThb
+    applyRateFields()
+    if (cmd.keepRemaining !== true) {
+      next.isRunning = next.remainingSeconds > 0
+      next.targetEpoch = next.isRunning ? now + next.remainingSeconds * 1000 : 0
     }
-    if (typeof cmd.maxHours === 'number' && cmd.maxHours > 0) {
-      next.maxHours = cmd.maxHours
-    }
-    next.isRunning = next.remainingSeconds > 0
-    next.targetEpoch = next.isRunning ? now + next.remainingSeconds * 1000 : 0
+  } else if (sub === 'rate') {
+    applyRateFields()
   } else if (sub === 'pause') {
     next.isRunning = false
     next.targetEpoch = 0
@@ -517,7 +559,10 @@ export async function addSubathonDonation(
   const amt = Number(amount) || 0
   if (amt <= 0) return current
 
-  const addedSecs = Math.round(amt * current.secPerThb)
+  const rateCoins = Math.max(0.01, current.rateCoins || 1)
+  if (amt < rateCoins) return current
+  const rateSeconds = Math.max(1, current.rateSeconds || current.secPerThb || 6)
+  const addedSecs = Math.round((amt / rateCoins) * rateSeconds)
   if (addedSecs <= 0) return current
 
   const maxCapSecs = Math.max(1, current.maxHours) * 3600

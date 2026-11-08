@@ -12,7 +12,8 @@ export function SubathonControlPage({
   const initTitle = subathonState?.title || 'SUBATHON'
   const initEndMsg = subathonState?.endMsg || 'TIME UP'
   const initMins = Math.max(1, Math.round((subathonState?.initialSeconds ?? 600) / 60))
-  const initRate = subathonState?.secPerThb ?? 6
+  const initRateCoins = subathonState?.rateCoins ?? 10
+  const initRateSeconds = subathonState?.rateSeconds ?? 60
   const initCapHours = subathonState?.maxHours ?? 24
   const initRemaining = subathonState?.remainingSeconds ?? 600
   const initTargetEpoch = subathonState?.targetEpoch ?? 0
@@ -33,18 +34,23 @@ export function SubathonControlPage({
         const previewSubLink = document.getElementById('previewSubLink');
         const titleInput = document.getElementById('subCustomTitle');
         const minsInput = document.getElementById('subCustomMinutes');
-        const rateInput = document.getElementById('subSecPerThb');
+        const rateCoinsInput = document.getElementById('subRateCoins');
+        const rateSecondsInput = document.getElementById('subRateSeconds');
+        const ratePreviewEl = document.getElementById('subRatePreview');
         const capInput = document.getElementById('subMaxHours');
         const endInput = document.getElementById('subCustomEnd');
 
         const dbClockEl = document.getElementById('subDbClock');
         const dbStateEl = document.getElementById('subDbState');
+        const dbRateEl = document.getElementById('subDbRate');
         const dbAddedEl = document.getElementById('subDbAdded');
         const dbThbEl = document.getElementById('subDbThb');
 
         let subRemaining = ${initRemaining};
         let subTargetEpoch = ${initTargetEpoch || 'null'};
         let subRunning = ${initIsRunning ? 'true' : 'false'};
+        let subRateCoins = ${initRateCoins};
+        let subRateSeconds = ${initRateSeconds};
         let subAddedSecs = ${initAddedSecs};
         let subTotalThb = ${initTotalThb};
 
@@ -65,9 +71,24 @@ export function SubathonControlPage({
           const m = Math.floor((totalSecs % 3600) / 60);
           const s = totalSecs % 60;
           if (h > 0) return h + 'h ' + m + 'm';
-          if (m > 0) return m + 'm ' + s + 's';
+          if (m > 0) return m + 'm ' + (s > 0 ? s + 's' : '');
           return s + 's';
         }
+
+        function updateRatePreview() {
+          const c = Math.max(0.01, Number(rateCoinsInput?.value) || 10);
+          const s = Math.max(1, Math.round(Number(rateSecondsInput?.value) || 60));
+          if (ratePreviewEl) {
+            ratePreviewEl.textContent =
+              'MIN TO COUNT: ' + c + ' COINS (BELOW ' + c + ' COINS = IGNORED)   |   ' +
+              c + ' COINS = +' + formatHuman(s) +
+              '   •   ' + (c * 5) + ' COINS = +' + formatHuman(s * 5) +
+              '   •   ' + (c * 10) + ' COINS = +' + formatHuman(s * 10);
+          }
+        }
+
+        rateCoinsInput?.addEventListener('input', updateRatePreview);
+        rateSecondsInput?.addEventListener('input', updateRatePreview);
 
         function renderSubDbCard() {
           if (dbClockEl) dbClockEl.textContent = formatTime(subRemaining);
@@ -75,8 +96,9 @@ export function SubathonControlPage({
             dbStateEl.textContent = subRemaining <= 0 ? 'ENDED' : (subRunning ? 'RUNNING' : 'PAUSED');
             dbStateEl.className = subRunning && subRemaining > 0 ? 'status-online' : 'status-offline';
           }
+          if (dbRateEl) dbRateEl.textContent = subRateCoins + ' COINS ➔ +' + subRateSeconds + 'S';
           if (dbAddedEl) dbAddedEl.textContent = '+' + formatHuman(subAddedSecs);
-          if (dbThbEl) dbThbEl.textContent = Number(subTotalThb || 0).toLocaleString() + ' THB';
+          if (dbThbEl) dbThbEl.textContent = Number(subTotalThb || 0).toLocaleString() + ' COINS';
         }
 
         function applySubDbState(st) {
@@ -89,6 +111,8 @@ export function SubathonControlPage({
             subTargetEpoch = null;
             if (typeof st.remainingSeconds === 'number') subRemaining = Math.max(0, st.remainingSeconds);
           }
+          if (typeof st.rateCoins === 'number' && st.rateCoins > 0) subRateCoins = st.rateCoins;
+          if (typeof st.rateSeconds === 'number' && st.rateSeconds > 0) subRateSeconds = st.rateSeconds;
           if (typeof st.totalAddedSecs === 'number') subAddedSecs = st.totalAddedSecs;
           if (typeof st.totalDonations === 'number') subTotalThb = st.totalDonations;
 
@@ -97,12 +121,16 @@ export function SubathonControlPage({
           if (minsInput && typeof st.initialSeconds === 'number' && document.activeElement !== minsInput) {
             minsInput.value = String(Math.max(1, Math.round(st.initialSeconds / 60)));
           }
-          if (rateInput && typeof st.secPerThb === 'number' && document.activeElement !== rateInput) {
-            rateInput.value = String(st.secPerThb);
+          if (rateCoinsInput && typeof st.rateCoins === 'number' && document.activeElement !== rateCoinsInput) {
+            rateCoinsInput.value = String(st.rateCoins);
+          }
+          if (rateSecondsInput && typeof st.rateSeconds === 'number' && document.activeElement !== rateSecondsInput) {
+            rateSecondsInput.value = String(st.rateSeconds);
           }
           if (capInput && typeof st.maxHours === 'number' && document.activeElement !== capInput) {
             capInput.value = String(st.maxHours);
           }
+          updateRatePreview();
           renderSubDbCard();
         }
 
@@ -127,6 +155,7 @@ export function SubathonControlPage({
         }
 
         renderSubDbCard();
+        updateRatePreview();
         setInterval(refreshSubState, 5000);
 
         bindCopy(subUrlInput, copySubBtn, '/overlay/subathon');
@@ -153,14 +182,25 @@ export function SubathonControlPage({
           }
         }
 
+        function getRateValues() {
+          const rateCoins = Math.max(0.01, Number(rateCoinsInput?.value) || 10);
+          const rateSeconds = Math.max(1, Math.round(Number(rateSecondsInput?.value) || 60));
+          const maxHours = Math.max(1, Number(capInput?.value) || 24);
+          return { rateCoins, rateSeconds, maxHours };
+        }
+
         function startSubPreset(minutes) {
           if (minsInput) minsInput.value = String(minutes);
           const title = (titleInput?.value || 'SUBATHON').trim() || 'SUBATHON';
-          const secPerThb = Math.max(1, Number(rateInput?.value) || 6);
-          const maxHours = Math.max(1, Number(capInput?.value) || 24);
           const endMsg = (endInput?.value || 'TIME UP').trim() || 'TIME UP';
-          sendSubCommand({ cmd: 'set', minutes, title, secPerThb, maxHours, endMsg });
+          const { rateCoins, rateSeconds, maxHours } = getRateValues();
+          sendSubCommand({ cmd: 'set', minutes, title, rateCoins, rateSeconds, maxHours, endMsg });
         }
+
+        document.getElementById('subSaveRateBtn')?.addEventListener('click', () => {
+          const { rateCoins, rateSeconds, maxHours } = getRateValues();
+          sendSubCommand({ cmd: 'rate', rateCoins, rateSeconds, maxHours });
+        });
 
         document.getElementById('subQuick10Btn')?.addEventListener('click', () => startSubPreset(10));
         document.getElementById('subQuick30Btn')?.addEventListener('click', () => startSubPreset(30));
@@ -179,37 +219,62 @@ export function SubathonControlPage({
           e.preventDefault();
           const minutes = Math.max(1, Number(minsInput?.value) || 10);
           const title = (titleInput?.value || 'SUBATHON').trim() || 'SUBATHON';
-          const secPerThb = Math.max(1, Number(rateInput?.value) || 6);
-          const maxHours = Math.max(1, Number(capInput?.value) || 24);
           const endMsg = (endInput?.value || 'TIME UP').trim() || 'TIME UP';
-          sendSubCommand({ cmd: 'set', minutes, title, secPerThb, maxHours, endMsg });
+          const { rateCoins, rateSeconds, maxHours } = getRateValues();
+          sendSubCommand({ cmd: 'set', minutes, title, rateCoins, rateSeconds, maxHours, endMsg });
         });
 
-        document.getElementById('subTestDonateForm')?.addEventListener('submit', async (e) => {
-          e.preventDefault();
+        async function dispatchSubTestDonate(customAmount) {
           const btn = document.getElementById('subTestBtn');
           const donor = document.getElementById('subTestDonor')?.value || 'SUBATHON SUPPORTER';
-          const amount = Number(document.getElementById('subTestAmount')?.value || 100);
-          btn.disabled = true;
-          btn.textContent = 'DISPATCHING...';
+          const amount = Number(customAmount ?? document.getElementById('subTestAmount')?.value ?? 100);
+          const message = document.getElementById('subTestMessage')?.value || 'เพิ่มเวลา Subathon!';
+          const ttsEnabled = Boolean(document.getElementById('subTestTtsToggle')?.checked);
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'DISPATCHING...';
+          }
           try {
             const res = await fetch('/api/donate/test', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ donor, amount, message: 'เพิ่มเวลา Subathon!' })
+              body: JSON.stringify({ donor, amount, message, ttsEnabled })
             });
             const data = await res.json();
             if (!res.ok || !data.ok) throw new Error(data.error || 'FAILED');
-            showStatus('OK // SIMULATED ' + amount + ' THB DONATION SAVED & ADDED TO SUBATHON');
-            log('Subathon test donation dispatched: +' + amount + ' THB by ' + donor, 'success');
-            await refreshSubState();
+            if (data.subathonState) applySubDbState(data.subathonState);
+            else await refreshSubState();
+            if (amount < subRateCoins) {
+              showStatus('IGNORED BY SUBMATRON // ' + amount + ' COINS IS BELOW MIN RATE (' + subRateCoins + ' COINS)', true);
+              log('Submatron ignored test donate (' + amount + ' < ' + subRateCoins + ' coins)', 'warn');
+            } else {
+              const addedSecs = Math.round((amount / Math.max(0.01, subRateCoins)) * subRateSeconds);
+              showStatus('OK // TEST DONATE +' + amount + ' COINS (+' + addedSecs + 'S) ADDED TO SUBMATRON');
+              log('Submatron test donate: +' + amount + ' COINS (+' + addedSecs + 's) by ' + donor, 'success');
+            }
           } catch (err) {
             showStatus('ERROR // ' + err.message, true);
-            log('Subathon test failed: ' + err.message, 'err');
+            log('Submatron test failed: ' + err.message, 'err');
           } finally {
-            btn.disabled = false;
-            btn.textContent = 'SIMULATE DONATION (+TIME)';
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = 'SEND TEST DONATE (+TIME)';
+            }
           }
+        }
+
+        document.getElementById('subTestDonateForm')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await dispatchSubTestDonate();
+        });
+
+        document.querySelectorAll('[data-test-coins]').forEach((b) => {
+          b.addEventListener('click', () => {
+            const amt = Number(b.getAttribute('data-test-coins')) || 10;
+            const amtInput = document.getElementById('subTestAmount');
+            if (amtInput) amtInput.value = String(amt);
+            dispatchSubTestDonate(amt);
+          });
         });
       `}
     >
@@ -243,7 +308,7 @@ export function SubathonControlPage({
             </a>
           </div>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
-            Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>. Timer state, added seconds, and donation totals are automatically saved in Cloudflare D1 across refreshes.
+            Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>. Timer state, coin rate, added seconds, and donation totals are automatically saved in Cloudflare D1 across refreshes.
           </div>
         </div>
 
@@ -265,6 +330,12 @@ export function SubathonControlPage({
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
+            <label>ACTIVE COIN RATE</label>
+            <div style="font-family:var(--font-head); font-size:24px; color:var(--ctp-yellow);" id="subDbRate">
+              {initRateCoins} COINS ➔ +{initRateSeconds}S
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0;">
             <label>TOTAL ADDED TIME</label>
             <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-green);" id="subDbAdded">
               +0s
@@ -273,14 +344,80 @@ export function SubathonControlPage({
           <div class="card" style="margin-bottom:0;">
             <label>SUBATHON VOLUME</label>
             <div style="font-family:var(--font-head); font-size:28px;" id="subDbThb">
-              {initTotalThb.toLocaleString()} THB
+              {initTotalThb.toLocaleString()} COINS
             </div>
           </div>
         </div>
 
         <div class="card" style="margin-bottom:24px;">
           <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            SUBATHON REMOTE CONTROLS
+            COIN TO TIME CONVERSION (X COINS ➔ +Y SECONDS)
+          </h3>
+          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+            SET HOW MANY COINS (THB) ADD HOW MANY SECONDS
+          </p>
+
+          <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:14px;">
+            <div style="flex:1; min-width:140px;">
+              <label>EVERY X COINS (THB)</label>
+              <input
+                type="number"
+                id="subRateCoins"
+                value={String(initRateCoins)}
+                min="1"
+                max="100000"
+                step="any"
+                style="margin-bottom:0;"
+                required
+              />
+            </div>
+            <div style="font-family:var(--font-head); font-size:20px; color:var(--ctp-yellow); padding-bottom:10px;">
+              ➔ ADDS
+            </div>
+            <div style="flex:1; min-width:140px;">
+              <label>+ Y SECONDS</label>
+              <input
+                type="number"
+                id="subRateSeconds"
+                value={String(initRateSeconds)}
+                min="1"
+                max="86400"
+                style="margin-bottom:0;"
+                required
+              />
+            </div>
+            <div style="flex:1; min-width:140px;">
+              <label>MAX TIMER CAP (HOURS)</label>
+              <input
+                type="number"
+                id="subMaxHours"
+                value={String(initCapHours)}
+                min="1"
+                max="720"
+                style="margin-bottom:0;"
+                required
+              />
+            </div>
+            <button
+              type="button"
+              id="subSaveRateBtn"
+              style="width:auto; padding:12px 20px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust); white-space:nowrap;"
+            >
+              UPDATE COIN RATE (KEEP CLOCK)
+            </button>
+          </div>
+
+          <div
+            id="subRatePreview"
+            style="padding:10px 14px; background:var(--ctp-mantle); border:1px solid var(--ctp-surface1); font-family:var(--font-mono); font-size:12px; color:var(--ctp-teal);"
+          >
+            {initRateCoins} COINS ➔ +{initRateSeconds}s
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:24px;">
+          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
+            SUBATHON TIMER &amp; REMOTE CONTROLS
           </h3>
           <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
             ALL CHANGES ARE IMMEDIATELY SAVED TO D1 DATABASE &amp; BROADCAST TO OBS
@@ -343,10 +480,6 @@ export function SubathonControlPage({
           <form id="subCustomForm">
             <div class="row">
               <div>
-                <label>HEADER TITLE</label>
-                <input type="text" id="subCustomTitle" value={initTitle} required />
-              </div>
-              <div>
                 <label>INITIAL MINUTES (RESET / NEW START)</label>
                 <input type="number" id="subCustomMinutes" value={String(initMins)} min="1" max="14400" required />
               </div>
@@ -355,49 +488,79 @@ export function SubathonControlPage({
                 <input type="text" id="subCustomEnd" value={initEndMsg} required />
               </div>
             </div>
-            <div class="row">
-              <div>
-                <label>SECONDS ADDED PER 1 THB DONATED</label>
-                <input
-                  type="number"
-                  id="subSecPerThb"
-                  value={String(initRate)}
-                  min="1"
-                  max="3600"
-                  title="Seconds added to timer per 1 THB donated (e.g. 6s = +10m per 100 THB)"
-                  required
-                />
-              </div>
-              <div>
-                <label>MAX TIMER CAP (HOURS)</label>
-                <input type="number" id="subMaxHours" value={String(initCapHours)} min="1" max="720" required />
-              </div>
-            </div>
             <button type="submit" style="width:auto; padding:12px 24px; font-size:14px;">
-              SAVE &amp; APPLY SUBATHON SETTINGS TO D1
+              SAVE &amp; RESTART SUBATHON TIMER IN D1
             </button>
           </form>
         </div>
 
         <div class="card" style="margin-bottom:24px;">
           <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            TEST SUBATHON TIME ADDITION
+            DONATE TEST (SUBMATRON TIME ADDITION)
           </h3>
           <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
-            SIMULATE A DONATION TO ADD TIME TO D1 SUBATHON TIMER &amp; PREVIEW POPUP
+            DISPATCH A TEST DONATION TO ADD TIME TO SUBMATRON D1 TIMER &amp; TRIGGER OVERLAY POPUP
           </p>
-          <form id="subTestDonateForm" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
-            <div style="flex:2; min-width:180px;">
-              <label>DONOR NAME</label>
-              <input type="text" id="subTestDonor" value="SUBATHON SUPPORTER" style="margin-bottom:0;" required />
-            </div>
-            <div style="flex:1; min-width:120px;">
-              <label>AMOUNT (THB)</label>
-              <input type="number" id="subTestAmount" value="100" min="10" max="1000000" style="margin-bottom:0;" required />
-            </div>
-            <button type="submit" id="subTestBtn" style="width:auto; padding:12px 20px; font-size:14px; white-space:nowrap;">
-              SIMULATE DONATION (+TIME)
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+            <button
+              type="button"
+              data-test-coins="10"
+              style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-green); color:var(--ctp-green);"
+            >
+              TEST +10 COINS
             </button>
+            <button
+              type="button"
+              data-test-coins="50"
+              style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-green); color:var(--ctp-green);"
+            >
+              TEST +50 COINS
+            </button>
+            <button
+              type="button"
+              data-test-coins="100"
+              style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-green); color:var(--ctp-green);"
+            >
+              TEST +100 COINS
+            </button>
+            <button
+              type="button"
+              data-test-coins="500"
+              style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-green); color:var(--ctp-green);"
+            >
+              TEST +500 COINS
+            </button>
+          </div>
+
+          <form id="subTestDonateForm">
+            <div class="row">
+              <div>
+                <label>DONOR NAME</label>
+                <input type="text" id="subTestDonor" value="SUBMATRON TESTER" required />
+              </div>
+              <div>
+                <label>COINS / AMOUNT (THB)</label>
+                <input type="number" id="subTestAmount" value="10" min="1" max="1000000" required />
+              </div>
+              <div>
+                <label>TEST MESSAGE</label>
+                <input type="text" id="subTestMessage" value="เพิ่มเวลา Submatron!" />
+              </div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+              <label style="display:flex; align-items:center; gap:8px; margin-bottom:0; cursor:pointer;">
+                <input type="checkbox" id="subTestTtsToggle" checked style="width:auto; margin:0;" />
+                <span>ALSO PLAY ALERT TTS ON DONATION ALERT OVERLAY</span>
+              </label>
+              <button
+                type="submit"
+                id="subTestBtn"
+                style="width:auto; padding:12px 24px; font-size:14px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust); white-space:nowrap;"
+              >
+                SEND TEST DONATE (+TIME)
+              </button>
+            </div>
           </form>
         </div>
       </div>
