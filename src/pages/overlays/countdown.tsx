@@ -31,7 +31,7 @@ export function CountdownOverlayPage({
 
           let initialSecs = ${initialDuration};
           const targetStr = ${JSON.stringify(target || '')};
-          const endText = ${JSON.stringify(endMsg || 'LIVE NOW')};
+          let endText = ${JSON.stringify(endMsg || 'LIVE NOW')};
 
           let remaining = initialSecs;
           let targetEpoch = null;
@@ -107,6 +107,7 @@ export function CountdownOverlayPage({
               if (cmd.action === 'reload') {
                 window.location.reload();
               } else if (cmd.action === 'countdown') {
+                if (cmd.mode && cmd.mode !== 'countdown') return;
                 const sub = cmd.cmd || 'set';
                 if (sub === 'set') {
                   if (typeof cmd.minutes === 'number') {
@@ -115,6 +116,7 @@ export function CountdownOverlayPage({
                     targetEpoch = null;
                   }
                   if (cmd.title && titleEl) titleEl.textContent = cmd.title;
+                  if (cmd.endMsg) endText = cmd.endMsg;
                   isRunning = true;
                   render();
                 } else if (sub === 'pause') {

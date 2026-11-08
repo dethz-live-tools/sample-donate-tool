@@ -1,3 +1,5 @@
+import type { SubathonState } from '../../modules/db'
+
 export function SubathonOverlayPage({
   title = 'SUBATHON',
   minutes = 10,
@@ -5,7 +7,8 @@ export function SubathonOverlayPage({
   target = '',
   endMsg = 'TIME UP',
   secPerThb = 6,
-  maxHours = 24
+  maxHours = 24,
+  initialState
 }: {
   title?: string
   minutes?: number
@@ -14,15 +17,26 @@ export function SubathonOverlayPage({
   endMsg?: string
   secPerThb?: number
   maxHours?: number
+  initialState?: SubathonState
 }) {
-  const initialDuration = Math.max(0, (Number(minutes) || 0) * 60 + (Number(seconds) || 0))
+  const resolvedTitle = initialState?.title || title || 'SUBATHON'
+  const resolvedEndMsg = initialState?.endMsg || endMsg || 'TIME UP'
+  const resolvedSecPerThb = initialState?.secPerThb ?? (Number(secPerThb) || 6)
+  const resolvedMaxHours = initialState?.maxHours ?? (Number(maxHours) || 24)
+  const fallbackDuration = Math.max(0, (Number(minutes) || 0) * 60 + (Number(seconds) || 0)) || 600
+  const resolvedInitialSecs = initialState?.initialSeconds ?? fallbackDuration
+  const resolvedRemainingSecs = initialState?.remainingSeconds ?? fallbackDuration
+  const resolvedTargetEpoch = initialState?.targetEpoch ?? 0
+  const resolvedIsRunning = initialState ? initialState.isRunning : true
+  const resolvedTotalAddedSecs = initialState?.totalAddedSecs ?? 0
+  const resolvedTotalDonations = initialState?.totalDonations ?? 0
 
   return (
     <div>
       <div class="countdown-card subathon" id="subathonBox">
         <div class="countdown-header">
           <span class="countdown-badge" id="subBadge">SUBATHON</span>
-          <span class="countdown-title" id="subTitle">{title}</span>
+          <span class="countdown-title" id="subTitle">{resolvedTitle}</span>
         </div>
         <div class="countdown-added" id="subAdded"></div>
         <div class="countdown-display" id="subDisplay">--:--:--</div>
@@ -35,21 +49,21 @@ export function SubathonOverlayPage({
           __html: `
           document.body.classList.add('overlay-body');
 
-          let initialSecs = ${initialDuration};
+          let initialSecs = ${resolvedInitialSecs};
           const targetStr = ${JSON.stringify(target || '')};
-          const endText = ${JSON.stringify(endMsg || 'TIME UP')};
-          let secPerThb = ${Number(secPerThb) || 6};
-          let maxCapSecs = ${Math.max(1, Number(maxHours) || 24)} * 3600;
+          let endText = ${JSON.stringify(resolvedEndMsg)};
+          let secPerThb = ${resolvedSecPerThb};
+          let maxCapSecs = ${Math.max(1, resolvedMaxHours)} * 3600;
 
-          let remaining = initialSecs;
-          let targetEpoch = null;
-          let isRunning = true;
+          let remaining = ${resolvedRemainingSecs};
+          let targetEpoch = ${resolvedTargetEpoch || 'null'};
+          let isRunning = ${resolvedIsRunning ? 'true' : 'false'};
           let timerInterval = null;
-          let totalAddedSecs = 0;
-          let totalDonations = 0;
+          let totalAddedSecs = ${resolvedTotalAddedSecs};
+          let totalDonations = ${resolvedTotalDonations};
           let addedTimeout = null;
 
-          if (targetStr) {
+          if (targetStr && !targetEpoch) {
             const parsed = Number(targetStr) || Date.parse(targetStr);
             if (!isNaN(parsed) && parsed > Date.now()) {
               targetEpoch = parsed;
@@ -57,9 +71,8 @@ export function SubathonOverlayPage({
             }
           }
 
-          if (remaining === 0 && !targetEpoch) {
-            remaining = 600;
-            initialSecs = 600;
+          if (isRunning && targetEpoch && targetEpoch > Date.now()) {
+            remaining = Math.max(0, Math.round((targetEpoch - Date.now()) / 1000));
           }
 
           const box = document.getElementById('subathonBox');
@@ -97,6 +110,9 @@ export function SubathonOverlayPage({
               statusEl.textContent = endText;
               box.classList.add('ended');
               badgeEl.textContent = 'ENDED';
+              if (statsEl) {
+                statsEl.textContent = 'RATE: +' + secPerThb + 'S/THB // ADDED: +' + formatHuman(totalAddedSecs) + ' (' + totalDonations.toLocaleString() + ' THB)';
+              }
               return;
             }
             box.classList.remove('ended');
@@ -107,6 +123,36 @@ export function SubathonOverlayPage({
             if (statsEl) {
               statsEl.textContent = 'RATE: +' + secPerThb + 'S/THB // ADDED: +' + formatHuman(totalAddedSecs) + ' (' + totalDonations.toLocaleString() + ' THB)';
             }
+          }
+
+          function applyPersistedState(st) {
+            if (!st || typeof st !== 'object') return;
+            if (st.title && titleEl) titleEl.textContent = st.title;
+            if (st.endMsg) endText = st.endMsg;
+            if (typeof st.initialSeconds === 'number') initialSecs = st.initialSeconds;
+            if (typeof st.secPerThb === 'number' && st.secPerThb > 0) secPerThb = st.secPerThb;
+            if (typeof st.maxHours === 'number' && st.maxHours > 0) maxCapSecs = st.maxHours * 3600;
+            if (typeof st.totalAddedSecs === 'number') totalAddedSecs = st.totalAddedSecs;
+            if (typeof st.totalDonations === 'number') totalDonations = st.totalDonations;
+            isRunning = Boolean(st.isRunning);
+            if (isRunning && typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
+              targetEpoch = st.targetEpoch;
+              remaining = Math.max(0, Math.round((targetEpoch - Date.now()) / 1000));
+            } else {
+              targetEpoch = null;
+              if (typeof st.remainingSeconds === 'number') remaining = Math.max(0, st.remainingSeconds);
+            }
+            render();
+          }
+
+          async function syncFromDb() {
+            try {
+              const r = await fetch('/api/events/subathon');
+              const d = await r.json();
+              if (d && d.ok && d.state) {
+                applyPersistedState(d.state);
+              }
+            } catch (_) {}
           }
 
           function tick() {
@@ -125,6 +171,7 @@ export function SubathonOverlayPage({
 
           render();
           timerInterval = setInterval(tick, 1000);
+          setInterval(syncFromDb, 10000);
 
           const es = new EventSource('/api/events/overlay');
 
@@ -140,6 +187,10 @@ export function SubathonOverlayPage({
                   remaining = Math.min(maxCapSecs, remaining + addedSecs);
                   totalAddedSecs += addedSecs;
                   totalDonations += amt;
+                  isRunning = remaining > 0;
+                  if (isRunning) {
+                    targetEpoch = Date.now() + remaining * 1000;
+                  }
 
                   box.classList.remove('pulse');
                   void box.offsetWidth;
@@ -155,10 +206,8 @@ export function SubathonOverlayPage({
                     }, 4500);
                   }
 
-                  if (!isRunning && remaining > 0) {
-                    isRunning = true;
-                  }
                   render();
+                  syncFromDb();
                 }
               }
             } catch (_) {}
@@ -169,36 +218,13 @@ export function SubathonOverlayPage({
               const cmd = JSON.parse(e.data);
               if (cmd.action === 'reload') {
                 window.location.reload();
-              } else if (cmd.action === 'countdown') {
-                const sub = cmd.cmd || 'set';
-                if (sub === 'set') {
-                  if (typeof cmd.minutes === 'number') {
-                    remaining = Math.max(0, cmd.minutes * 60 + (cmd.seconds || 0));
-                    initialSecs = remaining;
-                    targetEpoch = null;
-                  }
-                  if (cmd.title && titleEl) titleEl.textContent = cmd.title;
-                  if (typeof cmd.secPerThb === 'number' && cmd.secPerThb > 0) secPerThb = cmd.secPerThb;
-                  isRunning = true;
-                  render();
-                } else if (sub === 'pause') {
-                  isRunning = false;
-                  render();
-                } else if (sub === 'start' || sub === 'resume') {
-                  if (remaining > 0) isRunning = true;
-                  render();
-                } else if (sub === 'reset') {
-                  remaining = initialSecs;
-                  targetEpoch = null;
-                  totalAddedSecs = 0;
-                  totalDonations = 0;
-                  isRunning = true;
-                  render();
-                } else if (sub === 'adjust') {
-                  const delta = Number(cmd.delta) || 0;
-                  remaining = Math.max(0, remaining + delta);
-                  render();
+              } else if (cmd.action === 'countdown' || cmd.action === 'subathon') {
+                if (cmd.mode && cmd.mode !== 'subathon') return;
+                if (cmd.subathonState) {
+                  applyPersistedState(cmd.subathonState);
+                  return;
                 }
+                syncFromDb();
               }
             } catch (_) {}
           });

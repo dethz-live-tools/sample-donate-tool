@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { dashboardAuth } from './auth'
 import { getConfig, type Bindings } from './config'
-import { insertDonation } from './db'
+import { addSubathonDonation, insertDonation } from './db'
 import { broadcast, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
 import { filterWordContent } from './filter'
 import { verifySlip } from './slip2sure'
@@ -107,6 +107,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       if (!(await insertDonation(c.env?.DB, ev))) {
         return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
       }
+      await addSubathonDonation(c.env?.DB, verified.amount)
       broadcast(ev)
       return c.json({ ok: true, event: ev })
     } finally {
@@ -162,6 +163,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       createdAt: Date.now()
     }
     await insertDonation(c.env?.DB, ev)
+    await addSubathonDonation(c.env?.DB, amount)
     broadcast(ev)
     return c.json({ ok: true, event: ev })
   })

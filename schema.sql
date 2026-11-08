@@ -25,3 +25,18 @@ CREATE TABLE IF NOT EXISTS admins (
   token_version INTEGER DEFAULT 1,
   api_enabled INTEGER DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS subathon_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  title TEXT DEFAULT 'SUBATHON',
+  end_msg TEXT DEFAULT 'TIME UP',
+  initial_seconds INTEGER DEFAULT 600,
+  remaining_seconds INTEGER DEFAULT 600,
+  target_epoch INTEGER DEFAULT 0,
+  is_running INTEGER DEFAULT 1,
+  sec_per_thb INTEGER DEFAULT 6,
+  max_hours INTEGER DEFAULT 24,
+  total_added_secs INTEGER DEFAULT 0,
+  total_donations REAL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);

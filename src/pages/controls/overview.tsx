@@ -1,0 +1,241 @@
+import type { OverlayStatus } from '../../modules/events'
+import { ControlLayout } from './layout'
+
+export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+  const ttsEnabled = overlayStatus?.ttsEnabled ?? true
+
+  return (
+    <ControlLayout
+      activeTab="overview"
+      title="OVERLAY CONTROLLER"
+      subtitle="OBS BROWSER SOURCE DIRECTORY & GLOBAL COMMAND BUS"
+      overlayStatus={overlayStatus}
+      openOverlayHref="/overlay"
+      extraScript={`
+        bindCopy(document.getElementById('obsUrlInput'), document.getElementById('copyUrlBtn'), '/overlay');
+        bindCopy(document.getElementById('obsLbUrlInput'), document.getElementById('copyLbUrlBtn'), '/overlay/leaderboard?limit=5');
+        bindCopy(document.getElementById('obsCdUrlInput'), document.getElementById('copyCdUrlBtn'), '/overlay/countdown?minutes=10&title=STARTING+SOON');
+        bindCopy(document.getElementById('obsSubUrlInput'), document.getElementById('copySubUrlBtn'), '/overlay/subathon?minutes=10&rate=6');
+
+        document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
+        document.getElementById('cmdClearBtn')?.addEventListener('click', () => sendCommand('clear'));
+        document.getElementById('cmdDisconnectBtn')?.addEventListener('click', () => sendCommand('disconnect'));
+        document.getElementById('cmdTtsBtn')?.addEventListener('click', () => sendCommand('tts'));
+        document.getElementById('cmdPingBtn')?.addEventListener('click', async () => {
+          showStatus('SENDING MANUAL HEARTBEAT...');
+          try {
+            const res = await fetch('/api/events/heartbeat', { method: 'POST' });
+            const data = await res.json();
+            showStatus('OK // HEARTBEAT PING SENT');
+            log('Manual heartbeat ping sent', 'success');
+            if (data) updateState(data);
+          } catch (err) {
+            showStatus('ERROR // ' + err.message, true);
+            log('Heartbeat ping failed: ' + err.message, 'err');
+          }
+        });
+      `}
+    >
+      <div>
+        <div class="inverted-block">
+          <label style="color:var(--ctp-lavender); margin-bottom:12px;">
+            SELECT OVERLAY TO CONFIGURE OR COPY OBS BROWSER SOURCE URL
+          </label>
+
+          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <div>
+                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
+                  1. DONATION ALERT & TTS OVERLAY (800 x 400)
+                </div>
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                  Alert queue, Edge Neural TTS voices, profanity censor filter, and test alerts
+                </div>
+              </div>
+              <a
+                href="/overlay/control/alert"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+              >
+                CONFIGURE ALERT & TTS &rarr;
+              </a>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copyUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">
+                TEST
+              </a>
+            </div>
+          </div>
+
+          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <div>
+                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
+                  2. TOP DONORS LEADERBOARD OVERLAY (450 x 500)
+                </div>
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                  Live ranked top donors list, custom title, and row count limit
+                </div>
+              </div>
+              <a
+                href="/overlay/control/leaderboard"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+              >
+                CONFIGURE LEADERBOARD &rarr;
+              </a>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsLbUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copyLbUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a href="/overlay/leaderboard" target="_blank" style="white-space:nowrap; font-size:12px;">
+                TEST
+              </a>
+            </div>
+          </div>
+
+          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <div>
+                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
+                  3. COUNTDOWN TIMER OVERLAY (450 x 250)
+                </div>
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                  Standard stream countdown timer, quick presets, pause/resume, and custom durations
+                </div>
+              </div>
+              <a
+                href="/overlay/control/countdown"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+              >
+                CONFIGURE COUNTDOWN &rarr;
+              </a>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsCdUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copyCdUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a
+                href="/overlay/countdown?minutes=10&title=STARTING+SOON"
+                target="_blank"
+                style="white-space:nowrap; font-size:12px;"
+              >
+                TEST
+              </a>
+            </div>
+          </div>
+
+          <div class="card" style="background:var(--ctp-mantle); margin-bottom:12px; padding:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <div>
+                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
+                  4. SUBATHON MARATHON OVERLAY (450 x 250)
+                </div>
+                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                  Auto-extending marathon clock (+seconds per 1 THB donated), rate &amp; cap controls
+                </div>
+              </div>
+              <a
+                href="/overlay/control/subathon"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+              >
+                CONFIGURE SUBATHON &rarr;
+              </a>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="obsSubUrlInput"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copySubUrlBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY
+              </button>
+              <a
+                href="/overlay/subathon?minutes=10&rate=6"
+                target="_blank"
+                style="white-space:nowrap; font-size:12px;"
+              >
+                TEST
+              </a>
+            </div>
+          </div>
+
+          <div style="font-size:13px; color:var(--ctp-subtext0); line-height:1.6;">
+            Recommended OBS settings: Check <strong>Control audio via OBS</strong>. Background is transparent.
+          </div>
+        </div>
+
+        <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:12px; text-transform:uppercase;">
+          GLOBAL COMMAND BUS ACTIONS
+        </h3>
+        <div class="grid-actions" style="margin-bottom:24px;">
+          <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
+            FORCE RELOAD OVERLAYS
+          </button>
+          <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
+            CLEAR ALERT QUEUE
+          </button>
+          <button
+            type="button"
+            id="cmdDisconnectBtn"
+            style="font-size:14px; padding:14px 20px; background:var(--ctp-red); border-color:var(--ctp-red);"
+          >
+            DISCONNECT / RESET
+          </button>
+          <button
+            type="button"
+            id="cmdPingBtn"
+            style="font-size:14px; padding:14px 20px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
+          >
+            PING HEARTBEAT
+          </button>
+          <button type="button" id="cmdTtsBtn" style="font-size:14px; padding:14px 20px;">
+            TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
+          </button>
+        </div>
+      </div>
+    </ControlLayout>
+  )
+}

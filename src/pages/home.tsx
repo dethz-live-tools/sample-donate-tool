@@ -208,6 +208,7 @@ export function HomePage({
 
           document.getElementById('donateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const form = e.target;
             const btn = document.getElementById('submitBtn');
             const status = document.getElementById('statusBox');
             btn.disabled = true;
@@ -215,7 +216,7 @@ export function HomePage({
             status.className = 'status';
 
             try {
-              const fd = new FormData(e.target);
+              const fd = new FormData(form);
               // ponytail: verify turnstile token before submit
               if (document.querySelector('.cf-turnstile') && !fd.get('cf-turnstile-response')) {
                 throw new Error('กรุณายืนยันความปลอดภัย (Turnstile) ก่อนส่ง');
@@ -227,6 +228,13 @@ export function HomePage({
               }
               status.className = 'status ok';
               status.textContent = 'OK // DONATED ' + data.event.amount + ' THB FROM ' + data.event.donor;
+              form.reset();
+              fileInput.value = '';
+              dzText.textContent = 'DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE';
+              if (ppAmt) {
+                ppAmt.value = '10';
+                renderPP();
+              }
             } catch (err) {
               status.className = 'status err';
               status.textContent = err.message;

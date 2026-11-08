@@ -3,12 +3,18 @@ import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
 import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
-import { getAdmin, getLeaderboard, listDonations } from './modules/db'
+import { getAdmin, getLeaderboard, getSubathonState, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
 import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
 import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
 import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
-import { OverlayControlPage } from './pages/control'
+import {
+  AlertControlPage,
+  CountdownControlPage,
+  LeaderboardControlPage,
+  OverlayControlPage,
+  SubathonControlPage
+} from './pages/controls'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
@@ -91,7 +97,31 @@ app.get('/overlay/control', dashboardAuth, async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} />)
 })
+app.get('/overlay/control/alert', dashboardAuth, async (c) => {
+  await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  return c.render(<AlertControlPage overlayStatus={getOverlayStatus()} />)
+})
+app.get('/overlay/control/leaderboard', dashboardAuth, async (c) => {
+  await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  return c.render(<LeaderboardControlPage overlayStatus={getOverlayStatus()} />)
+})
+app.get('/overlay/control/countdown', dashboardAuth, async (c) => {
+  await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  return c.render(<CountdownControlPage overlayStatus={getOverlayStatus()} />)
+})
+app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
+  const [, , subathonState] = await Promise.all([
+    resolveTtsConfig(c.env),
+    resolveFilterConfig(c.env),
+    getSubathonState(c.env?.DB)
+  ])
+  return c.render(<SubathonControlPage overlayStatus={getOverlayStatus()} subathonState={subathonState} />)
+})
 app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
+app.get('/control/alert', dashboardAuth, (c) => c.redirect('/overlay/control/alert'))
+app.get('/control/leaderboard', dashboardAuth, (c) => c.redirect('/overlay/control/leaderboard'))
+app.get('/control/countdown', dashboardAuth, (c) => c.redirect('/overlay/control/countdown'))
+app.get('/control/subathon', dashboardAuth, (c) => c.redirect('/overlay/control/subathon'))
 app.get('/overlay', async (c) => {
   const ttsEnabled = await resolveTtsEnabled(c.env)
   return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} />)
@@ -123,14 +153,15 @@ app.get('/overlay/countdown', (c) => {
     />
   )
 })
-app.get('/overlay/subathon', (c) => {
-  const title = c.req.query('title') || 'SUBATHON'
-  const minutes = c.req.query('minutes') !== undefined ? Number(c.req.query('minutes')) : 10
+app.get('/overlay/subathon', async (c) => {
+  const initialState = await getSubathonState(c.env?.DB)
+  const title = c.req.query('title') || initialState.title || 'SUBATHON'
+  const minutes = c.req.query('minutes') !== undefined ? Number(c.req.query('minutes')) : Math.round(initialState.initialSeconds / 60)
   const seconds = Number(c.req.query('seconds')) || 0
   const target = c.req.query('target') || ''
-  const endMsg = c.req.query('end') || 'TIME UP'
-  const secPerThb = Number(c.req.query('sec_per_thb') || c.req.query('rate')) || 6
-  const maxHours = Number(c.req.query('max_hours')) || 24
+  const endMsg = c.req.query('end') || initialState.endMsg || 'TIME UP'
+  const secPerThb = Number(c.req.query('sec_per_thb') || c.req.query('rate')) || initialState.secPerThb || 6
+  const maxHours = Number(c.req.query('max_hours')) || initialState.maxHours || 24
   return c.render(
     <SubathonOverlayPage
       title={title}
@@ -140,6 +171,7 @@ app.get('/overlay/subathon', (c) => {
       endMsg={endMsg}
       secPerThb={secPerThb}
       maxHours={maxHours}
+      initialState={initialState}
     />
   )
 })

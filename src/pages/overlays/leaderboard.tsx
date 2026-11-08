@@ -39,8 +39,9 @@ export function LeaderboardOverlayPage({
         dangerouslySetInnerHTML={{
           __html: `
           document.body.classList.add('overlay-body');
-          const limit = ${Math.max(1, Math.min(50, limit))};
+          let currentLimit = ${Math.max(1, Math.min(50, limit))};
           const listEl = document.getElementById('lbList');
+          const titleEl = document.getElementById('lbTitle');
 
           function escapeHtml(str) {
             const div = document.createElement('div');
@@ -66,7 +67,7 @@ export function LeaderboardOverlayPage({
 
           async function refreshLeaderboard() {
             try {
-              const r = await fetch('/api/events/leaderboard?limit=' + limit);
+              const r = await fetch('/api/events/leaderboard?limit=' + currentLimit);
               const data = await r.json();
               if (data.ok && Array.isArray(data.items)) {
                 renderRows(data.items);
@@ -85,6 +86,12 @@ export function LeaderboardOverlayPage({
               const cmd = JSON.parse(e.data);
               if (cmd.action === 'reload') {
                 window.location.reload();
+              } else if (cmd.action === 'leaderboard') {
+                if (cmd.title && titleEl) titleEl.textContent = cmd.title;
+                if (typeof cmd.limit === 'number' && cmd.limit > 0) {
+                  currentLimit = Math.max(1, Math.min(50, cmd.limit));
+                }
+                refreshLeaderboard();
               }
             } catch (_) {}
           });

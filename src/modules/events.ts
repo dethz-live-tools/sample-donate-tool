@@ -2,7 +2,19 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { dashboardAuth, isValidSession } from './auth'
 import { getConfig, type Bindings } from './config'
-import { getTtsConfig, listDonations, setTtsConfig, getLeaderboard, getFilterConfig, setFilterConfig, type TtsSettings, type FilterSettings } from './db'
+import {
+  applySubathonCommand,
+  getFilterConfig,
+  getLeaderboard,
+  getSubathonState,
+  getTtsConfig,
+  listDonations,
+  setFilterConfig,
+  setTtsConfig,
+  type FilterSettings,
+  type SubathonState,
+  type TtsSettings
+} from './db'
 
 export type DonateEvent = {
   id: string
@@ -46,7 +58,7 @@ let lastOverlayHeartbeat = 0
 let runtimeTtsConfig: TtsSettings | null = null
 let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
-const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown'])
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
 
 export async function resolveTtsConfig(env?: Bindings): Promise<TtsSettings> {
   const cfg = getConfig(env)
@@ -306,6 +318,10 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     const items = await getLeaderboard(c.env?.DB, limit)
     return c.json({ ok: true, items })
   })
+  .get('/subathon', async (c) => {
+    const state = await getSubathonState(c.env?.DB)
+    return c.json({ ok: true, state })
+  })
   .get('/heartbeat', dashboardAuth, (c) => {
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
@@ -347,9 +363,14 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
       })
     }
 
-    const payload = { ...body, action, timestamp: Date.now() }
+    let subathonState: SubathonState | undefined
+    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+      subathonState = await applySubathonCommand(c.env?.DB, body)
+    }
+
+    const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)
-    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
+    return c.json({ ok: true, command: payload, ...(subathonState ? { subathonState } : {}), status: getOverlayStatus() })
   })
   .get('/overlay', (c) => sseHandler(c, 'overlay'))
   .get('/', (c) => sseHandler(c))

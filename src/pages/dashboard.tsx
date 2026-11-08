@@ -96,6 +96,42 @@ export function DashboardPage({
           </div>
         </div>
 
+        <div class="inverted-block" style="margin-bottom: 24px;">
+          <label style="color:var(--ctp-lavender); margin-bottom:8px;">OVERLAY SETTINGS &amp; CONTROLLERS</label>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <a
+              href="/overlay/control"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-surface2); background:var(--ctp-mantle); color:var(--ctp-text);"
+            >
+              OVERVIEW HUB
+            </a>
+            <a
+              href="/overlay/control/alert"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              1. DONATION ALERT &amp; TTS
+            </a>
+            <a
+              href="/overlay/control/leaderboard"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              2. LEADERBOARD
+            </a>
+            <a
+              href="/overlay/control/countdown"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              3. COUNTDOWN TIMER
+            </a>
+            <a
+              href="/overlay/control/subathon"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              4. SUBATHON MARATHON
+            </a>
+          </div>
+        </div>
+
         <div class="card" style="margin-bottom: 24px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <div>

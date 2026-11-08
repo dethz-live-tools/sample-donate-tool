@@ -2,14 +2,17 @@ import { Hono, type Context, type Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { Bindings } from './config'
 import {
+  applySubathonCommand,
   bumpTokenVersion,
   createAdmin,
   deleteDonation,
   getAdmin,
   getDonationStats,
+  getSubathonState,
   listDonations,
   setApiEnabled,
-  updateAdmin
+  updateAdmin,
+  type SubathonState
 } from './db'
 import {
   broadcastControl,
@@ -471,6 +474,17 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     return c.json({ ok: true, id })
   })
+  .get('/subathon', dashboardAuth, async (c) => {
+    const state = await getSubathonState(c.env?.DB)
+    return c.json({ ok: true, state })
+  })
+  .put('/subathon', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const subathonState = await applySubathonCommand(c.env?.DB, { cmd: 'set', ...body })
+    const payload = { action: 'subathon', cmd: 'set', ...body, subathonState, timestamp: Date.now() }
+    broadcastControl(payload)
+    return c.json({ ok: true, state: subathonState })
+  })
   .get('/overlay', dashboardAuth, async (c) => {
     await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
@@ -479,7 +493,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
     const action = String(body.action || '').trim()
     if (!action) return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
-    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
     if (!allowed.has(action)) return c.json({ ok: false, error: 'INVALID_ACTION' }, 400)
     if (action === 'heartbeat') {
       touchOverlayHeartbeat()
@@ -506,7 +520,11 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
         status: getOverlayStatus()
       })
     }
-    const payload = { ...body, action, timestamp: Date.now() }
+    let subathonState: SubathonState | undefined
+    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+      subathonState = await applySubathonCommand(c.env?.DB, body)
+    }
+    const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)
-    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
+    return c.json({ ok: true, command: payload, ...(subathonState ? { subathonState } : {}), status: getOverlayStatus() })
   })
