@@ -10,7 +10,7 @@ Base URL: `http://localhost:5173` (local development) or `https://donate-tools.d
 ## 1. Donation Endpoints
 
 ### `POST /api/donate`
-Process a donation by verifying Cloudflare Turnstile (if configured), validating the bank/PromptPay or TrueMoney slip image via Slip2Sure, synthesizing Gemini 2.5 Flash TTS audio, persisting the transaction to Cloudflare D1, and broadcasting a real-time `donate` SSE event.
+Process a donation by verifying Cloudflare Turnstile (if configured), validating the bank/PromptPay or TrueMoney slip image via Slip2Sure, synthesizing Edge Neural TTS audio, persisting the transaction to Cloudflare D1, and broadcasting a real-time `donate` SSE event.
 
 - **Content-Type**: `multipart/form-data`
 - **Authentication**: Public (protected by optional Cloudflare Turnstile)
@@ -66,7 +66,7 @@ Process a donation by verifying Cloudflare Turnstile (if configured), validating
 ---
 
 ### `POST /api/donate/test`
-Trigger a simulated donation alert with Gemini TTS audio synthesis, store it in D1 (`type: "test"`), and broadcast it to all connected overlays and dashboards.
+Trigger a simulated donation alert with Edge Neural TTS audio synthesis, store it in D1 (`type: "test"`), and broadcast it to all connected overlays and dashboards.
 
 - **Content-Type**: `application/json`
 - **Authentication**: Admin session cookie (`dash_token`) or `Authorization: Bearer <token>` required
@@ -128,7 +128,7 @@ Unified SSE stream for the donor home page, streamer dashboard, overlay controll
 2. `overlay_status`: Sent immediately on connection and broadcast whenever an overlay connects, disconnects, or sends a heartbeat.
    ```
    event: overlay_status
-   data: {"online":true,"count":1,"timestamp":1793335000000}
+   data: {"online":true,"count":1,"ttsEnabled":true,"ttsVoice":"th-TH-NiwatNeural","ttsRate":"+0%","ttsPitch":"+0Hz","filterEnabled":true,"filterAction":"censor","timestamp":1793335000000}
    ```
 3. `donate`: Broadcast when a real or test donation is processed.
    - **Privacy Scrubbing**: `transRef` is included only if the SSE request carries a valid admin `dash_token` cookie; public/non-admin streams have `transRef` omitted.
@@ -142,6 +142,7 @@ Unified SSE stream for the donor home page, streamer dashboard, overlay controll
    event: control
    data: {"action":"reload","timestamp":1793335000000}
    ```
+   *(For timer overlays, action may be `"countdown"` with payload `diffSeconds`, `setSeconds`, `pause`, or `resume`.)*
 5. `ping`: Keep-alive frame emitted every 15 seconds.
    ```
    event: ping
@@ -162,7 +163,7 @@ Dedicated SSE stream endpoint for the OBS `/overlay` page. Equivalent to `GET /a
 ---
 
 ### `GET /api/events/status`
-Retrieve current overlay online state and active SSE connection count.
+Retrieve current overlay online state, active SSE connection count, and live TTS / filter settings.
 
 - **Authentication**: None
 - **Success Response (`200 OK`)**:
@@ -171,7 +172,40 @@ Retrieve current overlay online state and active SSE connection count.
   "ok": true,
   "online": true,
   "count": 1,
+  "ttsEnabled": true,
+  "ttsVoice": "th-TH-NiwatNeural",
+  "ttsRate": "+0%",
+  "ttsPitch": "+0Hz",
+  "filterEnabled": true,
+  "filterAction": "censor",
   "timestamp": 1793335000000
+}
+```
+
+---
+
+### `GET /api/events/leaderboard`
+Retrieve ranked list of top donors aggregated by cumulative donation sum from Cloudflare D1 (excluding simulated test donations).
+
+- **Query Parameters**:
+  - `limit` (`number`, optional): Max ranks returned (clamped between `1` and `50`, default `5`).
+- **Authentication**: None
+- **Success Response (`200 OK`)**:
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "donor": "SOMCHAI",
+      "total": 5000,
+      "count": 12
+    },
+    {
+      "donor": "ALICE",
+      "total": 3500,
+      "count": 4
+    }
+  ]
 }
 ```
 
@@ -246,6 +280,7 @@ Dispatch a remote command to all connected OBS overlay clients over the SSE `con
 | `clear` | Empties the overlay's client-side alert queue, stops active TTS playback, and hides the alert card. |
 | `disconnect` | Clears `overlayConnections` and resets `lastOverlayHeartbeat` on the server, then broadcasts `disconnect` so overlays close and reconnect after 2 seconds. |
 | `tts` | Toggles TTS voice on/off (or sets `enabled: boolean` if provided), persists to D1, and immediately mutes/enables overlay audio. |
+| `countdown` | Controls `/overlay/countdown` timer (`cmd`: `'start'`, `'pause'`, `'reset'`, `'set'`, `'adjust'`; `seconds` or `minutes`; `delta` in seconds; `title`). |
 
 #### Success Response (`200 OK`)
 ```json
@@ -583,25 +618,79 @@ Inspect live overlay connection status and TTS state.
 ---
 
 ### `GET /api/manage/tts` & `PUT /api/manage/tts`
-Query or update the TTS voice setting (`true` = enabled, `false` = muted). Persisted in D1 (`admins.tts_enabled`, with `TTS_ENABLED` env var as default) and broadcast in real time to all connected overlays.
+Query or update the Edge Neural TTS voice settings (`enabled`, `voice`, `rate`, `pitch`). Persisted in D1 (`admins` table) and broadcast in real time to all connected overlays.
 
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
 - **Request Body (`PUT /api/manage/tts`, optional)**:
   ```json
   {
-    "enabled": false
+    "enabled": true,
+    "voice": "th-TH-NiwatNeural",
+    "rate": "+0%",
+    "pitch": "+0Hz"
   }
   ```
-  *(Omit `enabled` to toggle the current state.)*
+  *(Supported voices: `th-TH-NiwatNeural`, `th-TH-PremwadeeNeural`, `en-US-AriaNeural`, `en-US-GuyNeural`, `en-US-JennyNeural`, `ja-JP-NanamiNeural`, `ja-JP-KeitaNeural`.)*
 - **Success Response (`200 OK`)**:
   ```json
   {
     "ok": true,
-    "ttsEnabled": false,
+    "enabled": true,
+    "voice": "th-TH-NiwatNeural",
+    "rate": "+0%",
+    "pitch": "+0Hz",
+    "voices": [
+      { "id": "th-TH-NiwatNeural", "name": "Thai - Niwat (Male)", "lang": "th-TH", "gender": "Male" },
+      { "id": "th-TH-PremwadeeNeural", "name": "Thai - Premwadee (Female)", "lang": "th-TH", "gender": "Female" }
+    ],
     "overlayStatus": {
       "online": true,
       "count": 1,
-      "ttsEnabled": false,
+      "ttsEnabled": true,
+      "ttsVoice": "th-TH-NiwatNeural",
+      "ttsRate": "+0%",
+      "ttsPitch": "+0Hz",
+      "filterEnabled": true,
+      "filterAction": "censor",
+      "timestamp": 1793335000000
+    }
+  }
+  ```
+
+---
+
+### `GET /api/manage/filter` & `PUT /api/manage/filter`
+Query or update the donation profanity and word filtering configuration. Persisted in Cloudflare D1 (`admins` table) and broadcast in real time to all connected overlays.
+
+- **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
+- **Request Body (`PUT /api/manage/filter`, optional)**:
+  ```json
+  {
+    "enabled": true,
+    "action": "censor",
+    "words": "badword1, badword2\nbadword3"
+  }
+  ```
+  - `enabled` (`boolean`): Toggle the word filter on or off.
+  - `action` (`"censor"` | `"mute"`):
+    - `"censor"`: Replaces profanity with asterisks (`***`) and skips asterisks in spoken TTS.
+    - `"mute"`: Automatically silences/mutes TTS audio for flagged donation messages while preserving visual text.
+  - `words` (`string`): Comma- or newline-separated custom blocked words. Added on top of 270+ built-in Thai/English profanities (obbaeiei/bad-words-thai).
+- **Success Response (`200 OK`)**:
+  ```json
+  {
+    "ok": true,
+    "enabled": true,
+    "action": "censor",
+    "words": "badword1, badword2",
+    "defaultCount": 273,
+    "overlayStatus": {
+      "online": true,
+      "count": 1,
+      "ttsEnabled": true,
+      "ttsVoice": "th-TH-NiwatNeural",
+      "filterEnabled": true,
+      "filterAction": "censor",
       "timestamp": 1793335000000
     }
   }
@@ -610,7 +699,7 @@ Query or update the TTS voice setting (`true` = enabled, `false` = muted). Persi
 ---
 
 ### `POST /api/manage/overlay/control`
-Broadcast a control command (`reload`, `clear`, `disconnect`, or `heartbeat`) to connected OBS overlays.
+Broadcast a control command (`reload`, `clear`, `disconnect`, `tts`, `countdown`, or `heartbeat`) to connected OBS overlays.
 
 - **Content-Type**: `application/json`
 - **Authentication**: `Authorization: Bearer <token>` or `dash_token` cookie
@@ -620,6 +709,7 @@ Broadcast a control command (`reload`, `clear`, `disconnect`, or `heartbeat`) to
     "action": "clear"
   }
   ```
+  *(For timer overlays: `{ "action": "countdown", "diffSeconds": 60 }` to add 1 minute, or `-60` to subtract.)*
 - **Success Response (`200 OK`)**:
   ```json
   {

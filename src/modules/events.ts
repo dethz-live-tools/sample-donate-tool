@@ -2,7 +2,19 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { dashboardAuth, isValidSession } from './auth'
 import { getConfig, type Bindings } from './config'
-import { getTtsSetting, listDonations, setTtsSetting } from './db'
+import {
+  applySubathonCommand,
+  getFilterConfig,
+  getLeaderboard,
+  getSubathonState,
+  getTtsConfig,
+  listDonations,
+  setFilterConfig,
+  setTtsConfig,
+  type FilterSettings,
+  type SubathonState,
+  type TtsSettings
+} from './db'
 
 export type DonateEvent = {
   id: string
@@ -21,12 +33,20 @@ export type OverlayStatus = {
   online: boolean
   count: number
   ttsEnabled: boolean
+  ttsVoice?: string
+  ttsRate?: string
+  ttsPitch?: string
+  filterEnabled?: boolean
+  filterAction?: string
   timestamp: number
 }
 
 export type OverlayCommand = {
   action: 'reload' | 'clear' | 'disconnect' | 'tts' | string
   enabled?: boolean
+  voice?: string
+  rate?: string
+  pitch?: string
   [key: string]: any
 }
 
@@ -35,23 +55,54 @@ const statusListeners = new Set<(status: OverlayStatus) => void>()
 const controlListeners = new Set<(cmd: OverlayCommand) => void>()
 const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
-let runtimeTtsEnabled: boolean | null = null
+let runtimeTtsConfig: TtsSettings | null = null
+let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
-const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
+
+export async function resolveTtsConfig(env?: Bindings): Promise<TtsSettings> {
+  const cfg = getConfig(env)
+  const val = await getTtsConfig(env?.DB, runtimeTtsConfig?.enabled ?? cfg.ttsEnabled)
+  runtimeTtsConfig = val
+  return val
+}
 
 export async function resolveTtsEnabled(env?: Bindings): Promise<boolean> {
-  const cfg = getConfig(env)
-  const val = await getTtsSetting(env?.DB, runtimeTtsEnabled ?? cfg.ttsEnabled)
-  runtimeTtsEnabled = val
+  const cfg = await resolveTtsConfig(env)
+  return cfg.enabled
+}
+
+export async function updateTtsConfig(env: Bindings | undefined, update: Partial<TtsSettings>): Promise<TtsSettings> {
+  const val = await setTtsConfig(env?.DB, update)
+  runtimeTtsConfig = val
+  broadcastOverlayStatus()
+  broadcastControl({
+    action: 'tts',
+    enabled: val.enabled,
+    voice: val.voice,
+    rate: val.rate,
+    pitch: val.pitch,
+    timestamp: Date.now()
+  })
   return val
 }
 
 export async function updateTtsEnabled(env: Bindings | undefined, enabled: boolean): Promise<boolean> {
-  runtimeTtsEnabled = enabled
-  await setTtsSetting(env?.DB, enabled)
+  const updated = await updateTtsConfig(env, { enabled })
+  return updated.enabled
+}
+
+export async function resolveFilterConfig(env?: Bindings): Promise<FilterSettings> {
+  const val = await getFilterConfig(env?.DB)
+  runtimeFilterConfig = val
+  return val
+}
+
+export async function updateFilterConfig(env: Bindings | undefined, update: Partial<FilterSettings>): Promise<FilterSettings> {
+  const val = await setFilterConfig(env?.DB, update)
+  runtimeFilterConfig = val
   broadcastOverlayStatus()
-  broadcastControl({ action: 'tts', enabled, timestamp: Date.now() })
-  return enabled
+  return val
 }
 
 export function isOverlayOnline(): boolean {
@@ -63,7 +114,12 @@ export function getOverlayStatus(): OverlayStatus {
   return {
     online: isOverlayOnline(),
     count: overlayConnections.size,
-    ttsEnabled: runtimeTtsEnabled ?? true,
+    ttsEnabled: runtimeTtsConfig?.enabled ?? true,
+    ttsVoice: runtimeTtsConfig?.voice ?? 'th-TH-NiwatNeural',
+    ttsRate: runtimeTtsConfig?.rate ?? '+0%',
+    ttsPitch: runtimeTtsConfig?.pitch ?? '+0Hz',
+    filterEnabled: runtimeFilterConfig?.enabled ?? true,
+    filterAction: runtimeFilterConfig?.action ?? 'censor',
     timestamp: Date.now()
   }
 }
@@ -122,40 +178,6 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
       broadcastOverlayStatus()
     }
 
-    const sendDonate = (ev: DonateEvent) => {
-      if (seenIds.has(ev.id)) return
-      seenIds.add(ev.id)
-      try {
-        stream.writeSSE({
-          event: 'donate',
-          data: JSON.stringify(sanitizeEvent(ev, isAdmin)),
-          id: ev.id
-        })
-      } catch {}
-    }
-    listeners.add(sendDonate)
-
-    const sendStatus = (status: OverlayStatus) => {
-      try {
-        stream.writeSSE({
-          event: 'overlay_status',
-          data: JSON.stringify(status)
-        })
-      } catch {}
-    }
-    statusListeners.add(sendStatus)
-
-    const sendControl = (cmd: OverlayCommand) => {
-      if (!isOverlay && !isAdmin) return
-      try {
-        stream.writeSSE({
-          event: 'control',
-          data: JSON.stringify(cmd)
-        })
-      } catch {}
-    }
-    controlListeners.add(sendControl)
-
     let cleanedUp = false
     const cleanup = () => {
       if (cleanedUp) return
@@ -172,28 +194,80 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
       }
     }
 
+    const sendDonate = (ev: DonateEvent) => {
+      if (cleanedUp || seenIds.has(ev.id)) return
+      seenIds.add(ev.id)
+      stream
+        .writeSSE({
+          event: 'donate',
+          data: JSON.stringify(sanitizeEvent(ev, isAdmin)),
+          id: ev.id
+        })
+        .catch(() => {
+          cleanup()
+        })
+    }
+    listeners.add(sendDonate)
+
+    const sendStatus = (status: OverlayStatus) => {
+      if (cleanedUp) return
+      stream
+        .writeSSE({
+          event: 'overlay_status',
+          data: JSON.stringify(status)
+        })
+        .catch(() => {
+          cleanup()
+        })
+    }
+    statusListeners.add(sendStatus)
+
+    const sendControl = (cmd: OverlayCommand) => {
+      if (cleanedUp || (!isOverlay && !isAdmin)) return
+      stream
+        .writeSSE({
+          event: 'control',
+          data: JSON.stringify(cmd)
+        })
+        .catch(() => {
+          cleanup()
+        })
+    }
+    controlListeners.add(sendControl)
+
     stream.onAbort(cleanup)
 
     // Immediate heartbeat and initial status on connect
-    await stream.writeSSE({
-      event: 'heartbeat',
-      data: JSON.stringify({
-        ok: true,
-        client,
-        online: isOverlayOnline(),
-        count: overlayConnections.size,
-        timestamp: Date.now()
+    await stream
+      .writeSSE({
+        event: 'heartbeat',
+        data: JSON.stringify({
+          ok: true,
+          client,
+          online: isOverlayOnline(),
+          count: overlayConnections.size,
+          timestamp: Date.now()
+        })
       })
-    })
+      .catch(() => {
+        cleanup()
+      })
 
-    await stream.writeSSE({
-      event: 'overlay_status',
-      data: JSON.stringify(getOverlayStatus())
-    })
+    if (cleanedUp) return
+
+    await stream
+      .writeSSE({
+        event: 'overlay_status',
+        data: JSON.stringify(getOverlayStatus())
+      })
+      .catch(() => {
+        cleanup()
+      })
 
     try {
-      while (true) {
+      while (!cleanedUp) {
         await stream.sleep(15000)
+        if (cleanedUp) break
         if (isOverlay) {
           touchOverlayHeartbeat()
         }
@@ -208,6 +282,8 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
         })
         await stream.writeSSE({ event: 'ping', data: '1' })
       }
+    } catch {
+      // stream aborted or closed
     } finally {
       cleanup()
     }
@@ -236,6 +312,16 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
   })
+  .get('/leaderboard', async (c) => {
+    const rawLimit = Number(c.req.query('limit'))
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
+    const items = await getLeaderboard(c.env?.DB, limit)
+    return c.json({ ok: true, items })
+  })
+  .get('/subathon', async (c) => {
+    const state = await getSubathonState(c.env?.DB)
+    return c.json({ ok: true, state })
+  })
   .get('/heartbeat', dashboardAuth, (c) => {
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
@@ -257,15 +343,34 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     }
 
     if (action === 'tts') {
-      const current = await resolveTtsEnabled(c.env)
-      const next = typeof body.enabled === 'boolean' ? body.enabled : !current
-      await updateTtsEnabled(c.env, next)
-      return c.json({ ok: true, command: { action: 'tts', enabled: next, timestamp: Date.now() }, status: getOverlayStatus() })
+      const current = await resolveTtsConfig(c.env)
+      const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !current.enabled
+      const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+      const rate = typeof body.rate === 'string' ? body.rate : current.rate
+      const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+      const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+      return c.json({
+        ok: true,
+        command: {
+          action: 'tts',
+          enabled: updated.enabled,
+          voice: updated.voice,
+          rate: updated.rate,
+          pitch: updated.pitch,
+          timestamp: Date.now()
+        },
+        status: getOverlayStatus()
+      })
     }
 
-    const payload = { ...body, action, timestamp: Date.now() }
+    let subathonState: SubathonState | undefined
+    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+      subathonState = await applySubathonCommand(c.env?.DB, body)
+    }
+
+    const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)
-    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
+    return c.json({ ok: true, command: payload, ...(subathonState ? { subathonState } : {}), status: getOverlayStatus() })
   })
   .get('/overlay', (c) => sseHandler(c, 'overlay'))
   .get('/', (c) => sseHandler(c))

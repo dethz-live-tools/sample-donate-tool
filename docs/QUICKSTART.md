@@ -9,7 +9,7 @@ Step-by-step setup guide for running Donate Tools locally and deploying to Cloud
 - [Bun](https://bun.sh) (v1.1+) or Node.js (v20+)
 - [Cloudflare Account](https://dash.cloudflare.com) with Workers and D1 enabled
 - [Slip2Sure Account & API Key](https://app.slip2sure.com) (for bank/TrueMoney slip verification)
-- [Google AI Studio Gemini API Key](https://aistudio.google.com) (optional, for Gemini 2.5 Flash TTS)
+- Microsoft Edge Neural TTS is built-in with zero API keys required
 
 ---
 
@@ -34,9 +34,6 @@ Edit `.env` with your credentials:
 ```dotenv
 # Slip2Sure Application API Key (from https://app.slip2sure.com)
 SLIP2SURE_API_KEY=your_slip2sure_api_key_here
-
-# Google Gemini API Key for Gemini 2.5 Flash TTS (optional; falls back to browser TTS if omitted)
-GEMINI_API_KEY=your_gemini_api_key_here
 TTS_ENABLED=true
 
 # Secret key for HMAC-SHA256 signing of admin session tokens
@@ -69,8 +66,11 @@ Navigate to:
 - **Initial Admin Setup**: `http://localhost:5173/setup` (create your admin username & password)
 - **Admin Login**: `http://localhost:5173/login`
 - **Streamer Dashboard**: `http://localhost:5173/dashboard`
-- **Overlay Controller**: `http://localhost:5173/overlay/control`
-- **OBS Browser Source**: `http://localhost:5173/overlay`
+- **Overlay Controller**: `http://localhost:5173/overlay/control` (or `/control`)
+- **OBS Donation Alert Overlay**: `http://localhost:5173/overlay` (or `/overlay/alert`)
+- **OBS Leaderboard Overlay**: `http://localhost:5173/overlay/leaderboard?limit=5`
+- **OBS Countdown Overlay**: `http://localhost:5173/overlay/countdown?minutes=10`
+- **OBS Subathon Marathon Overlay**: `http://localhost:5173/overlay/subathon?hours=2&sec_per_thb=6` (or `/overlay/submatron`)
 
 ---
 
@@ -86,7 +86,6 @@ Set production secrets in Cloudflare:
 
 ```sh
 bunx wrangler secret put SLIP2SURE_API_KEY
-bunx wrangler secret put GEMINI_API_KEY
 bunx wrangler secret put SESSION_SECRET
 bunx wrangler secret put TURNSTILE_SECRET_KEY
 ```

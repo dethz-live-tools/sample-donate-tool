@@ -78,6 +78,198 @@ export function DashboardPage({
                 : 'NO OVERLAY CONNECTED'}
             </div>
           </div>
+          <div class="card" style="margin-bottom:0;">
+            <label>TTS (EDGE NEURAL)</label>
+            <div
+              style="font-family:var(--font-head); font-size:32px;"
+              id="dashTtsStatus"
+              class={overlayStatus?.ttsEnabled !== false ? 'status-online' : 'status-offline'}
+            >
+              {overlayStatus?.ttsEnabled !== false ? 'ONLINE' : 'MUTED'}
+            </div>
+            <div
+              id="dashTtsVoice"
+              style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-top:4px;"
+            >
+              {overlayStatus?.ttsVoice || 'th-TH-NiwatNeural'}
+            </div>
+          </div>
+        </div>
+
+        <div class="inverted-block" style="margin-bottom: 24px;">
+          <label style="color:var(--ctp-lavender); margin-bottom:8px;">OVERLAY SETTINGS &amp; CONTROLLERS</label>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <a
+              href="/overlay/control"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-surface2); background:var(--ctp-mantle); color:var(--ctp-text);"
+            >
+              OVERVIEW HUB
+            </a>
+            <a
+              href="/overlay/control/alert"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              1. DONATION ALERT &amp; TTS
+            </a>
+            <a
+              href="/overlay/control/leaderboard"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              2. LEADERBOARD
+            </a>
+            <a
+              href="/overlay/control/countdown"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              3. COUNTDOWN TIMER
+            </a>
+            <a
+              href="/overlay/control/subathon"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+            >
+              4. SUBATHON MARATHON
+            </a>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="font-family:var(--font-head); font-size:18px; margin:0; text-transform:uppercase;">
+                EDGE TTS VOICE OPTIONS
+              </h3>
+              <p class="subtitle" style="margin:2px 0 0 0; font-size:11px;">
+                MICROSOFT EDGE NEURAL SYNTHESIS // FREE & FAST // LOADED LOCALLY
+              </p>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button
+                type="button"
+                id="dashToggleTtsBtn"
+                style="width:auto; padding:6px 14px; font-size:12px;"
+              >
+                TOGGLE TTS: {overlayStatus?.ttsEnabled !== false ? 'MUTE' : 'UNMUTE'}
+              </button>
+            </div>
+          </div>
+
+          <form id="dashTtsForm" style="margin-bottom:0;">
+            <div class="row" style="margin-bottom:12px;">
+              <div>
+                <label>VOICE</label>
+                <select id="dashVoiceSelect" style="margin-bottom:0;">
+                  <option value="th-TH-NiwatNeural" selected={overlayStatus?.ttsVoice === 'th-TH-NiwatNeural' || !overlayStatus?.ttsVoice}>
+                    Thai - Niwat (Male)
+                  </option>
+                  <option value="th-TH-PremwadeeNeural" selected={overlayStatus?.ttsVoice === 'th-TH-PremwadeeNeural'}>
+                    Thai - Premwadee (Female)
+                  </option>
+                  <option value="en-US-AriaNeural" selected={overlayStatus?.ttsVoice === 'en-US-AriaNeural'}>
+                    English (US) - Aria (Female)
+                  </option>
+                  <option value="en-US-GuyNeural" selected={overlayStatus?.ttsVoice === 'en-US-GuyNeural'}>
+                    English (US) - Guy (Male)
+                  </option>
+                  <option value="en-US-JennyNeural" selected={overlayStatus?.ttsVoice === 'en-US-JennyNeural'}>
+                    English (US) - Jenny (Female)
+                  </option>
+                  <option value="ja-JP-NanamiNeural" selected={overlayStatus?.ttsVoice === 'ja-JP-NanamiNeural'}>
+                    Japanese - Nanami (Female)
+                  </option>
+                  <option value="ja-JP-KeitaNeural" selected={overlayStatus?.ttsVoice === 'ja-JP-KeitaNeural'}>
+                    Japanese - Keita (Male)
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label>SPEED / RATE</label>
+                <select id="dashRateSelect" style="margin-bottom:0;">
+                  <option value="-20%" selected={overlayStatus?.ttsRate === '-20%'}>Slow (-20%)</option>
+                  <option value="-10%" selected={overlayStatus?.ttsRate === '-10%'}>Slightly Slow (-10%)</option>
+                  <option value="+0%" selected={overlayStatus?.ttsRate === '+0%' || !overlayStatus?.ttsRate}>Normal (0%)</option>
+                  <option value="+10%" selected={overlayStatus?.ttsRate === '+10%'}>Slightly Fast (+10%)</option>
+                  <option value="+20%" selected={overlayStatus?.ttsRate === '+20%'}>Fast (+20%)</option>
+                  <option value="+30%" selected={overlayStatus?.ttsRate === '+30%'}>Very Fast (+30%)</option>
+                </select>
+              </div>
+              <div>
+                <label>PITCH</label>
+                <select id="dashPitchSelect" style="margin-bottom:0;">
+                  <option value="-10Hz" selected={overlayStatus?.ttsPitch === '-10Hz'}>Low (-10Hz)</option>
+                  <option value="-5Hz" selected={overlayStatus?.ttsPitch === '-5Hz'}>Slightly Low (-5Hz)</option>
+                  <option value="+0Hz" selected={overlayStatus?.ttsPitch === '+0Hz' || !overlayStatus?.ttsPitch}>Normal (0Hz)</option>
+                  <option value="+5Hz" selected={overlayStatus?.ttsPitch === '+5Hz'}>Slightly High (+5Hz)</option>
+                  <option value="+10Hz" selected={overlayStatus?.ttsPitch === '+10Hz'}>High (+10Hz)</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+              <button type="submit" id="dashSaveTtsBtn" style="width:auto; padding:8px 16px; font-size:13px;">
+                SAVE SETTINGS
+              </button>
+              <button
+                type="button"
+                id="dashPreviewTtsBtn"
+                style="width:auto; padding:8px 16px; font-size:13px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
+              >
+                TEST AUDIO LOCALLY
+              </button>
+              <span id="dashTtsMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-bottom: 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="font-family:var(--font-head); font-size:18px; margin:0; text-transform:uppercase;">
+                WORD FILTER & PROFANITY CENSOR
+              </h3>
+              <p class="subtitle" style="margin:2px 0 0 0; font-size:11px;">
+                CENSOR OFFENSIVE WORDS WITH *** OR SILENCE TTS // THAI & ENGLISH
+              </p>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button
+                type="button"
+                id="dashToggleFilterBtn"
+                style="width:auto; padding:6px 14px; font-size:12px;"
+              >
+                FILTER: {overlayStatus?.filterEnabled !== false ? 'ENABLED' : 'DISABLED'}
+              </button>
+            </div>
+          </div>
+
+          <form id="dashFilterForm" style="margin-bottom:0;">
+            <div class="row" style="margin-bottom:12px;">
+              <div>
+                <label>ACTION ON PROFANITY</label>
+                <select id="dashFilterAction" style="margin-bottom:0;">
+                  <option value="censor" selected={overlayStatus?.filterAction !== 'mute'}>
+                    Censor with *** (TTS speaks censored text)
+                  </option>
+                  <option value="mute" selected={overlayStatus?.filterAction === 'mute'}>
+                    Mute TTS (Censor text & silence audio completely)
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label>CUSTOM WORDS (COMMA OR NEWLINE SEPARATED)</label>
+                <input
+                  type="text"
+                  id="dashFilterWords"
+                  placeholder="คำหยาบ, คำต้องห้าม, badword1, badword2"
+                  style="margin-bottom:0;"
+                />
+              </div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+              <button type="submit" id="dashSaveFilterBtn" style="width:auto; padding:8px 16px; font-size:13px;">
+                SAVE FILTER SETTINGS
+              </button>
+              <span id="dashFilterMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
+            </div>
+          </form>
         </div>
 
         <div style="overflow-x:auto;">
@@ -228,7 +420,206 @@ export function DashboardPage({
                 navText.textContent = 'OVERLAY: OFFLINE';
               }
             }
+
+            const ttsStatusEl = document.getElementById('dashTtsStatus');
+            const ttsVoiceEl = document.getElementById('dashTtsVoice');
+            const toggleBtn = document.getElementById('dashToggleTtsBtn');
+            const vSel = document.getElementById('dashVoiceSelect');
+            const rSel = document.getElementById('dashRateSelect');
+            const pSel = document.getElementById('dashPitchSelect');
+
+            if (typeof data === 'object') {
+              if (typeof data.ttsEnabled === 'boolean') {
+                const on = data.ttsEnabled;
+                if (ttsStatusEl) {
+                  ttsStatusEl.textContent = on ? 'ONLINE' : 'MUTED';
+                  ttsStatusEl.className = on ? 'status-online' : 'status-offline';
+                }
+                if (toggleBtn) {
+                  toggleBtn.textContent = 'TOGGLE TTS: ' + (on ? 'MUTE' : 'UNMUTE');
+                }
+              }
+              if (data.ttsVoice && ttsVoiceEl) ttsVoiceEl.textContent = data.ttsVoice;
+              if (vSel && data.ttsVoice && document.activeElement !== vSel) vSel.value = data.ttsVoice;
+              if (rSel && data.ttsRate && document.activeElement !== rSel) rSel.value = data.ttsRate;
+              if (pSel && data.ttsPitch && document.activeElement !== pSel) pSel.value = data.ttsPitch;
+            }
           }
+
+          // Toggle TTS button
+          document.getElementById('dashToggleTtsBtn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('dashToggleTtsBtn');
+            if (btn) btn.disabled = true;
+            try {
+              const res = await fetch('/api/manage/tts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+              });
+              const d = await res.json().catch(() => ({}));
+              if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
+            } catch (err) {
+              console.error(err);
+            } finally {
+              if (btn) btn.disabled = false;
+            }
+          });
+
+          // Save TTS Settings
+          document.getElementById('dashTtsForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const voice = document.getElementById('dashVoiceSelect')?.value;
+            const rate = document.getElementById('dashRateSelect')?.value;
+            const pitch = document.getElementById('dashPitchSelect')?.value;
+            const msgEl = document.getElementById('dashTtsMsg');
+            const saveBtn = document.getElementById('dashSaveTtsBtn');
+            if (saveBtn) saveBtn.disabled = true;
+            if (msgEl) msgEl.textContent = 'SAVING...';
+
+            try {
+              const res = await fetch('/api/manage/tts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voice, rate, pitch })
+              });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
+              if (msgEl) {
+                msgEl.textContent = 'SAVED';
+                setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+              }
+              if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
+            } catch (err) {
+              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+            } finally {
+              if (saveBtn) saveBtn.disabled = false;
+            }
+          });
+
+          // Test Audio locally
+          let dashAudio = null;
+          document.getElementById('dashPreviewTtsBtn')?.addEventListener('click', async () => {
+            const voice = document.getElementById('dashVoiceSelect')?.value;
+            const rate = document.getElementById('dashRateSelect')?.value;
+            const pitch = document.getElementById('dashPitchSelect')?.value;
+            const previewBtn = document.getElementById('dashPreviewTtsBtn');
+            const msgEl = document.getElementById('dashTtsMsg');
+
+            if (dashAudio) {
+              dashAudio.pause();
+              dashAudio = null;
+            }
+
+            if (previewBtn) {
+              previewBtn.disabled = true;
+              previewBtn.textContent = 'LOADING...';
+            }
+            try {
+              const sampleText = 'ทดสอบระบบเสียง Edge TTS โดเนทสำเร็จครับ';
+              const url = '/api/tts?text=' + encodeURIComponent(sampleText) +
+                '&voice=' + encodeURIComponent(voice || '') +
+                '&rate=' + encodeURIComponent(rate || '') +
+                '&pitch=' + encodeURIComponent(pitch || '');
+              
+              dashAudio = new Audio(url);
+              dashAudio.onended = () => {
+                if (previewBtn) {
+                  previewBtn.disabled = false;
+                  previewBtn.textContent = 'TEST AUDIO LOCALLY';
+                }
+              };
+              dashAudio.onerror = () => {
+                if (msgEl) msgEl.textContent = 'PREVIEW FAILED';
+                if (previewBtn) {
+                  previewBtn.disabled = false;
+                  previewBtn.textContent = 'TEST AUDIO LOCALLY';
+                }
+              };
+              await dashAudio.play();
+              if (previewBtn) previewBtn.textContent = 'PLAYING...';
+            } catch (err) {
+              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+              if (previewBtn) {
+                previewBtn.disabled = false;
+                previewBtn.textContent = 'TEST AUDIO LOCALLY';
+              }
+            }
+          });
+
+          // Filter Settings
+          let filterEnabled = ${overlayStatus?.filterEnabled !== false ? 'true' : 'false'};
+
+          async function loadFilterSettings() {
+            try {
+              const res = await fetch('/api/manage/filter');
+              const d = await res.json().catch(() => ({}));
+              if (d.ok) {
+                filterEnabled = Boolean(d.enabled);
+                const toggleBtn = document.getElementById('dashToggleFilterBtn');
+                if (toggleBtn) {
+                  toggleBtn.textContent = 'FILTER: ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+                }
+                const actEl = document.getElementById('dashFilterAction');
+                if (actEl && d.action) actEl.value = d.action;
+                const wordsEl = document.getElementById('dashFilterWords');
+                if (wordsEl && typeof d.words === 'string') wordsEl.value = d.words;
+              }
+            } catch {}
+          }
+          loadFilterSettings();
+
+          document.getElementById('dashToggleFilterBtn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('dashToggleFilterBtn');
+            const msgEl = document.getElementById('dashFilterMsg');
+            const next = !filterEnabled;
+            if (btn) btn.disabled = true;
+            try {
+              const res = await fetch('/api/manage/filter', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next })
+              });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
+              filterEnabled = Boolean(d.enabled);
+              if (btn) btn.textContent = 'FILTER: ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+              if (msgEl) {
+                msgEl.textContent = 'FILTER ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+                setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+              }
+            } catch (err) {
+              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+            } finally {
+              if (btn) btn.disabled = false;
+            }
+          });
+
+          document.getElementById('dashFilterForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const action = document.getElementById('dashFilterAction')?.value || 'censor';
+            const words = document.getElementById('dashFilterWords')?.value || '';
+            const msgEl = document.getElementById('dashFilterMsg');
+            const saveBtn = document.getElementById('dashSaveFilterBtn');
+            if (saveBtn) saveBtn.disabled = true;
+            if (msgEl) msgEl.textContent = 'SAVING...';
+            try {
+              const res = await fetch('/api/manage/filter', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, words, enabled: filterEnabled })
+              });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
+              if (msgEl) {
+                msgEl.textContent = 'SAVED';
+                setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+              }
+            } catch (err) {
+              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+            } finally {
+              if (saveBtn) saveBtn.disabled = false;
+            }
+          });
 
           const es = new EventSource('/api/events?client=dashboard');
           es.addEventListener('donate', (e) => addRow(JSON.parse(e.data)));

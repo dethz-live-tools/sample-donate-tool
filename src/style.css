@@ -46,6 +46,20 @@ body.overlay-body {
   justify-content: center;
 }
 
+body.overlay-body.subathon-overlay-body {
+  display: block;
+  padding: 0;
+  margin: 0;
+}
+
+.subathon-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+
 a {
   color: var(--ctp-blue);
   text-decoration: underline;
@@ -429,4 +443,244 @@ tr:hover td {
   background: var(--ctp-mantle);
   color: var(--ctp-text);
   border: 3px solid var(--ctp-lavender);
+}
+
+/* Leaderboard Overlay */
+.leaderboard-card {
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  border: 4px solid var(--ctp-lavender);
+  padding: 20px 24px;
+  min-width: 380px;
+  max-width: 460px;
+}
+
+.leaderboard-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 3px solid var(--ctp-surface1);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.leaderboard-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--ctp-mauve);
+  color: var(--ctp-crust);
+  padding: 2px 8px;
+  letter-spacing: 1px;
+}
+
+.leaderboard-title {
+  font-family: var(--font-head);
+  font-size: 22px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--ctp-yellow);
+  letter-spacing: 1px;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ctp-crust);
+  border: 2px solid var(--ctp-surface1);
+  padding: 8px 12px;
+  gap: 12px;
+}
+
+.leaderboard-rank {
+  font-family: var(--font-head);
+  font-size: 15px;
+  padding: 2px 8px;
+  min-width: 36px;
+  text-align: center;
+}
+
+.rank-gold {
+  background: var(--ctp-yellow);
+  color: var(--ctp-crust);
+  font-weight: 700;
+}
+
+.rank-silver {
+  background: var(--ctp-lavender);
+  color: var(--ctp-crust);
+  font-weight: 700;
+}
+
+.rank-bronze {
+  background: var(--ctp-peach);
+  color: var(--ctp-crust);
+  font-weight: 700;
+}
+
+.rank-normal {
+  background: var(--ctp-surface1);
+  color: var(--ctp-subtext0);
+}
+
+.leaderboard-name {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ctp-text);
+}
+
+.leaderboard-total {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ctp-green);
+  white-space: nowrap;
+}
+
+.leaderboard-empty {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ctp-subtext0);
+  padding: 16px;
+  text-align: center;
+}
+
+/* Countdown Overlay */
+.countdown-card {
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  border: 5px solid var(--ctp-blue);
+  padding: 24px 36px;
+  text-align: center;
+  min-width: 380px;
+}
+
+.countdown-card.ended {
+  border-color: var(--ctp-red);
+}
+
+.countdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.countdown-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--ctp-sapphire);
+  color: var(--ctp-crust);
+  padding: 2px 8px;
+  letter-spacing: 1px;
+}
+
+.countdown-title {
+  font-family: var(--font-head);
+  font-size: 20px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--ctp-yellow);
+  letter-spacing: 1px;
+}
+
+.countdown-display {
+  font-family: var(--font-mono);
+  font-size: 64px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--ctp-text);
+  letter-spacing: 2px;
+  margin: 8px 0;
+}
+
+.countdown-card.ended .countdown-display {
+  color: var(--ctp-red);
+}
+
+.countdown-status {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--ctp-subtext0);
+}
+
+.countdown-card.ended .countdown-status {
+  color: var(--ctp-yellow);
+  font-weight: 700;
+}
+
+.countdown-card.subathon {
+  border-color: var(--ctp-mauve);
+}
+
+.countdown-card.pulse {
+  animation: cdPulse 0.8s ease-in-out;
+}
+
+@keyframes cdPulse {
+  0% { transform: scale(1); border-color: var(--ctp-green); box-shadow: 0 0 30px rgba(166, 227, 161, 0.4); }
+  50% { transform: scale(1.03); border-color: var(--ctp-yellow); box-shadow: 0 0 50px rgba(249, 226, 175, 0.7); }
+  100% { transform: scale(1); }
+}
+
+.countdown-added {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ctp-crust);
+  background: var(--ctp-green);
+  border: 3px solid var(--ctp-crust);
+  box-shadow: 4px 4px 0 var(--ctp-crust);
+  padding: 8px 18px;
+  margin-top: 10px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.countdown-added.show {
+  display: block;
+}
+
+.countdown-stats {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ctp-subtext1);
+  letter-spacing: 1px;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.subathon-rate-banner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-head);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--ctp-crust);
+  background: var(--ctp-yellow);
+  border: 2px solid var(--ctp-yellow);
+  padding: 6px 16px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 var(--ctp-crust);
 }

@@ -2,7 +2,6 @@ import type { D1Binding } from './db'
 
 export type AppConfig = {
   s2sKey: string
-  geminiKey: string
   ttsEnabled: boolean
   bankName: string
   bankAccount: string
@@ -18,8 +17,6 @@ export type Bindings = {
   SESSION_SECRET?: string
   SLIP2SURE_API_KEY?: string
   VITE_SLIP2SURE_API_KEY?: string
-  GEMINI_API_KEY?: string
-  VITE_GEMINI_API_KEY?: string
   TTS_ENABLED?: string
   VITE_TTS_ENABLED?: string
   BANK_NAME?: string
@@ -48,7 +45,6 @@ export function getConfig(env?: Bindings): AppConfig {
 
   return {
     s2sKey: pickSecret('SLIP2SURE_API_KEY', 'VITE_SLIP2SURE_API_KEY'),
-    geminiKey: pickSecret('GEMINI_API_KEY', 'VITE_GEMINI_API_KEY'),
     ttsEnabled: !['false', '0', 'off', 'no'].includes(rawTts),
     bankName: pickPublic('BANK_NAME', 'VITE_BANK_NAME'),
     bankAccount: pickPublic('BANK_ACCOUNT', 'VITE_BANK_ACCOUNT'),

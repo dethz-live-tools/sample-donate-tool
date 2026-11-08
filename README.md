@@ -1,6 +1,6 @@
-# Donate Tools — Slip2Sure + Gemini TTS
+# Donate Tools — Slip2Sure + Edge TTS
 
-Stream donation platform with real-time OBS overlay alerts, automatic slip verification via [Slip2Sure API](https://app.slip2sure.com/user/api/docs), voice synthesis powered by Google Gemini 2.5 Flash TTS, and remote overlay management. Built on Hono + Vite + Cloudflare Workers & D1.
+Stream donation platform with real-time OBS overlay alerts, automatic slip verification via [Slip2Sure API](https://app.slip2sure.com/user/api/docs), voice synthesis powered by Microsoft Edge Neural TTS, and remote overlay management. Built on Hono + Vite + Cloudflare Workers & D1.
 
 ## Features
 
@@ -12,15 +12,33 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
   - Minimum donation check (10 THB) and duplicate slip prevention (`is_exist` + D1 `trans_ref` uniqueness + in-flight lock)
 - **Bot Protection (`Cloudflare Turnstile`)**:
   - Optional Turnstile challenge verification before calling Slip2Sure API to protect quota
-- **AI Voice Alerts (`Gemini 2.5 Flash TTS`)**:
-  - Fixed `Aoede` voice via `gemini-2.5-flash-preview-tts`
-  - 24kHz 16-bit PCM Web Audio decoding in browser
-  - Automatic fallback to Web Speech API (`th-TH`) when `GEMINI_API_KEY` is omitted
-  - Configurable on/off via `TTS_ENABLED` env var or live toggle on `/overlay/control` and `PUT /api/manage/tts` (persisted in D1)
-- **Real-Time OBS Overlay & Remote Controller**:
-  - Transparent OBS Browser Source (`/overlay`) with sequential alert + TTS playback queue
+- **AI Voice Alerts (`Edge Neural TTS`)**:
+  - Microsoft Edge neural text-to-speech with natural Thai (`th-TH-NiwatNeural`, `th-TH-PremwadeeNeural`), English, and Japanese voices
+  - Default voice `th-TH-NiwatNeural` with automatic failover fallback if a voice cluster becomes exhausted
+  - Zero external SDK or API key needed — runs free and fast
+  - Audio loaded and decoded locally in browser / OBS overlay via Web Audio API MP3 decoding
+  - Dashboard & Overlay Controller settings to select voices, adjust speech rate and pitch, and test audio locally
+  - Spoken text cleans asterisks (`***`) automatically so TTS skips pronouncing "ดอกจัน" / "asterisk"
+  - Configurable on/off via `TTS_ENABLED` env var or live toggle on `/dashboard`, `/overlay/control` and `PUT /api/manage/tts` (persisted in D1)
+- **Word Filtering & Profanity Censor**:
+  - Integrated `obbaeiei/bad-words-thai` dictionary with 270+ Thai profanities, phonetic variations, karaoke terms, and English curse words
+  - Smart whitelist protection for everyday Thai words (`สวัสดี`, `อีเมล`, `หีบสมบัติ`, `ไอที`) preventing false-positive masking
+  - Configurable actions: Censor with `***` or automatically silence/mute TTS audio
+  - Custom blocked words supported via Dashboard & Overlay Controller settings (`/dashboard`, `/overlay/control`)
+  - Full persistence in Cloudflare D1 (`admins` table) and REST API endpoints (`GET/PUT /api/manage/filter`)
+- **Subathon / Countdown Timer Overlay (`/overlay/countdown`, `/overlay/subathon`)**:
+  - Dedicated subathon marathon timer (`/overlay/subathon` or `/overlay/submatron`) and stream countdown (`/overlay/countdown`)
+  - Live timer that automatically adds time on donation (configurable seconds per 1 THB, e.g. 6s/THB)
+  - Visual pulse effects, popup notifications with donor name and time added, and customizable cap
+  - Complete remote controller buttons: +1m, +5m, +10m, -1m, pause, resume, reset, and live rate adjustments
+- **Real-Time OBS Overlays & Remote Controller**:
+  - Transparent OBS Browser Sources:
+    - Donation Alert (`/overlay` or `/overlay/alert`) with sequential alert + TTS playback queue
+    - Top Donors Leaderboard (`/overlay/leaderboard?limit=5`)
+    - Countdown Timer (`/overlay/countdown?minutes=10`)
+    - Subathon Marathon (`/overlay/subathon?hours=2&sec_per_thb=6`)
   - Dedicated SSE stream (`/api/events/overlay`), heartbeat tracking, and automatic polling fallback (`/api/events/poll`)
-  - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`, `tts`), and view live event logs
+  - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`, `tts`, `countdown`), and view live event logs
 - **Admin Dashboard, Management API & Cloudflare D1 Persistence**:
   - First-run admin setup (`/setup`) and rate-limited login (`/login`, 3 tries/min) using Web Crypto `PBKDF2` + `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`)
   - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), credential rotation, TTS toggle, donation ledger management, and overlay control
@@ -55,7 +73,8 @@ bun run deploy
 - `src/modules/db.ts` — Cloudflare D1 auto-schema initialization and queries (`donations`, `admins`)
 - `src/modules/auth.ts` — Admin setup, login, rate limiting, and `PBKDF2` / `HMAC-SHA256` session middleware
 - `src/modules/slip2sure.ts` — Slip2Sure API verification, receiver mask check, and duplicate guard
-- `src/modules/tts.ts` — Gemini 2.5 Flash TTS (`Aoede`) audio generator
+- `src/modules/filter.ts` — Word filtering engine, bad words dictionary (obbaeiei/bad-words-thai), and whitelist masking
+- `src/modules/tts.ts` — Microsoft Edge Neural TTS audio generator, voice synthesizers, and cluster failover
 - `src/modules/events.ts` — SSE stream (`/api/events`, `/api/events/overlay`), overlay status, polling, and command bus
 - `src/modules/donate.ts` — Donation submission (`POST /api/donate`) and test alert (`POST /api/donate/test`)
 - `src/pages/home.tsx` — Public donor page (`GET /`) with PromptPay QR, slip upload, and live overlay status
@@ -63,7 +82,11 @@ bun run deploy
 - `src/pages/login.tsx` — Admin sign-in page (`GET /login`)
 - `src/pages/dashboard.tsx` — Streamer dashboard (`GET /dashboard`) with revenue stats, test alert form, and history
 - `src/pages/control.tsx` — Remote overlay controller and live SSE terminal (`GET /overlay/control`)
-- `src/pages/overlay.tsx` — OBS Browser Source alert overlay (`GET /overlay`)
+- `src/pages/overlays/alert.tsx` — OBS Browser Source alert overlay (`GET /overlay`, `GET /overlay/alert`)
+- `src/pages/overlays/leaderboard.tsx` — OBS Browser Source leaderboard overlay (`GET /overlay/leaderboard`)
+- `src/pages/overlays/countdown.tsx` — OBS Browser Source countdown timer (`GET /overlay/countdown`)
+- `src/pages/overlays/subathon.tsx` — OBS Browser Source subathon marathon overlay (`GET /overlay/subathon`, `GET /overlay/submatron`)
+- `src/pages/overlays/index.ts` — Barrel export for all overlay components
 - `schema.sql` — D1 SQL schema reference for `donations` and `admins`
 
 ## Documentation

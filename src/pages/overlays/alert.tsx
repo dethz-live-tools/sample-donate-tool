@@ -1,4 +1,4 @@
-export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
+export function AlertOverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
   return (
     <div>
       <button class="unlock-btn" id="unlockBtn">ENABLE AUDIO</button>
@@ -28,32 +28,58 @@ export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
             return audioCtx;
           }
 
-          document.getElementById('unlockBtn').addEventListener('click', (e) => {
+          document.getElementById('unlockBtn')?.addEventListener('click', (e) => {
             getAudioCtx();
             e.target.style.display = 'none';
           });
 
-          // ponytail: decode raw L16 PCM via Web Audio API Float32Array directly without WAV header library
-          async function playPCM(base64, sampleRate) {
+          // ponytail: decode audio via Web Audio API decodeAudioData with raw PCM fallback
+          async function playAudio(base64, sampleRate) {
             const ctx = getAudioCtx();
             const bin = atob(base64);
-            const samples = bin.length >> 1;
-            const buf = ctx.createBuffer(1, samples, sampleRate || 24000);
-            const ch = buf.getChannelData(0);
-            const view = new DataView(Uint8Array.from(bin, c => c.charCodeAt(0)).buffer);
-            for (let i = 0; i < samples; i++) {
-              ch[i] = view.getInt16(i * 2, true) / 32768;
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            try {
+              const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+              return new Promise((resolve) => {
+                const src = ctx.createBufferSource();
+                activeSource = src;
+                src.buffer = audioBuffer;
+                src.connect(ctx.destination);
+                src.onended = () => {
+                  if (activeSource === src) activeSource = null;
+                  resolve();
+                };
+                src.start();
+              });
+            } catch (err) {
+              const samples = bin.length >> 1;
+              const buf = ctx.createBuffer(1, samples, sampleRate || 24000);
+              const ch = buf.getChannelData(0);
+              const view = new DataView(bytes.buffer);
+              for (let i = 0; i < samples; i++) {
+                ch[i] = view.getInt16(i * 2, true) / 32768;
+              }
+              return new Promise((resolve) => {
+                const src = ctx.createBufferSource();
+                activeSource = src;
+                src.buffer = buf;
+                src.connect(ctx.destination);
+                src.onended = () => {
+                  if (activeSource === src) activeSource = null;
+                  resolve();
+                };
+                src.start();
+              });
             }
-            return new Promise((resolve) => {
-              const src = ctx.createBufferSource();
-              activeSource = src;
-              src.buffer = buf;
-              src.connect(ctx.destination);
-              src.onended = () => {
-                if (activeSource === src) activeSource = null;
-                resolve();
-              };
-              src.start();
+          }
+
+          async function playAudioUrl(url) {
+            return new Promise((resolve, reject) => {
+              const audio = new Audio(url);
+              audio.onended = () => resolve();
+              audio.onerror = (err) => reject(err);
+              audio.play().catch(reject);
             });
           }
 
@@ -73,39 +99,56 @@ export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
             playing = true;
             const myRun = ++runId;
             const ev = queue.shift();
+            lastSeen = Math.max(lastSeen, Number(ev.createdAt) || Date.now());
+
             const box = document.getElementById('alertBox');
-            document.getElementById('alertDonor').textContent = ev.donor;
-            document.getElementById('alertAmount').textContent = ev.amount.toLocaleString() + ' THB';
-            document.getElementById('alertMsg').textContent = ev.message || '';
+            const donorEl = document.getElementById('alertDonor');
+            const amtEl = document.getElementById('alertAmount');
+            const msgEl = document.getElementById('alertMsg');
+
+            if (!box || !donorEl || !amtEl || !msgEl) {
+              playing = false;
+              return;
+            }
+
+            donorEl.textContent = ev.donor;
+            amtEl.textContent = Number(ev.amount).toLocaleString() + ' THB';
+            msgEl.textContent = ev.message || '';
             box.classList.add('show');
 
-            try {
-              const shouldSpeak = ttsEnabled && ev.ttsEnabled !== false;
-              if (shouldSpeak) {
+            const isTtsActive = typeof ev.ttsEnabled === 'boolean' ? ev.ttsEnabled && ttsEnabled : ttsEnabled;
+            const cleanDonor = String(ev.donor || '').replace(/[*＊]+/g, ' ').replace(/\s+/g, ' ').trim() || 'ผู้บริจาค';
+            const cleanMsg = String(ev.message || '').replace(/[*＊]+/g, ' ').replace(/\s+/g, ' ').trim();
+            const fullText = cleanDonor + ' โดเนท ' + ev.amount + ' บาท' + (cleanMsg ? ' ' + cleanMsg : '');
+
+            if (isTtsActive) {
+              try {
                 if (ev.audioBase64) {
-                  await playPCM(ev.audioBase64, ev.sampleRate);
+                  await playAudio(ev.audioBase64, ev.sampleRate);
                 } else {
-                  await playFallbackTTS(ev.donor + ' โดเนท ' + ev.amount + ' บาท ' + (ev.message || ''));
+                  await playFallbackTTS(fullText);
                 }
+              } catch (err) {
+                console.error('[overlay] audio error', err);
+                try {
+                  await playFallbackTTS(fullText);
+                } catch (_) {}
               }
-            } catch (e) {
-              console.error(e);
+            } else {
+              await new Promise((r) => setTimeout(r, 4500));
             }
+
             if (myRun !== runId) return;
 
-            await new Promise(r => setTimeout(r, 2500));
-            if (myRun !== runId) return;
             box.classList.remove('show');
-            await new Promise(r => setTimeout(r, 400));
-            if (myRun !== runId) return;
+            await new Promise((r) => setTimeout(r, 800));
             playing = false;
             processQueue();
           }
 
           function enqueue(ev) {
-            if (!ev || seenIds.has(ev.id)) return;
+            if (!ev || !ev.id || seenIds.has(ev.id)) return;
             seenIds.add(ev.id);
-            if (ev.createdAt > lastSeen) lastSeen = ev.createdAt;
             queue.push(ev);
             processQueue();
           }
@@ -158,7 +201,11 @@ export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
               console.error('[overlay] control error', err);
             }
           });
-          es.addEventListener('donate', (e) => enqueue(JSON.parse(e.data)));
+          es.addEventListener('donate', (e) => {
+            try {
+              enqueue(JSON.parse(e.data));
+            } catch (_) {}
+          });
 
           setInterval(async () => {
             try {
@@ -174,3 +221,5 @@ export function OverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
     </div>
   )
 }
+
+export { AlertOverlayPage as OverlayPage }

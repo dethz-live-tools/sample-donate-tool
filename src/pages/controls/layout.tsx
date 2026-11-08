@@ -1,9 +1,36 @@
-import type { OverlayStatus } from '../modules/events'
+import type { OverlayStatus } from '../../modules/events'
 
-export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+export type ControlTab = 'overview' | 'alert' | 'leaderboard' | 'countdown' | 'subathon'
+
+export function ControlLayout({
+  activeTab,
+  title,
+  subtitle,
+  overlayStatus,
+  openOverlayHref = '/overlay',
+  children,
+  extraScript = ''
+}: {
+  activeTab: ControlTab
+  title: string
+  subtitle: string
+  overlayStatus?: OverlayStatus
+  openOverlayHref?: string
+  children: any
+  extraScript?: string
+}) {
   const overlayOnline = Boolean(overlayStatus?.online)
   const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
   const ttsEnabled = overlayStatus?.ttsEnabled ?? true
+  const filterEnabled = overlayStatus?.filterEnabled ?? true
+
+  const tabs: Array<{ id: ControlTab; label: string; href: string }> = [
+    { id: 'overview', label: 'OVERVIEW', href: '/overlay/control' },
+    { id: 'alert', label: '1. DONATION ALERT & TTS', href: '/overlay/control/alert' },
+    { id: 'leaderboard', label: '2. LEADERBOARD', href: '/overlay/control/leaderboard' },
+    { id: 'countdown', label: '3. COUNTDOWN', href: '/overlay/control/countdown' },
+    { id: 'subathon', label: '4. SUBATHON', href: '/overlay/control/subathon' }
+  ]
 
   return (
     <div class="container wide">
@@ -20,7 +47,7 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
                 OVERLAY: {overlayOnline ? `ONLINE${clientCount > 1 ? ` (${clientCount})` : ''}` : 'OFFLINE'}
               </span>
             </div>
-            <a href="/overlay" target="_blank">OPEN OVERLAY</a>
+            <a href={openOverlayHref} target="_blank">OPEN OVERLAY</a>
             <form method="post" action="/logout" style="display:inline;">
               <button
                 type="submit"
@@ -32,8 +59,28 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           </div>
         </div>
 
-        <h1>OVERLAY CONTROLLER</h1>
-        <p class="subtitle">OBS BROWSER SOURCE CONNECTION & COMMAND BUS</p>
+        <div
+          style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid var(--ctp-surface1);"
+        >
+          {tabs.map((tab) => {
+            const isActive = tab.id === activeTab
+            return (
+              <a
+                href={tab.href}
+                style={`text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:13px; border:3px solid ${
+                  isActive ? 'var(--ctp-mauve)' : 'var(--ctp-surface2)'
+                }; background:${isActive ? 'var(--ctp-mauve)' : 'var(--ctp-crust)'}; color:${
+                  isActive ? 'var(--ctp-crust)' : 'var(--ctp-text)'
+                };`}
+              >
+                {tab.label}
+              </a>
+            )
+          })}
+        </div>
+
+        <h1>{title}</h1>
+        <p class="subtitle">{subtitle}</p>
 
         <div id="actionStatus" class="status" style="margin-bottom: 24px;"></div>
 
@@ -70,86 +117,19 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
               {ttsEnabled ? 'ON' : 'OFF'}
             </div>
           </div>
-        </div>
-
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">OBS BROWSER SOURCE CONFIGURATION</label>
-          <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-            <input
-              type="text"
-              id="obsUrlInput"
-              readOnly
-              value=""
-              style="margin-bottom:0; background:var(--ctp-mantle);"
-            />
-            <button
-              type="button"
-              id="copyUrlBtn"
-              style="width:auto; padding:10px 20px; font-size:14px; white-space:nowrap;"
+          <div class="card" style="margin-bottom:0;">
+            <label>WORD FILTER</label>
+            <div
+              style="font-family:var(--font-head); font-size:32px;"
+              id="filterStatusText"
+              class={filterEnabled ? 'status-online' : 'status-offline'}
             >
-              COPY OBS URL
-            </button>
-          </div>
-          <div style="font-size:13px; color:var(--ctp-subtext0); line-height:1.6;">
-            Recommended OBS settings: Width <strong>800</strong>, Height <strong>400</strong>, Check <strong>Control audio via OBS</strong>. Background is transparent.
-          </div>
-        </div>
-
-        <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:12px; text-transform:uppercase;">
-          COMMAND BUS ACTIONS
-        </h3>
-        <div class="grid-actions">
-          <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
-            FORCE RELOAD OVERLAY
-          </button>
-          <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
-            CLEAR ALERT QUEUE
-          </button>
-          <button
-            type="button"
-            id="cmdDisconnectBtn"
-            style="font-size:14px; padding:14px 20px; background:var(--ctp-red); border-color:var(--ctp-red);"
-          >
-            DISCONNECT / RESET
-          </button>
-          <button
-            type="button"
-            id="cmdPingBtn"
-            style="font-size:14px; padding:14px 20px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
-          >
-            PING HEARTBEAT
-          </button>
-          <button
-            type="button"
-            id="cmdTtsBtn"
-            style="font-size:14px; padding:14px 20px;"
-          >
-            TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
-          </button>
-        </div>
-
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:16px; text-transform:uppercase;">
-            TRIGGER TEST DONATION
-          </h3>
-          <form id="testAlertForm">
-            <div class="row">
-              <div>
-                <label>DONOR NAME</label>
-                <input type="text" id="testDonor" value="TEST DONOR" required />
-              </div>
-              <div>
-                <label>AMOUNT (THB)</label>
-                <input type="number" id="testAmount" value="99" min="10" max="1000000" required />
-              </div>
+              {filterEnabled ? 'ON' : 'OFF'}
             </div>
-            <label>MESSAGE (GEMINI TTS AUDIO)</label>
-            <input type="text" id="testMsg" value="ทดสอบระบบแจ้งเตือนโดเนท!" required />
-            <button type="submit" id="submitTestBtn" style="font-size:15px; padding:12px 24px;">
-              DISPATCH TEST DONATE TO OVERLAY
-            </button>
-          </form>
+          </div>
         </div>
+
+        {children}
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <label style="margin-bottom:0;">REAL-TIME BUS LOG</label>
@@ -177,24 +157,23 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
           const navText = document.getElementById('overlayNavText');
           const actionStatus = document.getElementById('actionStatus');
           const busLog = document.getElementById('busLog');
-          const obsInput = document.getElementById('obsUrlInput');
-          const copyBtn = document.getElementById('copyUrlBtn');
 
-          if (obsInput) {
-            obsInput.value = window.location.origin + '/overlay';
-          }
-
-          if (copyBtn && obsInput) {
-            copyBtn.addEventListener('click', async () => {
-              try {
-                await navigator.clipboard.writeText(obsInput.value);
-                copyBtn.textContent = 'COPIED!';
-                setTimeout(() => { copyBtn.textContent = 'COPY OBS URL'; }, 2000);
-              } catch {
-                obsInput.select();
-                document.execCommand('copy');
-              }
-            });
+          function bindCopy(inputEl, btnEl, path) {
+            if (!inputEl) return;
+            inputEl.value = window.location.origin + path;
+            if (btnEl) {
+              btnEl.addEventListener('click', async () => {
+                try {
+                  await navigator.clipboard.writeText(inputEl.value);
+                  const orig = btnEl.textContent;
+                  btnEl.textContent = 'COPIED!';
+                  setTimeout(() => { btnEl.textContent = orig; }, 2000);
+                } catch {
+                  inputEl.select();
+                  document.execCommand('copy');
+                }
+              });
+            }
           }
 
           function log(msg, type = 'info') {
@@ -232,14 +211,40 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
             if (countText) {
               countText.textContent = String(count);
             }
-            if (typeof data === 'object' && typeof data?.ttsEnabled === 'boolean') {
-              const ttsOn = data.ttsEnabled;
-              if (ttsStatusText) {
-                ttsStatusText.textContent = ttsOn ? 'ON' : 'OFF';
-                ttsStatusText.className = ttsOn ? 'status-online' : 'status-offline';
+            if (typeof data === 'object') {
+              if (typeof data?.ttsEnabled === 'boolean') {
+                const ttsOn = data.ttsEnabled;
+                if (ttsStatusText) {
+                  ttsStatusText.textContent = ttsOn ? 'ON' : 'OFF';
+                  ttsStatusText.className = ttsOn ? 'status-online' : 'status-offline';
+                }
+                if (cmdTtsBtn) {
+                  cmdTtsBtn.textContent = 'TTS VOICE: ' + (ttsOn ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)');
+                }
               }
-              if (cmdTtsBtn) {
-                cmdTtsBtn.textContent = 'TTS VOICE: ' + (ttsOn ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)');
+              const vSel = document.getElementById('ttsVoiceSelect');
+              const rSel = document.getElementById('ttsRateSelect');
+              const pSel = document.getElementById('ttsPitchSelect');
+              if (vSel && data.ttsVoice && document.activeElement !== vSel) vSel.value = data.ttsVoice;
+              if (rSel && data.ttsRate && document.activeElement !== rSel) rSel.value = data.ttsRate;
+              if (pSel && data.ttsPitch && document.activeElement !== pSel) pSel.value = data.ttsPitch;
+
+              if (typeof data?.filterEnabled === 'boolean') {
+                const fOn = data.filterEnabled;
+                if (typeof window.onFilterStateSync === 'function') window.onFilterStateSync(fOn);
+                const fStatus = document.getElementById('filterStatusText');
+                if (fStatus) {
+                  fStatus.textContent = fOn ? 'ON' : 'OFF';
+                  fStatus.className = fOn ? 'status-online' : 'status-offline';
+                }
+                const fToggle = document.getElementById('toggleFilterBtn');
+                if (fToggle) {
+                  fToggle.textContent = 'FILTER: ' + (fOn ? 'ENABLED' : 'DISABLED');
+                }
+              }
+              const actSel = document.getElementById('filterActionSelect');
+              if (actSel && data.filterAction && document.activeElement !== actSel) {
+                actSel.value = data.filterAction;
               }
             }
             if (navBadge && navText) {
@@ -263,14 +268,14 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
             }
           }, 1000);
 
-          async function sendCommand(action) {
+          async function sendCommand(action, extra = {}) {
             showStatus('DISPATCHING: ' + action.toUpperCase() + '...');
-            log('Sending command: ' + action, 'warn');
+            log('Sending command: ' + action + (extra.cmd ? ' (' + extra.cmd + ')' : ''), 'warn');
             try {
               const res = await fetch('/api/events/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action })
+                body: JSON.stringify({ action, ...extra })
               });
               const data = await res.json();
               if (!res.ok || !data.ok) throw new Error(data.error || 'COMMAND_FAILED');
@@ -283,57 +288,11 @@ export function OverlayControlPage({ overlayStatus }: { overlayStatus?: OverlayS
             }
           }
 
-          document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
-          document.getElementById('cmdClearBtn')?.addEventListener('click', () => sendCommand('clear'));
-          document.getElementById('cmdDisconnectBtn')?.addEventListener('click', () => sendCommand('disconnect'));
-          document.getElementById('cmdTtsBtn')?.addEventListener('click', () => sendCommand('tts'));
-          document.getElementById('cmdPingBtn')?.addEventListener('click', async () => {
-            showStatus('SENDING MANUAL HEARTBEAT...');
-            try {
-              const res = await fetch('/api/events/heartbeat', { method: 'POST' });
-              const data = await res.json();
-              showStatus('OK // HEARTBEAT PING SENT');
-              log('Manual heartbeat ping sent', 'success');
-              if (data) updateState(data);
-            } catch (err) {
-              showStatus('ERROR // ' + err.message, true);
-              log('Heartbeat ping failed: ' + err.message, 'err');
-            }
-          });
-
           document.getElementById('clearLogBtn')?.addEventListener('click', () => {
             if (busLog) busLog.innerHTML = '';
           });
 
-          document.getElementById('testAlertForm')?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submitTestBtn');
-            const donor = document.getElementById('testDonor')?.value;
-            const amount = Number(document.getElementById('testAmount')?.value || 99);
-            const message = document.getElementById('testMsg')?.value;
-
-            btn.disabled = true;
-            btn.textContent = 'GENERATING TTS & SENDING ALERT...';
-            showStatus('DISPATCHING TEST ALERT...');
-
-            try {
-              const res = await fetch('/api/donate/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ donor, amount, message })
-              });
-              const data = await res.json();
-              if (!res.ok || !data.ok) throw new Error(data.error || 'TEST_ALERT_FAILED');
-              showStatus('OK // TEST DONATION SENT TO OVERLAY');
-              log('Test donation dispatched: ' + donor + ' (' + amount + ' THB)', 'success');
-            } catch (err) {
-              showStatus('ERROR // ' + err.message, true);
-              log('Test donation failed: ' + err.message, 'err');
-            } finally {
-              btn.disabled = false;
-              btn.textContent = 'DISPATCH TEST DONATE TO OVERLAY';
-            }
-          });
+          ${extraScript}
 
           log('Connecting to SSE bus /api/events?client=controller...', 'info');
           const es = new EventSource('/api/events?client=controller');

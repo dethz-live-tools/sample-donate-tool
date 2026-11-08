@@ -2,24 +2,33 @@ import { Hono, type Context, type Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { Bindings } from './config'
 import {
+  applySubathonCommand,
   bumpTokenVersion,
   createAdmin,
   deleteDonation,
   getAdmin,
   getDonationStats,
+  getSubathonState,
   listDonations,
   setApiEnabled,
-  updateAdmin
+  updateAdmin,
+  type SubathonState
 } from './db'
 import {
   broadcastControl,
   broadcastOverlayStatus,
   getOverlayStatus,
+  resolveFilterConfig,
+  resolveTtsConfig,
   resolveTtsEnabled,
   touchOverlayHeartbeat,
+  updateFilterConfig,
+  updateTtsConfig,
   updateTtsEnabled,
   type OverlayCommand
 } from './events'
+import { DEFAULT_BLOCKED_WORDS } from './filter'
+import { EDGE_TTS_VOICES } from './tts'
 
 const COOKIE_NAME = 'dash_token'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
@@ -197,6 +206,33 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     deleteCookie(c, COOKIE_NAME, { path: '/' })
     return c.redirect('/login')
   })
+  .get('/tts', dashboardAuth, async (c) => {
+    const ttsConfig = await resolveTtsConfig(c.env)
+    return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
+  })
+  .put('/tts', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveTtsConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+    const rate = typeof body.rate === 'string' ? body.rate : current.rate
+    const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+    const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+  })
+  .get('/filter', dashboardAuth, async (c) => {
+    const filterConfig = await resolveFilterConfig(c.env)
+    return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
+  })
+  .put('/filter', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveFilterConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const words = typeof body.words === 'string' ? body.words : current.words
+    const action = body.action === 'mute' ? 'mute' : 'censor'
+    const updated = await updateFilterConfig(c.env, { enabled: nextEnabled, words, action })
+    return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
+  })
 
 function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string) {
   setCookie(c, COOKIE_NAME, token, {
@@ -362,15 +398,31 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/tts', dashboardAuth, async (c) => {
-    const ttsEnabled = await resolveTtsEnabled(c.env)
-    return c.json({ ok: true, ttsEnabled })
+    const ttsConfig = await resolveTtsConfig(c.env)
+    return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
   })
   .put('/tts', dashboardAuth, async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
-    const current = await resolveTtsEnabled(c.env)
-    const next = typeof body.enabled === 'boolean' ? body.enabled : !current
-    const ttsEnabled = await updateTtsEnabled(c.env, next)
-    return c.json({ ok: true, ttsEnabled, overlayStatus: getOverlayStatus() })
+    const current = await resolveTtsConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+    const rate = typeof body.rate === 'string' ? body.rate : current.rate
+    const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+    const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+  })
+  .get('/filter', dashboardAuth, async (c) => {
+    const filterConfig = await resolveFilterConfig(c.env)
+    return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
+  })
+  .put('/filter', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const current = await resolveFilterConfig(c.env)
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
+    const words = typeof body.words === 'string' ? body.words : current.words
+    const action = body.action === 'mute' ? 'mute' : 'censor'
+    const updated = await updateFilterConfig(c.env, { enabled: nextEnabled, words, action })
+    return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
   })
   .put('/credentials', dashboardAuth, async (c) => {
     const admin = await getAdmin(c.env?.DB)
@@ -422,6 +474,17 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     return c.json({ ok: true, id })
   })
+  .get('/subathon', dashboardAuth, async (c) => {
+    const state = await getSubathonState(c.env?.DB)
+    return c.json({ ok: true, state })
+  })
+  .put('/subathon', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const subathonState = await applySubathonCommand(c.env?.DB, { cmd: 'set', ...body })
+    const payload = { action: 'subathon', cmd: 'set', ...body, subathonState, timestamp: Date.now() }
+    broadcastControl(payload)
+    return c.json({ ok: true, state: subathonState })
+  })
   .get('/overlay', dashboardAuth, async (c) => {
     await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
@@ -430,7 +493,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
     const action = String(body.action || '').trim()
     if (!action) return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
-    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat'])
+    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
     if (!allowed.has(action)) return c.json({ ok: false, error: 'INVALID_ACTION' }, 400)
     if (action === 'heartbeat') {
       touchOverlayHeartbeat()
@@ -438,12 +501,30 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       return c.json({ ok: true, status: getOverlayStatus() })
     }
     if (action === 'tts') {
-      const current = await resolveTtsEnabled(c.env)
-      const next = typeof body.enabled === 'boolean' ? body.enabled : !current
-      await updateTtsEnabled(c.env, next)
-      return c.json({ ok: true, command: { action: 'tts', enabled: next, timestamp: Date.now() }, status: getOverlayStatus() })
+      const current = await resolveTtsConfig(c.env)
+      const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !current.enabled
+      const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
+      const rate = typeof body.rate === 'string' ? body.rate : current.rate
+      const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
+      const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
+      return c.json({
+        ok: true,
+        command: {
+          action: 'tts',
+          enabled: updated.enabled,
+          voice: updated.voice,
+          rate: updated.rate,
+          pitch: updated.pitch,
+          timestamp: Date.now()
+        },
+        status: getOverlayStatus()
+      })
     }
-    const payload = { ...body, action, timestamp: Date.now() }
+    let subathonState: SubathonState | undefined
+    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+      subathonState = await applySubathonCommand(c.env?.DB, body)
+    }
+    const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)
-    return c.json({ ok: true, command: payload, status: getOverlayStatus() })
+    return c.json({ ok: true, command: payload, ...(subathonState ? { subathonState } : {}), status: getOverlayStatus() })
   })
