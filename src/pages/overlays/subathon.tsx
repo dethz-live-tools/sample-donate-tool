@@ -8,7 +8,8 @@ export function SubathonOverlayPage({
   endMsg = 'TIME UP',
   secPerThb = 6,
   maxHours = 24,
-  initialState
+  initialState,
+  transparent = false
 }: {
   title?: string
   minutes?: number
@@ -18,6 +19,7 @@ export function SubathonOverlayPage({
   secPerThb?: number
   maxHours?: number
   initialState?: SubathonState
+  transparent?: boolean
 }) {
   const resolvedTitle = initialState?.title || title || 'SUBATHON'
   const resolvedEndMsg = initialState?.endMsg || endMsg || 'TIME UP'
@@ -34,7 +36,7 @@ export function SubathonOverlayPage({
 
   return (
     <div class="subathon-wrapper">
-      <div class="countdown-card subathon" id="subathonBox">
+      <div class={`countdown-card subathon${transparent ? ' transparent-bg' : ''}`} id="subathonBox">
         <div class="countdown-header" style="margin-bottom:10px;">
           <div class="subathon-rate-banner" id="subRateBanner">
             {resolvedRateCoins} COINS ➔ +{resolvedRateSeconds}S
@@ -50,6 +52,12 @@ export function SubathonOverlayPage({
         dangerouslySetInnerHTML={{
           __html: `
           document.body.classList.add('overlay-body', 'subathon-overlay-body');
+          function setTransparentBg(enabled) {
+            const box = document.getElementById('subathonBox');
+            if (box) box.classList.toggle('transparent-bg', Boolean(enabled));
+            document.body.classList.toggle('overlay-transparent', Boolean(enabled));
+          }
+          if (${Boolean(transparent)}) setTransparentBg(true);
 
           let initialSecs = ${resolvedInitialSecs};
           const targetStr = ${JSON.stringify(target || '')};
@@ -195,9 +203,10 @@ export function SubathonOverlayPage({
             const amt = Number(d.amount) || 0;
             const donor = String(d.donor || 'ANONYMOUS').trim() || 'ANONYMOUS';
             const minCoins = Math.max(0.01, rateCoins);
+            const steps = Math.floor(amt / minCoins);
 
-            if (amt >= minCoins) {
-              const addedSecs = Math.round((amt / minCoins) * rateSeconds);
+            if (steps > 0) {
+              const addedSecs = Math.round(steps * rateSeconds);
               if (addedSecs > 0) {
                 remaining = Math.min(maxCapSecs, remaining + addedSecs);
                 totalAddedSecs += addedSecs;
@@ -252,11 +261,15 @@ export function SubathonOverlayPage({
                 window.location.reload();
               } else if (cmd.action === 'countdown' || cmd.action === 'subathon') {
                 if (cmd.mode && cmd.mode !== 'subathon') return;
+                if (typeof cmd.transparent === 'boolean') setTransparentBg(cmd.transparent);
+                if (cmd.cmd === 'bg') return;
                 if (cmd.subathonState) {
                   applyPersistedState(cmd.subathonState);
                   return;
                 }
                 syncFromDb();
+              } else if (cmd.action === 'bg' && typeof cmd.transparent === 'boolean') {
+                setTransparentBg(cmd.transparent);
               }
             } catch (_) {}
           });

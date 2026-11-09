@@ -80,10 +80,10 @@ export function SubathonControlPage({
           const s = Math.max(1, Math.round(Number(rateSecondsInput?.value) || 60));
           if (ratePreviewEl) {
             ratePreviewEl.textContent =
-              'MIN TO COUNT: ' + c + ' COINS (BELOW ' + c + ' COINS = IGNORED)   |   ' +
+              'STEP MULTIPLE: EVERY FULL ' + c + ' COINS (REMAINDER % ' + c + ' IGNORED)   |   ' +
               c + ' COINS = +' + formatHuman(s) +
-              '   •   ' + (c * 5) + ' COINS = +' + formatHuman(s * 5) +
-              '   •   ' + (c * 10) + ' COINS = +' + formatHuman(s * 10);
+              '   •   ' + (c * 2) + ' COINS = +' + formatHuman(s * 2) +
+              '   •   ' + (c * 5) + ' COINS = +' + formatHuman(s * 5);
           }
         }
 
@@ -159,7 +159,18 @@ export function SubathonControlPage({
         setInterval(refreshSubState, 5000);
 
         bindCopy(subUrlInput, copySubBtn, '/overlay/subathon');
-        if (previewSubLink) previewSubLink.href = '/overlay/subathon';
+        const subTransparentToggle = document.getElementById('subTransparentToggle');
+        function updateSubUrl() {
+          const isTransparent = Boolean(subTransparentToggle?.checked);
+          const path = isTransparent ? '/overlay/subathon?transparent=1' : '/overlay/subathon';
+          if (subUrlInput) subUrlInput.value = window.location.origin + path;
+          if (previewSubLink) previewSubLink.href = path;
+        }
+        updateSubUrl();
+        subTransparentToggle?.addEventListener('change', () => {
+          updateSubUrl();
+          sendCommand('subathon', { cmd: 'bg', mode: 'subathon', transparent: Boolean(subTransparentToggle.checked) });
+        });
 
         async function sendSubCommand(extra = {}) {
           showStatus('SAVING SUBATHON TO DB...');
@@ -244,13 +255,16 @@ export function SubathonControlPage({
             if (!res.ok || !data.ok) throw new Error(data.error || 'FAILED');
             if (data.subathonState) applySubDbState(data.subathonState);
             else await refreshSubState();
-            if (amount < subRateCoins) {
+            const steps = Math.floor(amount / Math.max(0.01, subRateCoins));
+            if (steps <= 0) {
               showStatus('IGNORED BY SUBMATRON // ' + amount + ' COINS IS BELOW MIN RATE (' + subRateCoins + ' COINS)', true);
               log('Submatron ignored test donate (' + amount + ' < ' + subRateCoins + ' coins)', 'warn');
             } else {
-              const addedSecs = Math.round((amount / Math.max(0.01, subRateCoins)) * subRateSeconds);
-              showStatus('OK // TEST DONATE +' + amount + ' COINS (+' + addedSecs + 'S) ADDED TO SUBMATRON');
-              log('Submatron test donate: +' + amount + ' COINS (+' + addedSecs + 's) by ' + donor, 'success');
+              const addedSecs = Math.round(steps * subRateSeconds);
+              const remainder = Number((amount % subRateCoins).toFixed(2));
+              const remNote = remainder > 0 ? ' (REMAINDER ' + remainder + ' IGNORED)' : '';
+              showStatus('OK // TEST DONATE +' + amount + ' COINS (+' + addedSecs + 'S)' + remNote + ' ADDED TO SUBMATRON');
+              log('Submatron test donate: +' + amount + ' COINS (' + steps + 'x' + subRateCoins + ' = +' + addedSecs + 's) by ' + donor, 'success');
             }
           } catch (err) {
             showStatus('ERROR // ' + err.message, true);
@@ -307,12 +321,16 @@ export function SubathonControlPage({
               OPEN PREVIEW
             </a>
           </div>
+          <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
+            <input type="checkbox" id="subTransparentToggle" style="width:auto; margin:0;" />
+            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+          </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>. Timer state, coin rate, added seconds, and donation totals are automatically saved in Cloudflare D1 across refreshes.
           </div>
         </div>
 
-        <div class="row" style="margin-bottom: 24px;">
+        <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
             <label>PERSISTED DB CLOCK</label>
             <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-mauve);" id="subDbClock">

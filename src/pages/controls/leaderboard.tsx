@@ -15,11 +15,15 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
         const previewLbLink = document.getElementById('previewLbLink');
         const titleInput = document.getElementById('lbTitleInput');
         const limitInput = document.getElementById('lbLimitInput');
+        const lbTransparentToggle = document.getElementById('lbTransparentToggle');
 
         function buildLbPath() {
           const title = (titleInput?.value || 'TOP DONORS').trim() || 'TOP DONORS';
           const limit = Math.max(1, Math.min(50, Number(limitInput?.value) || 5));
-          return '/overlay/leaderboard?limit=' + encodeURIComponent(String(limit)) + '&title=' + encodeURIComponent(title);
+          const transparent = Boolean(lbTransparentToggle?.checked);
+          let path = '/overlay/leaderboard?limit=' + encodeURIComponent(String(limit)) + '&title=' + encodeURIComponent(title);
+          if (transparent) path += '&transparent=1';
+          return path;
         }
 
         function updateLbUrl() {
@@ -33,12 +37,18 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
 
         titleInput?.addEventListener('input', updateLbUrl);
         limitInput?.addEventListener('input', updateLbUrl);
+        lbTransparentToggle?.addEventListener('change', () => {
+          updateLbUrl();
+          const title = (titleInput?.value || 'TOP DONORS').trim() || 'TOP DONORS';
+          const limit = Math.max(1, Math.min(50, Number(limitInput?.value) || 5));
+          sendCommand('leaderboard', { title, limit, transparent: Boolean(lbTransparentToggle.checked) });
+        });
 
         function applyLbPreset(limit) {
           if (limitInput) limitInput.value = String(limit);
           updateLbUrl();
           const title = (titleInput?.value || 'TOP DONORS').trim() || 'TOP DONORS';
-          sendCommand('leaderboard', { limit, title });
+          sendCommand('leaderboard', { limit, title, transparent: Boolean(lbTransparentToggle?.checked) });
         }
 
         document.getElementById('lbPreset3Btn')?.addEventListener('click', () => applyLbPreset(3));
@@ -51,7 +61,7 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
           updateLbUrl();
           const title = (titleInput?.value || 'TOP DONORS').trim() || 'TOP DONORS';
           const limit = Math.max(1, Math.min(50, Number(limitInput?.value) || 5));
-          sendCommand('leaderboard', { title, limit });
+          sendCommand('leaderboard', { title, limit, transparent: Boolean(lbTransparentToggle?.checked) });
         });
 
         document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
@@ -86,6 +96,10 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
               OPEN PREVIEW
             </a>
           </div>
+          <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
+            <input type="checkbox" id="lbTransparentToggle" style="width:auto; margin:0;" />
+            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+          </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>500</strong>. Automatically refreshes when new donations arrive.
           </div>

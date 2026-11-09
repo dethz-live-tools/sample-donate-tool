@@ -84,7 +84,7 @@ export function ControlLayout({
 
         <div id="actionStatus" class="status" style="margin-bottom: 24px;"></div>
 
-        <div class="row" style="margin-bottom: 24px;">
+        <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
             <label>CONNECTION STATE</label>
             <div

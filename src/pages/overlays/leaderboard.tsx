@@ -3,15 +3,17 @@ import type { LeaderboardEntry } from '../../modules/db'
 export function LeaderboardOverlayPage({
   initialItems = [],
   limit = 5,
-  title = 'TOP DONORS'
+  title = 'TOP DONORS',
+  transparent = false
 }: {
   initialItems?: LeaderboardEntry[]
   limit?: number
   title?: string
+  transparent?: boolean
 }) {
   return (
     <div>
-      <div class="leaderboard-card" id="leaderboardBox">
+      <div class={`leaderboard-card${transparent ? ' transparent-bg' : ''}`} id="leaderboardBox">
         <div class="leaderboard-header">
           <span class="leaderboard-badge">TOP</span>
           <span class="leaderboard-title" id="lbTitle">{title}</span>
@@ -39,6 +41,12 @@ export function LeaderboardOverlayPage({
         dangerouslySetInnerHTML={{
           __html: `
           document.body.classList.add('overlay-body');
+          function setTransparentBg(enabled) {
+            const box = document.getElementById('leaderboardBox');
+            if (box) box.classList.toggle('transparent-bg', Boolean(enabled));
+            document.body.classList.toggle('overlay-transparent', Boolean(enabled));
+          }
+          if (${Boolean(transparent)}) setTransparentBg(true);
           let currentLimit = ${Math.max(1, Math.min(50, limit))};
           const listEl = document.getElementById('lbList');
           const titleEl = document.getElementById('lbTitle');
@@ -87,11 +95,14 @@ export function LeaderboardOverlayPage({
               if (cmd.action === 'reload') {
                 window.location.reload();
               } else if (cmd.action === 'leaderboard') {
+                if (typeof cmd.transparent === 'boolean') setTransparentBg(cmd.transparent);
                 if (cmd.title && titleEl) titleEl.textContent = cmd.title;
                 if (typeof cmd.limit === 'number' && cmd.limit > 0) {
                   currentLimit = Math.max(1, Math.min(50, cmd.limit));
                 }
                 refreshLeaderboard();
+              } else if (cmd.action === 'bg' && typeof cmd.transparent === 'boolean') {
+                setTransparentBg(cmd.transparent);
               }
             } catch (_) {}
           });

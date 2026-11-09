@@ -12,10 +12,31 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay"
       extraScript={`
-        bindCopy(document.getElementById('obsUrlInput'), document.getElementById('copyUrlBtn'), '/overlay');
-        bindCopy(document.getElementById('obsLbUrlInput'), document.getElementById('copyLbUrlBtn'), '/overlay/leaderboard?limit=5');
-        bindCopy(document.getElementById('obsCdUrlInput'), document.getElementById('copyCdUrlBtn'), '/overlay/countdown?minutes=10&title=STARTING+SOON');
-        bindCopy(document.getElementById('obsSubUrlInput'), document.getElementById('copySubUrlBtn'), '/overlay/subathon?minutes=10&rate=6');
+        function bindOverlayRow(inputId, btnId, linkId, toggleId, basePath, cmdAction, cmdExtra = {}) {
+          const inputEl = document.getElementById(inputId);
+          const btnEl = document.getElementById(btnId);
+          const linkEl = document.getElementById(linkId);
+          const toggleEl = document.getElementById(toggleId);
+          bindCopy(inputEl, btnEl, basePath);
+
+          function syncUrl() {
+            const isTransparent = Boolean(toggleEl?.checked);
+            const sep = basePath.includes('?') ? '&' : '?';
+            const path = isTransparent ? (basePath + sep + 'transparent=1') : basePath;
+            if (inputEl) inputEl.value = window.location.origin + path;
+            if (linkEl) linkEl.href = path;
+          }
+          syncUrl();
+          toggleEl?.addEventListener('change', () => {
+            syncUrl();
+            sendCommand(cmdAction, { ...cmdExtra, transparent: Boolean(toggleEl.checked) });
+          });
+        }
+
+        bindOverlayRow('obsUrlInput', 'copyUrlBtn', 'testAlertLink', 'ovAlertTransparent', '/overlay', 'alert');
+        bindOverlayRow('obsLbUrlInput', 'copyLbUrlBtn', 'testLbLink', 'ovLbTransparent', '/overlay/leaderboard?limit=5', 'leaderboard');
+        bindOverlayRow('obsCdUrlInput', 'copyCdUrlBtn', 'testCdLink', 'ovCdTransparent', '/overlay/countdown?minutes=10&title=STARTING+SOON', 'countdown', { cmd: 'bg', mode: 'countdown' });
+        bindOverlayRow('obsSubUrlInput', 'copySubUrlBtn', 'testSubLink', 'ovSubTransparent', '/overlay/subathon?minutes=10&rate=6', 'subathon', { cmd: 'bg', mode: 'subathon' });
 
         document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
         document.getElementById('cmdClearBtn')?.addEventListener('click', () => sendCommand('clear'));
@@ -74,10 +95,14 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               >
                 COPY
               </button>
-              <a href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">
+              <a id="testAlertLink" href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">
                 TEST
               </a>
             </div>
+            <label style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:0; cursor:pointer; color:var(--ctp-text);">
+              <input type="checkbox" id="ovAlertTransparent" style="width:auto; margin:0;" />
+              <span>TRANSPARENT CARD BACKGROUND</span>
+            </label>
           </div>
 
           <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
@@ -112,10 +137,14 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               >
                 COPY
               </button>
-              <a href="/overlay/leaderboard" target="_blank" style="white-space:nowrap; font-size:12px;">
+              <a id="testLbLink" href="/overlay/leaderboard" target="_blank" style="white-space:nowrap; font-size:12px;">
                 TEST
               </a>
             </div>
+            <label style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:0; cursor:pointer; color:var(--ctp-text);">
+              <input type="checkbox" id="ovLbTransparent" style="width:auto; margin:0;" />
+              <span>TRANSPARENT CARD BACKGROUND</span>
+            </label>
           </div>
 
           <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
@@ -151,6 +180,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
                 COPY
               </button>
               <a
+                id="testCdLink"
                 href="/overlay/countdown?minutes=10&title=STARTING+SOON"
                 target="_blank"
                 style="white-space:nowrap; font-size:12px;"
@@ -158,6 +188,10 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
                 TEST
               </a>
             </div>
+            <label style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:0; cursor:pointer; color:var(--ctp-text);">
+              <input type="checkbox" id="ovCdTransparent" style="width:auto; margin:0;" />
+              <span>TRANSPARENT CARD BACKGROUND</span>
+            </label>
           </div>
 
           <div class="card" style="background:var(--ctp-mantle); margin-bottom:12px; padding:16px;">
@@ -193,6 +227,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
                 COPY
               </button>
               <a
+                id="testSubLink"
                 href="/overlay/subathon?minutes=10&rate=6"
                 target="_blank"
                 style="white-space:nowrap; font-size:12px;"
@@ -200,6 +235,10 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
                 TEST
               </a>
             </div>
+            <label style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; margin-bottom:0; cursor:pointer; color:var(--ctp-text);">
+              <input type="checkbox" id="ovSubTransparent" style="width:auto; margin:0;" />
+              <span>TRANSPARENT CARD BACKGROUND</span>
+            </label>
           </div>
 
           <div style="font-size:13px; color:var(--ctp-subtext0); line-height:1.6;">

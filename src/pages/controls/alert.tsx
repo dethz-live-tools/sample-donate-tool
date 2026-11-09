@@ -17,7 +17,25 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay"
       extraScript={`
-        bindCopy(document.getElementById('obsUrlInput'), document.getElementById('copyUrlBtn'), '/overlay');
+        const alertUrlInput = document.getElementById('obsUrlInput');
+        const copyAlertBtn = document.getElementById('copyUrlBtn');
+        const previewAlertLink = document.getElementById('previewAlertLink');
+        const alertTransparentToggle = document.getElementById('alertTransparentToggle');
+
+        function updateAlertUrl() {
+          const isTransparent = Boolean(alertTransparentToggle?.checked);
+          const path = isTransparent ? '/overlay?transparent=1' : '/overlay';
+          if (alertUrlInput) alertUrlInput.value = window.location.origin + path;
+          if (previewAlertLink) previewAlertLink.href = path;
+        }
+
+        bindCopy(alertUrlInput, copyAlertBtn, '/overlay');
+        updateAlertUrl();
+
+        alertTransparentToggle?.addEventListener('change', () => {
+          updateAlertUrl();
+          sendCommand('alert', { transparent: Boolean(alertTransparentToggle.checked) });
+        });
 
         document.getElementById('cmdReloadBtn')?.addEventListener('click', () => sendCommand('reload'));
         document.getElementById('cmdClearBtn')?.addEventListener('click', () => sendCommand('clear'));
@@ -254,10 +272,14 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
             >
               COPY URL
             </button>
-            <a href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">
+            <a id="previewAlertLink" href="/overlay" target="_blank" style="white-space:nowrap; font-size:12px;">
               OPEN PREVIEW
             </a>
           </div>
+          <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
+            <input type="checkbox" id="alertTransparentToggle" style="width:auto; margin:0;" />
+            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+          </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>800</strong>, Height <strong>400</strong>, check <strong>Control audio via OBS</strong>.
           </div>

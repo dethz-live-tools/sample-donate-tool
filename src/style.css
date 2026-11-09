@@ -212,6 +212,18 @@ textarea:disabled {
   flex: 1;
 }
 
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 600px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 button {
   width: 100%;
   background: var(--ctp-mauve);
@@ -662,7 +674,7 @@ tr:hover td {
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 700;
-  color: var(--ctp-subtext1);
+  color: var(--ctp-subtext0);
   letter-spacing: 1px;
   margin-top: 8px;
   text-transform: uppercase;
@@ -683,4 +695,28 @@ tr:hover td {
   letter-spacing: 1.5px;
   text-transform: uppercase;
   box-shadow: 4px 4px 0 var(--ctp-crust);
+}
+
+/* Transparent Overlay Background Option */
+.alert-box.transparent-bg,
+.leaderboard-card.transparent-bg,
+.countdown-card.transparent-bg,
+body.overlay-transparent .alert-box,
+body.overlay-transparent .leaderboard-card,
+body.overlay-transparent .countdown-card {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.leaderboard-card.transparent-bg .leaderboard-row,
+body.overlay-transparent .leaderboard-row {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.alert-box.transparent-bg .alert-title,
+.leaderboard-card.transparent-bg .leaderboard-header,
+body.overlay-transparent .alert-title,
+body.overlay-transparent .leaderboard-header {
+  border-bottom-color: transparent !important;
 }

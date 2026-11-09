@@ -560,9 +560,10 @@ export async function addSubathonDonation(
   if (amt <= 0) return current
 
   const rateCoins = Math.max(0.01, current.rateCoins || 1)
-  if (amt < rateCoins) return current
+  const steps = Math.floor(amt / rateCoins)
+  if (steps <= 0) return current
   const rateSeconds = Math.max(1, current.rateSeconds || current.secPerThb || 6)
-  const addedSecs = Math.round((amt / rateCoins) * rateSeconds)
+  const addedSecs = Math.round(steps * rateSeconds)
   if (addedSecs <= 0) return current
 
   const maxCapSecs = Math.max(1, current.maxHours) * 3600

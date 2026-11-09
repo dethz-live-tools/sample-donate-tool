@@ -47,7 +47,7 @@ export function DashboardPage({
 
         <div id="testStatus" class="status" style="margin-bottom: 16px;"></div>
 
-        <div class="row" style="margin-bottom: 24px;">
+        <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
             <label>TOTAL VOLUME</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="totalAmount">

@@ -122,20 +122,33 @@ app.get('/control/alert', dashboardAuth, (c) => c.redirect('/overlay/control/ale
 app.get('/control/leaderboard', dashboardAuth, (c) => c.redirect('/overlay/control/leaderboard'))
 app.get('/control/countdown', dashboardAuth, (c) => c.redirect('/overlay/control/countdown'))
 app.get('/control/subathon', dashboardAuth, (c) => c.redirect('/overlay/control/subathon'))
+const isTransparentQuery = (c: any) => {
+  const t = c.req.query('transparent')
+  const bg = c.req.query('bg')
+  return t === '1' || t === 'true' || bg === 'transparent'
+}
+
 app.get('/overlay', async (c) => {
   const ttsEnabled = await resolveTtsEnabled(c.env)
-  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} />)
+  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} transparent={isTransparentQuery(c)} />)
 })
 app.get('/overlay/alert', async (c) => {
   const ttsEnabled = await resolveTtsEnabled(c.env)
-  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} />)
+  return c.render(<AlertOverlayPage ttsEnabled={ttsEnabled} transparent={isTransparentQuery(c)} />)
 })
 app.get('/overlay/leaderboard', async (c) => {
   const rawLimit = Number(c.req.query('limit'))
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
   const title = c.req.query('title') || 'TOP DONORS'
   const items = await getLeaderboard(c.env?.DB, limit)
-  return c.render(<LeaderboardOverlayPage initialItems={items} limit={limit} title={title} />)
+  return c.render(
+    <LeaderboardOverlayPage
+      initialItems={items}
+      limit={limit}
+      title={title}
+      transparent={isTransparentQuery(c)}
+    />
+  )
 })
 app.get('/overlay/countdown', (c) => {
   const title = c.req.query('title') || 'COUNTDOWN'
@@ -150,6 +163,7 @@ app.get('/overlay/countdown', (c) => {
       seconds={seconds}
       target={target}
       endMsg={endMsg}
+      transparent={isTransparentQuery(c)}
     />
   )
 })
@@ -172,6 +186,7 @@ app.get('/overlay/subathon', async (c) => {
       secPerThb={secPerThb}
       maxHours={maxHours}
       initialState={initialState}
+      transparent={isTransparentQuery(c)}
     />
   )
 })

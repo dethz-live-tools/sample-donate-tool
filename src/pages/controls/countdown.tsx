@@ -17,15 +17,18 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
         const minsInput = document.getElementById('cdCustomMinutes');
         const secsInput = document.getElementById('cdCustomSeconds');
         const endInput = document.getElementById('cdCustomEnd');
+        const cdTransparentToggle = document.getElementById('cdTransparentToggle');
 
         function buildCdPath() {
           const title = (titleInput?.value || 'STARTING SOON').trim() || 'STARTING SOON';
           const mins = Math.max(0, Number(minsInput?.value) || 0);
           const secs = Math.max(0, Number(secsInput?.value) || 0);
           const endMsg = (endInput?.value || 'TIME UP').trim() || 'TIME UP';
+          const transparent = Boolean(cdTransparentToggle?.checked);
           let path = '/overlay/countdown?minutes=' + encodeURIComponent(String(mins)) + '&title=' + encodeURIComponent(title);
           if (secs > 0) path += '&seconds=' + encodeURIComponent(String(secs));
           if (endMsg !== 'TIME UP') path += '&end=' + encodeURIComponent(endMsg);
+          if (transparent) path += '&transparent=1';
           return path;
         }
 
@@ -42,6 +45,10 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
         minsInput?.addEventListener('input', updateCdUrl);
         secsInput?.addEventListener('input', updateCdUrl);
         endInput?.addEventListener('input', updateCdUrl);
+        cdTransparentToggle?.addEventListener('change', () => {
+          updateCdUrl();
+          sendCommand('countdown', { cmd: 'bg', mode: 'countdown', transparent: Boolean(cdTransparentToggle.checked) });
+        });
 
         function startPreset(minutes) {
           if (minsInput) minsInput.value = String(minutes);
@@ -49,7 +56,7 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
           updateCdUrl();
           const title = (titleInput?.value || 'STARTING SOON').trim() || 'STARTING SOON';
           const endMsg = (endInput?.value || 'TIME UP').trim() || 'TIME UP';
-          sendCommand('countdown', { cmd: 'set', mode: 'countdown', minutes, seconds: 0, title, endMsg });
+          sendCommand('countdown', { cmd: 'set', mode: 'countdown', minutes, seconds: 0, title, endMsg, transparent: Boolean(cdTransparentToggle?.checked) });
         }
 
         document.getElementById('cdQuick5Btn')?.addEventListener('click', () => startPreset(5));
@@ -72,7 +79,7 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
           const seconds = Math.max(0, Number(secsInput?.value) || 0);
           const title = (titleInput?.value || 'STARTING SOON').trim() || 'STARTING SOON';
           const endMsg = (endInput?.value || 'TIME UP').trim() || 'TIME UP';
-          sendCommand('countdown', { cmd: 'set', mode: 'countdown', minutes, seconds, title, endMsg });
+          sendCommand('countdown', { cmd: 'set', mode: 'countdown', minutes, seconds, title, endMsg, transparent: Boolean(cdTransparentToggle?.checked) });
         });
       `}
     >
@@ -105,6 +112,10 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
               OPEN PREVIEW
             </a>
           </div>
+          <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
+            <input type="checkbox" id="cdTransparentToggle" style="width:auto; margin:0;" />
+            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+          </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>.
           </div>

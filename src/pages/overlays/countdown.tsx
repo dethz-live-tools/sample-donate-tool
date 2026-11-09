@@ -3,19 +3,21 @@ export function CountdownOverlayPage({
   minutes = 10,
   seconds = 0,
   target = '',
-  endMsg = 'LIVE NOW'
+  endMsg = 'LIVE NOW',
+  transparent = false
 }: {
   title?: string
   minutes?: number
   seconds?: number
   target?: string
   endMsg?: string
+  transparent?: boolean
 }) {
   const initialDuration = Math.max(0, (Number(minutes) || 0) * 60 + (Number(seconds) || 0))
 
   return (
     <div>
-      <div class="countdown-card" id="countdownBox">
+      <div class={`countdown-card${transparent ? ' transparent-bg' : ''}`} id="countdownBox">
         <div class="countdown-header">
           <span class="countdown-badge" id="cdBadge">TIMER</span>
           <span class="countdown-title" id="cdTitle">{title}</span>
@@ -28,6 +30,12 @@ export function CountdownOverlayPage({
         dangerouslySetInnerHTML={{
           __html: `
           document.body.classList.add('overlay-body');
+          function setTransparentBg(enabled) {
+            const box = document.getElementById('countdownBox');
+            if (box) box.classList.toggle('transparent-bg', Boolean(enabled));
+            document.body.classList.toggle('overlay-transparent', Boolean(enabled));
+          }
+          if (${Boolean(transparent)}) setTransparentBg(true);
 
           let initialSecs = ${initialDuration};
           const targetStr = ${JSON.stringify(target || '')};
@@ -108,8 +116,11 @@ export function CountdownOverlayPage({
                 window.location.reload();
               } else if (cmd.action === 'countdown') {
                 if (cmd.mode && cmd.mode !== 'countdown') return;
+                if (typeof cmd.transparent === 'boolean') setTransparentBg(cmd.transparent);
                 const sub = cmd.cmd || 'set';
-                if (sub === 'set') {
+                if (sub === 'bg') {
+                  return;
+                } else if (sub === 'set') {
                   if (typeof cmd.minutes === 'number') {
                     remaining = Math.max(0, cmd.minutes * 60 + (cmd.seconds || 0));
                     initialSecs = remaining;

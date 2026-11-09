@@ -58,7 +58,7 @@ let lastOverlayHeartbeat = 0
 let runtimeTtsConfig: TtsSettings | null = null
 let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
-const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg'])
 
 export async function resolveTtsConfig(env?: Bindings): Promise<TtsSettings> {
   const cfg = getConfig(env)
@@ -364,7 +364,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     }
 
     let subathonState: SubathonState | undefined
-    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+    if (body.cmd !== 'bg' && (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown'))) {
       subathonState = await applySubathonCommand(c.env?.DB, body)
     }
 

@@ -1,8 +1,14 @@
-export function AlertOverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }) {
+export function AlertOverlayPage({
+  ttsEnabled = true,
+  transparent = false
+}: {
+  ttsEnabled?: boolean
+  transparent?: boolean
+}) {
   return (
     <div>
       <button class="unlock-btn" id="unlockBtn">ENABLE AUDIO</button>
-      <div class="alert-box" id="alertBox">
+      <div class={`alert-box${transparent ? ' transparent-bg' : ''}`} id="alertBox">
         <div class="alert-title">
           <span id="alertDonor"></span> // <span class="alert-amount" id="alertAmount"></span>
         </div>
@@ -13,6 +19,12 @@ export function AlertOverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }
         dangerouslySetInnerHTML={{
           __html: `
           document.body.classList.add('overlay-body');
+          function setTransparentBg(enabled) {
+            const box = document.getElementById('alertBox');
+            if (box) box.classList.toggle('transparent-bg', Boolean(enabled));
+            document.body.classList.toggle('overlay-transparent', Boolean(enabled));
+          }
+          if (${Boolean(transparent)}) setTransparentBg(true);
           let audioCtx;
           let activeSource = null;
           let ttsEnabled = ${Boolean(ttsEnabled)};
@@ -196,6 +208,8 @@ export function AlertOverlayPage({ ttsEnabled = true }: { ttsEnabled?: boolean }
               } else if (cmd.action === 'disconnect') {
                 es.close();
                 setTimeout(() => window.location.reload(), 1500);
+              } else if ((cmd.action === 'alert' || cmd.action === 'bg') && typeof cmd.transparent === 'boolean') {
+                setTransparentBg(cmd.transparent);
               }
             } catch (err) {
               console.error('[overlay] control error', err);
