@@ -325,7 +325,20 @@ export function ControlLayout({
           es.addEventListener('control', (e) => {
             try {
               const d = JSON.parse(e.data);
-              log('Control event broadcast: ' + d.action, 'warn');
+              if (typeof window.onControlBroadcast === 'function') window.onControlBroadcast(d);
+              if (d.cmd === 'gift' && d.gift) {
+                log(
+                  'TikTok Gift: ' + d.gift.donor + ' sent ' + d.gift.giftName + ' (' + d.gift.coins + ' coins -> +' + d.gift.addedSecs + 's)',
+                  'success'
+                );
+              } else if (d.cmd === 'gift_ignored' && d.gift) {
+                log(
+                  'TikTok Gift ignored (< min rate): ' + d.gift.donor + ' sent ' + d.gift.giftName + ' (' + d.gift.coins + ' coins)',
+                  'warn'
+                );
+              } else {
+                log('Control event broadcast: ' + d.action + (d.cmd ? ' (' + d.cmd + ')' : ''), 'warn');
+              }
             } catch {}
           });
 

@@ -84,6 +84,15 @@ function getSecret(env: Bindings | undefined, passwordHash: string, tokenVersion
   return `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:${passwordHash}:v${tokenVersion}`
 }
 
+export async function getTikTokWebhookKey(env: Bindings | undefined): Promise<string> {
+  const admin = await getAdmin(env?.DB)
+  const baseSecret = admin
+    ? getSecret(env, admin.passwordHash, admin.tokenVersion)
+    : `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:default`
+  const sig = await hmacSign(baseSecret, 'tiktok-webhook-key')
+  return sig.slice(0, 32)
+}
+
 async function createSessionToken(
   env: Bindings | undefined,
   username: string,

@@ -346,6 +346,8 @@ export async function getLeaderboard(
   }))
 }
 
+export const SUBATHON_GRACE_SECONDS = 180
+
 export type SubathonState = {
   title: string
   endMsg: string
@@ -353,6 +355,9 @@ export type SubathonState = {
   remainingSeconds: number
   targetEpoch: number
   isRunning: boolean
+  isGracePeriod?: boolean
+  graceRemainingSeconds?: number
+  isEnded?: boolean
   rateCoins: number
   rateSeconds: number
   secPerThb: number
@@ -372,6 +377,9 @@ function createDefaultSubathonState(now = Date.now()): SubathonState {
     remainingSeconds: 600,
     targetEpoch: now + 600 * 1000,
     isRunning: true,
+    isGracePeriod: false,
+    graceRemainingSeconds: SUBATHON_GRACE_SECONDS,
+    isEnded: false,
     rateCoins: 10,
     rateSeconds: 60,
     secPerThb: 6,
@@ -383,16 +391,35 @@ function createDefaultSubathonState(now = Date.now()): SubathonState {
 }
 
 export function computeLiveSubathonState(state: SubathonState, now = Date.now()): SubathonState {
-  if (state.isRunning && state.targetEpoch > 0) {
-    const rem = Math.max(0, Math.round((state.targetEpoch - now) / 1000))
+  if (state.targetEpoch > 0) {
+    const diffSecs = Math.round((state.targetEpoch - now) / 1000)
+    if (diffSecs > 0) {
+      return {
+        ...state,
+        remainingSeconds: diffSecs,
+        isRunning: true,
+        isGracePeriod: false,
+        graceRemainingSeconds: SUBATHON_GRACE_SECONDS,
+        isEnded: false
+      }
+    }
+    const graceRem = Math.max(0, SUBATHON_GRACE_SECONDS + diffSecs)
     return {
       ...state,
-      remainingSeconds: rem,
-      isRunning: rem > 0,
-      targetEpoch: rem > 0 ? state.targetEpoch : 0
+      remainingSeconds: 0,
+      isRunning: false,
+      isGracePeriod: graceRem > 0,
+      graceRemainingSeconds: graceRem,
+      isEnded: graceRem <= 0
     }
   }
-  return state
+  const isEnded = state.remainingSeconds <= 0
+  return {
+    ...state,
+    isGracePeriod: false,
+    graceRemainingSeconds: isEnded ? 0 : SUBATHON_GRACE_SECONDS,
+    isEnded
+  }
 }
 
 export async function getSubathonState(db: D1Binding | undefined): Promise<SubathonState> {
@@ -541,8 +568,9 @@ export async function applySubathonCommand(
     next.remainingSeconds = Math.max(0, Math.min(maxCapSecs, next.remainingSeconds + delta))
     if (next.remainingSeconds === 0) {
       next.isRunning = false
-      next.targetEpoch = 0
-    } else if (next.isRunning) {
+      next.targetEpoch = now
+    } else if (next.isRunning || next.isGracePeriod) {
+      next.isRunning = true
       next.targetEpoch = now + next.remainingSeconds * 1000
     }
   }
@@ -558,6 +586,7 @@ export async function addSubathonDonation(
   const current = await getSubathonState(db)
   const amt = Number(amount) || 0
   if (amt <= 0) return current
+  if (current.isEnded) return current
 
   const rateCoins = Math.max(0.01, current.rateCoins || 1)
   const steps = Math.floor(amt / rateCoins)
@@ -567,13 +596,17 @@ export async function addSubathonDonation(
   if (addedSecs <= 0) return current
 
   const maxCapSecs = Math.max(1, current.maxHours) * 3600
-  const newRemaining = Math.min(maxCapSecs, current.remainingSeconds + addedSecs)
+  const baseRemaining = current.isGracePeriod ? 0 : current.remainingSeconds
+  const newRemaining = Math.min(maxCapSecs, baseRemaining + addedSecs)
   const isRunning = newRemaining > 0
 
   const next: SubathonState = {
     ...current,
     remainingSeconds: newRemaining,
     isRunning,
+    isGracePeriod: false,
+    graceRemainingSeconds: SUBATHON_GRACE_SECONDS,
+    isEnded: false,
     targetEpoch: isRunning ? now + newRemaining * 1000 : 0,
     totalAddedSecs: current.totalAddedSecs + addedSecs,
     totalDonations: current.totalDonations + amt,

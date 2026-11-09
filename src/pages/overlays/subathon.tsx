@@ -59,6 +59,7 @@ export function SubathonOverlayPage({
           }
           if (${Boolean(transparent)}) setTransparentBg(true);
 
+          const GRACE_SECS = 180;
           let initialSecs = ${resolvedInitialSecs};
           const targetStr = ${JSON.stringify(target || '')};
           let endText = ${JSON.stringify(resolvedEndMsg)};
@@ -69,6 +70,9 @@ export function SubathonOverlayPage({
           let remaining = ${resolvedRemainingSecs};
           let targetEpoch = ${resolvedTargetEpoch || 'null'};
           let isRunning = ${resolvedIsRunning ? 'true' : 'false'};
+          let isGrace = ${Boolean(initialState?.isGracePeriod)};
+          let graceRemaining = ${initialState?.graceRemainingSeconds ?? 180};
+          let isEnded = ${Boolean(initialState?.isEnded)};
           let timerInterval = null;
           let totalAddedSecs = ${resolvedTotalAddedSecs};
           let totalDonations = ${resolvedTotalDonations};
@@ -82,8 +86,26 @@ export function SubathonOverlayPage({
             }
           }
 
-          if (isRunning && targetEpoch && targetEpoch > Date.now()) {
-            remaining = Math.max(0, Math.round((targetEpoch - Date.now()) / 1000));
+          function recomputeFromEpoch() {
+            if (!targetEpoch || targetEpoch <= 0) return;
+            const diff = Math.round((targetEpoch - Date.now()) / 1000);
+            if (diff > 0) {
+              remaining = diff;
+              isRunning = true;
+              isGrace = false;
+              graceRemaining = GRACE_SECS;
+              isEnded = false;
+            } else {
+              remaining = 0;
+              isRunning = false;
+              graceRemaining = Math.max(0, GRACE_SECS + diff);
+              isGrace = graceRemaining > 0;
+              isEnded = graceRemaining <= 0;
+            }
+          }
+
+          if (targetEpoch && targetEpoch > 0) {
+            recomputeFromEpoch();
           }
 
           const box = document.getElementById('subathonBox');
@@ -122,22 +144,26 @@ export function SubathonOverlayPage({
             if (rateBannerEl) {
               rateBannerEl.textContent = formatRateLabel();
             }
-            if (remaining <= 0) {
-              displayEl.textContent = '00:00:00';
-              statusEl.textContent = endText;
-              box.classList.add('ended');
-              if (statsEl) {
-                statsEl.textContent = 'ADDED: +' + formatHuman(totalAddedSecs) + ' // TOTAL: ' + totalDonations.toLocaleString() + ' COINS';
-              }
-              return;
-            }
-            box.classList.remove('ended');
-            displayEl.textContent = formatTime(remaining);
-            statusEl.textContent = isRunning ? 'SUBATHON LIVE' : 'PAUSED';
-
             if (statsEl) {
               statsEl.textContent = 'ADDED: +' + formatHuman(totalAddedSecs) + ' // TOTAL: ' + totalDonations.toLocaleString() + ' COINS';
             }
+            if (remaining <= 0) {
+              if (isGrace && graceRemaining > 0) {
+                box.classList.remove('ended');
+                box.classList.add('grace');
+                displayEl.textContent = formatTime(graceRemaining);
+                statusEl.textContent = 'TIME OUT // +3M GRACE TO DONATE';
+                return;
+              }
+              box.classList.remove('grace');
+              box.classList.add('ended');
+              displayEl.textContent = '00:00:00';
+              statusEl.textContent = endText;
+              return;
+            }
+            box.classList.remove('ended', 'grace');
+            displayEl.textContent = formatTime(remaining);
+            statusEl.textContent = isRunning ? 'SUBATHON LIVE' : 'PAUSED';
           }
 
           function applyPersistedState(st) {
@@ -154,12 +180,15 @@ export function SubathonOverlayPage({
             if (typeof st.totalAddedSecs === 'number') totalAddedSecs = st.totalAddedSecs;
             if (typeof st.totalDonations === 'number') totalDonations = st.totalDonations;
             isRunning = Boolean(st.isRunning);
-            if (isRunning && typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
+            if (typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
               targetEpoch = st.targetEpoch;
-              remaining = Math.max(0, Math.round((targetEpoch - Date.now()) / 1000));
+              recomputeFromEpoch();
             } else {
               targetEpoch = null;
               if (typeof st.remainingSeconds === 'number') remaining = Math.max(0, st.remainingSeconds);
+              isGrace = Boolean(st.isGracePeriod);
+              graceRemaining = typeof st.graceRemainingSeconds === 'number' ? st.graceRemainingSeconds : (remaining > 0 ? GRACE_SECS : 0);
+              isEnded = typeof st.isEnded === 'boolean' ? st.isEnded : (remaining <= 0 && !isGrace);
             }
             render();
           }
@@ -175,16 +204,27 @@ export function SubathonOverlayPage({
           }
 
           function tick() {
-            if (!isRunning) return;
-            if (targetEpoch) {
-              const diff = Math.max(0, Math.round((targetEpoch - Date.now()) / 1000));
-              remaining = diff;
-            } else {
-              remaining = Math.max(0, remaining - 1);
+            if (targetEpoch && targetEpoch > 0) {
+              recomputeFromEpoch();
+              render();
+              return;
             }
-            render();
-            if (remaining <= 0) {
-              isRunning = false;
+            if (isRunning) {
+              remaining = Math.max(0, remaining - 1);
+              if (remaining <= 0) {
+                isRunning = false;
+                isGrace = true;
+                graceRemaining = GRACE_SECS;
+                targetEpoch = Date.now();
+              }
+              render();
+            } else if (isGrace) {
+              graceRemaining = Math.max(0, graceRemaining - 1);
+              if (graceRemaining <= 0) {
+                isGrace = false;
+                isEnded = true;
+              }
+              render();
             }
           }
 
@@ -199,6 +239,7 @@ export function SubathonOverlayPage({
             if (!d || (d.id && seenIds.has(d.id))) return;
             if (d.id) seenIds.add(d.id);
             if (d.createdAt) lastSeen = Math.max(lastSeen, Number(d.createdAt) || Date.now());
+            if (isEnded && !isGrace && remaining <= 0) return;
 
             const amt = Number(d.amount) || 0;
             const donor = String(d.donor || 'ANONYMOUS').trim() || 'ANONYMOUS';
@@ -208,10 +249,14 @@ export function SubathonOverlayPage({
             if (steps > 0) {
               const addedSecs = Math.round(steps * rateSeconds);
               if (addedSecs > 0) {
-                remaining = Math.min(maxCapSecs, remaining + addedSecs);
+                const baseRem = isGrace ? 0 : remaining;
+                remaining = Math.min(maxCapSecs, baseRem + addedSecs);
                 totalAddedSecs += addedSecs;
                 totalDonations += amt;
                 isRunning = remaining > 0;
+                isGrace = false;
+                isEnded = false;
+                graceRemaining = GRACE_SECS;
                 if (isRunning) {
                   targetEpoch = Date.now() + remaining * 1000;
                 }
@@ -262,7 +307,24 @@ export function SubathonOverlayPage({
               } else if (cmd.action === 'countdown' || cmd.action === 'subathon') {
                 if (cmd.mode && cmd.mode !== 'subathon') return;
                 if (typeof cmd.transparent === 'boolean') setTransparentBg(cmd.transparent);
-                if (cmd.cmd === 'bg') return;
+                if (cmd.cmd === 'bg' || cmd.cmd === 'gift_ignored') return;
+                if (cmd.cmd === 'gift' && cmd.gift && Number(cmd.gift.addedSecs) > 0) {
+                  box.classList.remove('pulse');
+                  void box.offsetWidth;
+                  box.classList.add('pulse');
+                  setTimeout(() => box.classList.remove('pulse'), 850);
+                  if (addedEl) {
+                    const g = cmd.gift;
+                    const giftTag = g.giftName ? (' [' + g.giftName + ']') : '';
+                    addedEl.textContent =
+                      '+' + formatHuman(Number(g.addedSecs)) + ' // ' + (g.donor || 'TIKTOK') + giftTag + ' (+' + Number(g.coins || 0).toLocaleString() + ' COINS)';
+                    addedEl.classList.add('show');
+                    clearTimeout(addedTimeout);
+                    addedTimeout = setTimeout(() => {
+                      if (addedEl) addedEl.classList.remove('show');
+                    }, 4500);
+                  }
+                }
                 if (cmd.subathonState) {
                   applyPersistedState(cmd.subathonState);
                   return;

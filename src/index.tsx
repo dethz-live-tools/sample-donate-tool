@@ -1,12 +1,13 @@
 import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
-import { authRoute, dashboardAuth, manageRoute } from './modules/auth'
+import { authRoute, dashboardAuth, getTikTokWebhookKey, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { getAdmin, getLeaderboard, getSubathonState, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
 import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
 import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
+import { tiktokRoute } from './modules/tiktok'
 import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
 import {
   AlertControlPage,
@@ -32,7 +33,13 @@ app.onError((err, c) => {
 app.use(secureHeaders())
 app.use('*', async (c, next) => {
   if (c.req.header('authorization')?.toLowerCase().startsWith('bearer ')) return next()
-  if (c.req.path === '/api/manage/login' || c.req.path === '/api/manage/setup') return next()
+  if (
+    c.req.path === '/api/manage/login' ||
+    c.req.path === '/api/manage/setup' ||
+    c.req.path.startsWith('/api/tiktok/')
+  ) {
+    return next()
+  }
   return csrf()(c, next)
 })
 app.use(renderer)
@@ -40,6 +47,7 @@ app.route('/', authRoute)
 app.route('/api/manage', manageRoute)
 app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
+app.route('/api/tiktok', tiktokRoute)
 
 app.get('/api/tts', async (c) => {
   const text = c.req.query('text') || ''
@@ -110,12 +118,19 @@ app.get('/overlay/control/countdown', dashboardAuth, async (c) => {
   return c.render(<CountdownControlPage overlayStatus={getOverlayStatus()} />)
 })
 app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
-  const [, , subathonState] = await Promise.all([
+  const [, , subathonState, tiktokWebhookKey] = await Promise.all([
     resolveTtsConfig(c.env),
     resolveFilterConfig(c.env),
-    getSubathonState(c.env?.DB)
+    getSubathonState(c.env?.DB),
+    getTikTokWebhookKey(c.env)
   ])
-  return c.render(<SubathonControlPage overlayStatus={getOverlayStatus()} subathonState={subathonState} />)
+  return c.render(
+    <SubathonControlPage
+      overlayStatus={getOverlayStatus()}
+      subathonState={subathonState}
+      tiktokWebhookKey={tiktokWebhookKey}
+    />
+  )
 })
 app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
 app.get('/control/alert', dashboardAuth, (c) => c.redirect('/overlay/control/alert'))

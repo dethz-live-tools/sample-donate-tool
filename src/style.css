@@ -583,6 +583,10 @@ tr:hover td {
   border-color: var(--ctp-red);
 }
 
+.countdown-card.grace {
+  border-color: var(--ctp-yellow);
+}
+
 .countdown-header {
   display: flex;
   align-items: center;
@@ -624,6 +628,10 @@ tr:hover td {
   color: var(--ctp-red);
 }
 
+.countdown-card.grace .countdown-display {
+  color: var(--ctp-yellow);
+}
+
 .countdown-status {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -632,7 +640,8 @@ tr:hover td {
   color: var(--ctp-subtext0);
 }
 
-.countdown-card.ended .countdown-status {
+.countdown-card.ended .countdown-status,
+.countdown-card.grace .countdown-status {
   color: var(--ctp-yellow);
   font-weight: 700;
 }

@@ -4,10 +4,12 @@ import { ControlLayout } from './layout'
 
 export function SubathonControlPage({
   overlayStatus,
-  subathonState
+  subathonState,
+  tiktokWebhookKey = ''
 }: {
   overlayStatus?: OverlayStatus
   subathonState?: SubathonState
+  tiktokWebhookKey?: string
 }) {
   const initTitle = subathonState?.title || 'SUBATHON'
   const initEndMsg = subathonState?.endMsg || 'TIME UP'
@@ -46,13 +48,36 @@ export function SubathonControlPage({
         const dbAddedEl = document.getElementById('subDbAdded');
         const dbThbEl = document.getElementById('subDbThb');
 
+        const GRACE_SECS = 180;
         let subRemaining = ${initRemaining};
         let subTargetEpoch = ${initTargetEpoch || 'null'};
         let subRunning = ${initIsRunning ? 'true' : 'false'};
+        let subIsGrace = ${Boolean(subathonState?.isGracePeriod)};
+        let subGraceRemaining = ${subathonState?.graceRemainingSeconds ?? 180};
+        let subIsEnded = ${Boolean(subathonState?.isEnded)};
         let subRateCoins = ${initRateCoins};
         let subRateSeconds = ${initRateSeconds};
         let subAddedSecs = ${initAddedSecs};
         let subTotalThb = ${initTotalThb};
+
+        function recomputeSubEpoch() {
+          if (!subTargetEpoch || subTargetEpoch <= 0) return;
+          const diff = Math.round((subTargetEpoch - Date.now()) / 1000);
+          if (diff > 0) {
+            subRemaining = diff;
+            subRunning = true;
+            subIsGrace = false;
+            subGraceRemaining = GRACE_SECS;
+            subIsEnded = false;
+          } else {
+            subRemaining = 0;
+            subRunning = false;
+            subGraceRemaining = Math.max(0, GRACE_SECS + diff);
+            subIsGrace = subGraceRemaining > 0;
+            subIsEnded = subGraceRemaining <= 0;
+          }
+        }
+        if (subTargetEpoch && subTargetEpoch > 0) recomputeSubEpoch();
 
         function pad(n) {
           return String(n).padStart(2, '0');
@@ -91,10 +116,25 @@ export function SubathonControlPage({
         rateSecondsInput?.addEventListener('input', updateRatePreview);
 
         function renderSubDbCard() {
-          if (dbClockEl) dbClockEl.textContent = formatTime(subRemaining);
+          if (dbClockEl) {
+            dbClockEl.textContent =
+              subRemaining <= 0 && subIsGrace && subGraceRemaining > 0
+                ? formatTime(subGraceRemaining)
+                : formatTime(subRemaining);
+          }
           if (dbStateEl) {
-            dbStateEl.textContent = subRemaining <= 0 ? 'ENDED' : (subRunning ? 'RUNNING' : 'PAUSED');
-            dbStateEl.className = subRunning && subRemaining > 0 ? 'status-online' : 'status-offline';
+            if (subRemaining <= 0) {
+              if (subIsGrace && subGraceRemaining > 0) {
+                dbStateEl.textContent = 'GRACE (3M)';
+                dbStateEl.className = 'status-online';
+              } else {
+                dbStateEl.textContent = 'ENDED';
+                dbStateEl.className = 'status-offline';
+              }
+            } else {
+              dbStateEl.textContent = subRunning ? 'RUNNING' : 'PAUSED';
+              dbStateEl.className = subRunning ? 'status-online' : 'status-offline';
+            }
           }
           if (dbRateEl) dbRateEl.textContent = subRateCoins + ' COINS ➔ +' + subRateSeconds + 'S';
           if (dbAddedEl) dbAddedEl.textContent = '+' + formatHuman(subAddedSecs);
@@ -104,12 +144,15 @@ export function SubathonControlPage({
         function applySubDbState(st) {
           if (!st || typeof st !== 'object') return;
           subRunning = Boolean(st.isRunning);
-          if (subRunning && typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
+          if (typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
             subTargetEpoch = st.targetEpoch;
-            subRemaining = Math.max(0, Math.round((subTargetEpoch - Date.now()) / 1000));
+            recomputeSubEpoch();
           } else {
             subTargetEpoch = null;
             if (typeof st.remainingSeconds === 'number') subRemaining = Math.max(0, st.remainingSeconds);
+            subIsGrace = Boolean(st.isGracePeriod);
+            subGraceRemaining = typeof st.graceRemainingSeconds === 'number' ? st.graceRemainingSeconds : (subRemaining > 0 ? GRACE_SECS : 0);
+            subIsEnded = typeof st.isEnded === 'boolean' ? st.isEnded : (subRemaining <= 0 && !subIsGrace);
           }
           if (typeof st.rateCoins === 'number' && st.rateCoins > 0) subRateCoins = st.rateCoins;
           if (typeof st.rateSeconds === 'number' && st.rateSeconds > 0) subRateSeconds = st.rateSeconds;
@@ -135,13 +178,24 @@ export function SubathonControlPage({
         }
 
         setInterval(() => {
-          if (subRunning) {
-            if (subTargetEpoch) {
-              subRemaining = Math.max(0, Math.round((subTargetEpoch - Date.now()) / 1000));
-            } else {
-              subRemaining = Math.max(0, subRemaining - 1);
+          if (subTargetEpoch && subTargetEpoch > 0) {
+            recomputeSubEpoch();
+            renderSubDbCard();
+          } else if (subRunning) {
+            subRemaining = Math.max(0, subRemaining - 1);
+            if (subRemaining <= 0) {
+              subRunning = false;
+              subIsGrace = true;
+              subGraceRemaining = GRACE_SECS;
+              subTargetEpoch = Date.now();
             }
-            if (subRemaining <= 0) subRunning = false;
+            renderSubDbCard();
+          } else if (subIsGrace) {
+            subGraceRemaining = Math.max(0, subGraceRemaining - 1);
+            if (subGraceRemaining <= 0) {
+              subIsGrace = false;
+              subIsEnded = true;
+            }
             renderSubDbCard();
           }
         }, 1000);
@@ -256,7 +310,10 @@ export function SubathonControlPage({
             if (data.subathonState) applySubDbState(data.subathonState);
             else await refreshSubState();
             const steps = Math.floor(amount / Math.max(0.01, subRateCoins));
-            if (steps <= 0) {
+            if (data.subathonState?.isEnded) {
+              showStatus('IGNORED BY SUBMATRON // SUBATHON ENDED (3M GRACE EXPIRED — RESET OR START TIMER)', true);
+              log('Submatron ignored test donate (3m grace period expired)', 'warn');
+            } else if (steps <= 0) {
               showStatus('IGNORED BY SUBMATRON // ' + amount + ' COINS IS BELOW MIN RATE (' + subRateCoins + ' COINS)', true);
               log('Submatron ignored test donate (' + amount + ' < ' + subRateCoins + ' coins)', 'warn');
             } else {
@@ -288,6 +345,79 @@ export function SubathonControlPage({
             const amtInput = document.getElementById('subTestAmount');
             if (amtInput) amtInput.value = String(amt);
             dispatchSubTestDonate(amt);
+          });
+        });
+
+        // TikTok Gift Webhook Setup & Tester
+        const webhookKey = ${JSON.stringify(tiktokWebhookKey || '')};
+        const tikfinityUrlInput = document.getElementById('tiktokTikfinityUrl');
+        const copyTikfinityBtn = document.getElementById('copyTikfinityBtn');
+        const webhookJsonUrlInput = document.getElementById('tiktokJsonUrl');
+        const copyWebhookJsonBtn = document.getElementById('copyWebhookJsonBtn');
+
+        const baseWebhookPath = '/api/tiktok/webhook?key=' + encodeURIComponent(webhookKey);
+        const tikfinityTemplatePath =
+          baseWebhookPath + '&user={username}&coins={coins}&gift={giftName}&repeat={repeatCount}';
+
+        bindCopy(tikfinityUrlInput, copyTikfinityBtn, tikfinityTemplatePath);
+        bindCopy(webhookJsonUrlInput, copyWebhookJsonBtn, baseWebhookPath);
+
+        window.onControlBroadcast = (d) => {
+          if (d && d.subathonState) applySubDbState(d.subathonState);
+        };
+
+        async function dispatchTikTokGiftTest(customCoins) {
+          const btn = document.getElementById('tiktokTestBtn');
+          const username = document.getElementById('tiktokTestUser')?.value || 'tiktok_viewer';
+          const giftName = document.getElementById('tiktokTestGift')?.value || 'Galaxy';
+          const coins = Number(customCoins ?? document.getElementById('tiktokTestCoins')?.value ?? 20);
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'CHECKING GIFT...';
+          }
+          try {
+            const res = await fetch('/api/tiktok/webhook', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: webhookKey, username, giftName, coins })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'WEBHOOK_FAILED');
+            if (data.subathonState) applySubDbState(data.subathonState);
+            if (!data.added) {
+              showStatus(
+                data.reason === 'SUBATHON_ENDED'
+                  ? 'TIKTOK GIFT IGNORED // SUBATHON ENDED (3M GRACE EXPIRED — RESET OR START TIMER)'
+                  : 'TIKTOK GIFT IGNORED // ' + coins + ' COINS IS BELOW MIN STEP (' + subRateCoins + ' COINS)',
+                true
+              );
+            } else {
+              const remNote = data.remainder > 0 ? ' (REMAINDER ' + data.remainder + ' IGNORED)' : '';
+              showStatus(
+                'OK // TIKTOK GIFT [' + giftName + '] +' + coins + ' COINS (+' + data.addedSeconds + 'S)' + remNote + ' ADDED TO SUBMATRON ONLY'
+              );
+            }
+          } catch (err) {
+            showStatus('ERROR // ' + err.message, true);
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = 'SEND TIKTOK GIFT TO SUBMATRON';
+            }
+          }
+        }
+
+        document.getElementById('tiktokTestForm')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          await dispatchTikTokGiftTest();
+        });
+
+        document.querySelectorAll('[data-tiktok-coins]').forEach((b) => {
+          b.addEventListener('click', () => {
+            const amt = Number(b.getAttribute('data-tiktok-coins')) || 20;
+            const input = document.getElementById('tiktokTestCoins');
+            if (input) input.value = String(amt);
+            dispatchTikTokGiftTest(amt);
           });
         });
       `}
@@ -510,6 +640,118 @@ export function SubathonControlPage({
               SAVE &amp; RESTART SUBATHON TIMER IN D1
             </button>
           </form>
+        </div>
+
+        <div class="card" style="margin-bottom:24px; border-color:var(--ctp-sapphire);">
+          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase; color:var(--ctp-sapphire);">
+            TIKTOK GIFT INTEGRATION (SUBMATRON WEBHOOK)
+          </h3>
+          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+            RECEIVE TIKTOK LIVE GIFTS VIA TIKFINITY OR CUSTOM SCRIPT // ADDS TIME ONLY TO SUBMATRON USING STEP MULTIPLES (% COIN RATE)
+          </p>
+
+          <div style="margin-bottom:14px;">
+            <label>1. TIKFINITY WEBHOOK URL (GET / POST WITH URL PLACEHOLDERS)</label>
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input
+                type="text"
+                id="tiktokTikfinityUrl"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copyTikfinityBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY URL
+              </button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label>2. CUSTOM SCRIPT / JSON WEBHOOK ENDPOINT (POST /api/tiktok/webhook)</label>
+            <div style="display:flex; gap:12px; align-items:center; margin-bottom:6px;">
+              <input
+                type="text"
+                id="tiktokJsonUrl"
+                readOnly
+                value=""
+                style="margin-bottom:0; background:var(--ctp-crust);"
+              />
+              <button
+                type="button"
+                id="copyWebhookJsonBtn"
+                style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
+              >
+                COPY URL
+              </button>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+              JSON Body: <code>{`{"username": "gifter_name", "giftName": "Rose", "coins": 20}`}</code> (or <code>diamondCount</code> + <code>repeatCount</code>)
+            </div>
+          </div>
+
+          <div style="border-top:2px solid var(--ctp-surface1); padding-top:16px;">
+            <label style="margin-bottom:8px; color:var(--ctp-yellow);">
+              TEST TIKTOK GIFT CHECKER (ADDS TIME TO SUBMATRON ONLY — NO TTS ALERT)
+            </label>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+              <button
+                type="button"
+                data-tiktok-coins="5"
+                style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-sapphire); color:var(--ctp-sapphire);"
+              >
+                GIFT +5 COINS
+              </button>
+              <button
+                type="button"
+                data-tiktok-coins="20"
+                style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-sapphire); color:var(--ctp-sapphire);"
+              >
+                GIFT +20 COINS
+              </button>
+              <button
+                type="button"
+                data-tiktok-coins="50"
+                style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-sapphire); color:var(--ctp-sapphire);"
+              >
+                GIFT +50 COINS
+              </button>
+              <button
+                type="button"
+                data-tiktok-coins="100"
+                style="width:auto; padding:8px 14px; font-size:12px; background:var(--ctp-surface0); border-color:var(--ctp-sapphire); color:var(--ctp-sapphire);"
+              >
+                GIFT +100 COINS
+              </button>
+            </div>
+
+            <form id="tiktokTestForm">
+              <div class="row">
+                <div>
+                  <label>TIKTOK USERNAME</label>
+                  <input type="text" id="tiktokTestUser" value="tiktok_supporter" required />
+                </div>
+                <div>
+                  <label>GIFT NAME</label>
+                  <input type="text" id="tiktokTestGift" value="Galaxy" required />
+                </div>
+                <div>
+                  <label>GIFT COINS (DIAMONDS)</label>
+                  <input type="number" id="tiktokTestCoins" value="20" min="1" max="1000000" required />
+                </div>
+              </div>
+              <button
+                type="submit"
+                id="tiktokTestBtn"
+                style="width:auto; padding:12px 24px; font-size:14px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire); color:var(--ctp-crust);"
+              >
+                SEND TIKTOK GIFT TO SUBMATRON
+              </button>
+            </form>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:24px;">
