@@ -73,6 +73,8 @@ export function SubathonOverlayPage({
           let isGrace = ${Boolean(initialState?.isGracePeriod)};
           let graceRemaining = ${initialState?.graceRemainingSeconds ?? 180};
           let isEnded = ${Boolean(initialState?.isEnded)};
+          let tiktokAutoSync = ${initialState?.tiktokAutoSync !== false ? 'true' : 'false'};
+          let tiktokIsLive = ${Boolean(initialState?.tiktokIsLive)};
           let timerInterval = null;
           let totalAddedSecs = ${resolvedTotalAddedSecs};
           let totalDonations = ${resolvedTotalDonations};
@@ -163,7 +165,9 @@ export function SubathonOverlayPage({
             }
             box.classList.remove('ended', 'grace');
             displayEl.textContent = formatTime(remaining);
-            statusEl.textContent = isRunning ? 'SUBATHON LIVE' : 'PAUSED';
+            statusEl.textContent = isRunning
+              ? 'SUBATHON LIVE'
+              : (tiktokAutoSync && !tiktokIsLive ? 'HOLD // WAITING FOR TIKTOK LIVE' : 'HOLD // PAUSED');
           }
 
           function applyPersistedState(st) {
@@ -179,6 +183,8 @@ export function SubathonOverlayPage({
             if (typeof st.maxHours === 'number' && st.maxHours > 0) maxCapSecs = st.maxHours * 3600;
             if (typeof st.totalAddedSecs === 'number') totalAddedSecs = st.totalAddedSecs;
             if (typeof st.totalDonations === 'number') totalDonations = st.totalDonations;
+            if (typeof st.tiktokAutoSync === 'boolean') tiktokAutoSync = st.tiktokAutoSync;
+            if (typeof st.tiktokIsLive === 'boolean') tiktokIsLive = st.tiktokIsLive;
             isRunning = Boolean(st.isRunning);
             if (typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
               targetEpoch = st.targetEpoch;
@@ -253,12 +259,14 @@ export function SubathonOverlayPage({
                 remaining = Math.min(maxCapSecs, baseRem + addedSecs);
                 totalAddedSecs += addedSecs;
                 totalDonations += amt;
-                isRunning = remaining > 0;
+                isRunning = remaining > 0 && (!tiktokAutoSync || tiktokIsLive);
                 isGrace = false;
                 isEnded = false;
                 graceRemaining = GRACE_SECS;
                 if (isRunning) {
                   targetEpoch = Date.now() + remaining * 1000;
+                } else {
+                  targetEpoch = null;
                 }
 
                 box.classList.remove('pulse');

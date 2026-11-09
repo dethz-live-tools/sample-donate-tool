@@ -336,6 +336,11 @@ export function ControlLayout({
                   'TikTok Gift ignored (< min rate): ' + d.gift.donor + ' sent ' + d.gift.giftName + ' (' + d.gift.coins + ' coins)',
                   'warn'
                 );
+              } else if (d.cmd === 'tiktok_live') {
+                log(
+                  'TikTok LIVE status: ' + (d.tiktokIsLive ? 'LIVE (Submatron STARTED)' : 'OFFLINE (Submatron on HOLD)'),
+                  d.tiktokIsLive ? 'success' : 'warn'
+                );
               } else {
                 log('Control event broadcast: ' + d.action + (d.cmd ? ' (' + d.cmd + ')' : ''), 'warn');
               }

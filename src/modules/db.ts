@@ -83,6 +83,18 @@ async function ensureSchema(db: D1Binding) {
     .prepare('ALTER TABLE subathon_state ADD COLUMN rate_seconds INTEGER DEFAULT 60')
     .run()
     .catch(() => {})
+  await db
+    .prepare("ALTER TABLE subathon_state ADD COLUMN tiktok_username TEXT DEFAULT ''")
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE subathon_state ADD COLUMN tiktok_auto_sync INTEGER DEFAULT 1')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare('ALTER TABLE subathon_state ADD COLUMN tiktok_is_live INTEGER DEFAULT 0')
+    .run()
+    .catch(() => {})
   initialized = true
 }
 
@@ -364,6 +376,9 @@ export type SubathonState = {
   maxHours: number
   totalAddedSecs: number
   totalDonations: number
+  tiktokUsername?: string
+  tiktokAutoSync?: boolean
+  tiktokIsLive?: boolean
   updatedAt: number
 }
 
@@ -375,8 +390,8 @@ function createDefaultSubathonState(now = Date.now()): SubathonState {
     endMsg: 'TIME UP',
     initialSeconds: 600,
     remainingSeconds: 600,
-    targetEpoch: now + 600 * 1000,
-    isRunning: true,
+    targetEpoch: 0,
+    isRunning: false,
     isGracePeriod: false,
     graceRemainingSeconds: SUBATHON_GRACE_SECONDS,
     isEnded: false,
@@ -386,6 +401,9 @@ function createDefaultSubathonState(now = Date.now()): SubathonState {
     maxHours: 24,
     totalAddedSecs: 0,
     totalDonations: 0,
+    tiktokUsername: '',
+    tiktokAutoSync: true,
+    tiktokIsLive: false,
     updatedAt: now
   }
 }
@@ -456,6 +474,9 @@ export async function getSubathonState(db: D1Binding | undefined): Promise<Subat
     maxHours: Number(row.max_hours || 24),
     totalAddedSecs: Number(row.total_added_secs || 0),
     totalDonations: Number(row.total_donations || 0),
+    tiktokUsername: String(row.tiktok_username || ''),
+    tiktokAutoSync: row.tiktok_auto_sync === null || row.tiktok_auto_sync === undefined ? true : Number(row.tiktok_auto_sync) !== 0,
+    tiktokIsLive: Number(row.tiktok_is_live ?? 0) !== 0,
     updatedAt: Number(row.updated_at || now)
   }
   const live = computeLiveSubathonState(parsed, now)
@@ -473,6 +494,9 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
     rateCoins,
     rateSeconds,
     secPerThb,
+    tiktokUsername: String(state.tiktokUsername || '').replace(/^@+/, '').trim(),
+    tiktokAutoSync: state.tiktokAutoSync ?? true,
+    tiktokIsLive: Boolean(state.tiktokIsLive),
     updatedAt: now
   }
   memorySubathonState = updated
@@ -481,7 +505,7 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
   await ensureSchema(db)
   await db
     .prepare(
-      'INSERT INTO subathon_state (id, title, end_msg, initial_seconds, remaining_seconds, target_epoch, is_running, rate_coins, rate_seconds, sec_per_thb, max_hours, total_added_secs, total_donations, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, end_msg = excluded.end_msg, initial_seconds = excluded.initial_seconds, remaining_seconds = excluded.remaining_seconds, target_epoch = excluded.target_epoch, is_running = excluded.is_running, rate_coins = excluded.rate_coins, rate_seconds = excluded.rate_seconds, sec_per_thb = excluded.sec_per_thb, max_hours = excluded.max_hours, total_added_secs = excluded.total_added_secs, total_donations = excluded.total_donations, updated_at = excluded.updated_at'
+      'INSERT INTO subathon_state (id, title, end_msg, initial_seconds, remaining_seconds, target_epoch, is_running, rate_coins, rate_seconds, sec_per_thb, max_hours, total_added_secs, total_donations, tiktok_username, tiktok_auto_sync, tiktok_is_live, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, end_msg = excluded.end_msg, initial_seconds = excluded.initial_seconds, remaining_seconds = excluded.remaining_seconds, target_epoch = excluded.target_epoch, is_running = excluded.is_running, rate_coins = excluded.rate_coins, rate_seconds = excluded.rate_seconds, sec_per_thb = excluded.sec_per_thb, max_hours = excluded.max_hours, total_added_secs = excluded.total_added_secs, total_donations = excluded.total_donations, tiktok_username = excluded.tiktok_username, tiktok_auto_sync = excluded.tiktok_auto_sync, tiktok_is_live = excluded.tiktok_is_live, updated_at = excluded.updated_at'
     )
     .bind(
       updated.title,
@@ -496,6 +520,9 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
       updated.maxHours,
       updated.totalAddedSecs,
       updated.totalDonations,
+      updated.tiktokUsername || '',
+      updated.tiktokAutoSync ? 1 : 0,
+      updated.tiktokIsLive ? 1 : 0,
       updated.updatedAt
     )
     .run()
@@ -543,11 +570,33 @@ export async function applySubathonCommand(
     }
     applyRateFields()
     if (cmd.keepRemaining !== true) {
-      next.isRunning = next.remainingSeconds > 0
-      next.targetEpoch = next.isRunning ? now + next.remainingSeconds * 1000 : 0
+      const shouldRun = next.remainingSeconds > 0 && (!next.tiktokAutoSync || Boolean(next.tiktokIsLive))
+      next.isRunning = shouldRun
+      next.targetEpoch = shouldRun ? now + next.remainingSeconds * 1000 : 0
     }
   } else if (sub === 'rate') {
     applyRateFields()
+  } else if (sub === 'tiktok_live') {
+    if (typeof cmd.tiktokUsername === 'string') {
+      next.tiktokUsername = cmd.tiktokUsername.replace(/^@+/, '').trim()
+    }
+    if (typeof cmd.tiktokAutoSync === 'boolean') {
+      next.tiktokAutoSync = cmd.tiktokAutoSync
+    }
+    if (typeof cmd.tiktokIsLive === 'boolean') {
+      next.tiktokIsLive = cmd.tiktokIsLive
+    }
+    if (next.tiktokAutoSync) {
+      if (next.tiktokIsLive) {
+        if (!next.isRunning && next.remainingSeconds > 0) {
+          next.isRunning = true
+          next.targetEpoch = now + next.remainingSeconds * 1000
+        }
+      } else {
+        next.isRunning = false
+        next.targetEpoch = 0
+      }
+    }
   } else if (sub === 'pause') {
     next.isRunning = false
     next.targetEpoch = 0
@@ -560,8 +609,9 @@ export async function applySubathonCommand(
     next.remainingSeconds = next.initialSeconds
     next.totalAddedSecs = 0
     next.totalDonations = 0
-    next.isRunning = next.remainingSeconds > 0
-    next.targetEpoch = next.isRunning ? now + next.remainingSeconds * 1000 : 0
+    const shouldRun = next.remainingSeconds > 0 && (!next.tiktokAutoSync || Boolean(next.tiktokIsLive))
+    next.isRunning = shouldRun
+    next.targetEpoch = shouldRun ? now + next.remainingSeconds * 1000 : 0
   } else if (sub === 'adjust') {
     const delta = Number(cmd.delta) || 0
     const maxCapSecs = Math.max(1, next.maxHours) * 3600
@@ -598,16 +648,16 @@ export async function addSubathonDonation(
   const maxCapSecs = Math.max(1, current.maxHours) * 3600
   const baseRemaining = current.isGracePeriod ? 0 : current.remainingSeconds
   const newRemaining = Math.min(maxCapSecs, baseRemaining + addedSecs)
-  const isRunning = newRemaining > 0
+  const shouldRun = newRemaining > 0 && (!current.tiktokAutoSync || Boolean(current.tiktokIsLive))
 
   const next: SubathonState = {
     ...current,
     remainingSeconds: newRemaining,
-    isRunning,
+    isRunning: shouldRun,
     isGracePeriod: false,
     graceRemainingSeconds: SUBATHON_GRACE_SECONDS,
     isEnded: false,
-    targetEpoch: isRunning ? now + newRemaining * 1000 : 0,
+    targetEpoch: shouldRun ? now + newRemaining * 1000 : 0,
     totalAddedSecs: current.totalAddedSecs + addedSecs,
     totalDonations: current.totalDonations + amt,
     updatedAt: now

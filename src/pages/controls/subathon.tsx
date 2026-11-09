@@ -22,6 +22,9 @@ export function SubathonControlPage({
   const initIsRunning = subathonState ? subathonState.isRunning : true
   const initAddedSecs = subathonState?.totalAddedSecs ?? 0
   const initTotalThb = subathonState?.totalDonations ?? 0
+  const initTiktokUser = subathonState?.tiktokUsername || ''
+  const initTiktokAutoSync = subathonState?.tiktokAutoSync ?? true
+  const initTiktokIsLive = Boolean(subathonState?.tiktokIsLive)
 
   return (
     <ControlLayout
@@ -47,6 +50,9 @@ export function SubathonControlPage({
         const dbRateEl = document.getElementById('subDbRate');
         const dbAddedEl = document.getElementById('subDbAdded');
         const dbThbEl = document.getElementById('subDbThb');
+        const dbTiktokLiveEl = document.getElementById('subDbTiktokLive');
+        const tiktokStreamUserInput = document.getElementById('tiktokStreamUsername');
+        const tiktokAutoSyncToggle = document.getElementById('tiktokAutoSyncToggle');
 
         const GRACE_SECS = 180;
         let subRemaining = ${initRemaining};
@@ -59,6 +65,9 @@ export function SubathonControlPage({
         let subRateSeconds = ${initRateSeconds};
         let subAddedSecs = ${initAddedSecs};
         let subTotalThb = ${initTotalThb};
+        let subTiktokUser = ${JSON.stringify(initTiktokUser)};
+        let subTiktokAutoSync = ${initTiktokAutoSync ? 'true' : 'false'};
+        let subTiktokIsLive = ${initTiktokIsLive ? 'true' : 'false'};
 
         function recomputeSubEpoch() {
           if (!subTargetEpoch || subTargetEpoch <= 0) return;
@@ -132,9 +141,15 @@ export function SubathonControlPage({
                 dbStateEl.className = 'status-offline';
               }
             } else {
-              dbStateEl.textContent = subRunning ? 'RUNNING' : 'PAUSED';
+              dbStateEl.textContent = subRunning
+                ? 'RUNNING'
+                : (subTiktokAutoSync && !subTiktokIsLive ? 'HOLD (OFFLINE)' : 'HOLD / PAUSED');
               dbStateEl.className = subRunning ? 'status-online' : 'status-offline';
             }
+          }
+          if (dbTiktokLiveEl) {
+            dbTiktokLiveEl.textContent = subTiktokIsLive ? 'LIVE (ONLINE)' : 'OFFLINE (HOLD)';
+            dbTiktokLiveEl.className = subTiktokIsLive ? 'status-online' : 'status-offline';
           }
           if (dbRateEl) dbRateEl.textContent = subRateCoins + ' COINS ➔ +' + subRateSeconds + 'S';
           if (dbAddedEl) dbAddedEl.textContent = '+' + formatHuman(subAddedSecs);
@@ -143,6 +158,19 @@ export function SubathonControlPage({
 
         function applySubDbState(st) {
           if (!st || typeof st !== 'object') return;
+          if (typeof st.tiktokUsername === 'string') {
+            subTiktokUser = st.tiktokUsername;
+            if (tiktokStreamUserInput && document.activeElement !== tiktokStreamUserInput) {
+              tiktokStreamUserInput.value = st.tiktokUsername;
+            }
+          }
+          if (typeof st.tiktokAutoSync === 'boolean') {
+            subTiktokAutoSync = st.tiktokAutoSync;
+            if (tiktokAutoSyncToggle) tiktokAutoSyncToggle.checked = st.tiktokAutoSync;
+          }
+          if (typeof st.tiktokIsLive === 'boolean') {
+            subTiktokIsLive = st.tiktokIsLive;
+          }
           subRunning = Boolean(st.isRunning);
           if (typeof st.targetEpoch === 'number' && st.targetEpoch > 0) {
             subTargetEpoch = st.targetEpoch;
@@ -358,9 +386,51 @@ export function SubathonControlPage({
         const baseWebhookPath = '/api/tiktok/webhook?key=' + encodeURIComponent(webhookKey);
         const tikfinityTemplatePath =
           baseWebhookPath + '&user={username}&coins={coins}&gift={giftName}&repeat={repeatCount}';
+        const liveStartPath = '/api/tiktok/live?key=' + encodeURIComponent(webhookKey) + '&status=live';
+        const liveHoldPath = '/api/tiktok/live?key=' + encodeURIComponent(webhookKey) + '&status=offline';
 
         bindCopy(tikfinityUrlInput, copyTikfinityBtn, tikfinityTemplatePath);
         bindCopy(webhookJsonUrlInput, copyWebhookJsonBtn, baseWebhookPath);
+        bindCopy(document.getElementById('tiktokLiveStartUrl'), document.getElementById('copyLiveStartBtn'), liveStartPath);
+        bindCopy(document.getElementById('tiktokLiveHoldUrl'), document.getElementById('copyLiveHoldBtn'), liveHoldPath);
+
+        async function updateTikTokLiveSync(opts = {}) {
+          const username = (tiktokStreamUserInput?.value || '').replace(/^@+/, '').trim();
+          const autoSync = Boolean(tiktokAutoSyncToggle?.checked);
+          showStatus('SYNCING TIKTOK LIVE STATUS...');
+          try {
+            const res = await fetch('/api/tiktok/live', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                key: webhookKey,
+                username,
+                autoSync,
+                ...opts
+              })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'SYNC_FAILED');
+            if (data.subathonState) applySubDbState(data.subathonState);
+            const liveLabel = data.tiktokIsLive ? 'LIVE (SUBMATRON STARTED)' : 'OFFLINE (SUBMATRON ON HOLD)';
+            showStatus('OK // TIKTOK STATUS: ' + liveLabel);
+          } catch (err) {
+            showStatus('ERROR // ' + err.message, true);
+          }
+        }
+
+        document.getElementById('tiktokLiveCheckBtn')?.addEventListener('click', () => {
+          updateTikTokLiveSync({ check: true });
+        });
+        document.getElementById('tiktokSetLiveBtn')?.addEventListener('click', () => {
+          updateTikTokLiveSync({ live: true });
+        });
+        document.getElementById('tiktokSetHoldBtn')?.addEventListener('click', () => {
+          updateTikTokLiveSync({ live: false });
+        });
+        tiktokAutoSyncToggle?.addEventListener('change', () => {
+          updateTikTokLiveSync({});
+        });
 
         window.onControlBroadcast = (d) => {
           if (d && d.subathonState) applySubDbState(d.subathonState);
@@ -493,6 +563,16 @@ export function SubathonControlPage({
             <label>SUBATHON VOLUME</label>
             <div style="font-family:var(--font-head); font-size:28px;" id="subDbThb">
               {initTotalThb.toLocaleString()} COINS
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0;">
+            <label>TIKTOK LIVE STATUS</label>
+            <div
+              style="font-family:var(--font-head); font-size:28px;"
+              id="subDbTiktokLive"
+              class={initTiktokIsLive ? 'status-online' : 'status-offline'}
+            >
+              {initTiktokIsLive ? 'LIVE (ONLINE)' : 'OFFLINE (HOLD)'}
             </div>
           </div>
         </div>
@@ -644,11 +724,100 @@ export function SubathonControlPage({
 
         <div class="card" style="margin-bottom:24px; border-color:var(--ctp-sapphire);">
           <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase; color:var(--ctp-sapphire);">
-            TIKTOK GIFT INTEGRATION (SUBMATRON WEBHOOK)
+            TIKTOK LIVE STATUS &amp; GIFT INTEGRATION (SUBMATRON)
           </h3>
           <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
-            RECEIVE TIKTOK LIVE GIFTS VIA TIKFINITY OR CUSTOM SCRIPT // ADDS TIME ONLY TO SUBMATRON USING STEP MULTIPLES (% COIN RATE)
+            AUTO START &amp; HOLD SUBMATRON WITH TIKTOK LIVE STATUS // RECEIVE GIFTS VIA WEBHOOK (% COIN RATE)
           </p>
+
+          <div style="margin-bottom:16px; padding-bottom:16px; border-bottom:2px solid var(--ctp-surface1);">
+            <label style="color:var(--ctp-yellow); margin-bottom:8px;">
+              TIKTOK LIVE AUTO START / HOLD SYNC
+            </label>
+            <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:12px;">
+              <div style="flex:1; min-width:200px;">
+                <label>TIKTOK @USERNAME (AUTO CHECK EVERY 15S)</label>
+                <input
+                  type="text"
+                  id="tiktokStreamUsername"
+                  value={initTiktokUser}
+                  placeholder="your_tiktok_username"
+                  style="margin-bottom:0;"
+                />
+              </div>
+              <button
+                type="button"
+                id="tiktokLiveCheckBtn"
+                style="width:auto; padding:11px 16px; font-size:13px; white-space:nowrap;"
+              >
+                SAVE &amp; CHECK TIKTOK LIVE
+              </button>
+              <button
+                type="button"
+                id="tiktokSetLiveBtn"
+                style="width:auto; padding:11px 16px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust); white-space:nowrap;"
+              >
+                SET LIVE (START)
+              </button>
+              <button
+                type="button"
+                id="tiktokSetHoldBtn"
+                style="width:auto; padding:11px 16px; font-size:13px; background:var(--ctp-yellow); border-color:var(--ctp-yellow); color:var(--ctp-crust); white-space:nowrap;"
+              >
+                SET OFFLINE (HOLD)
+              </button>
+            </div>
+            <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer; color:var(--ctp-text);">
+              <input
+                type="checkbox"
+                id="tiktokAutoSyncToggle"
+                checked={initTiktokAutoSync}
+                style="width:auto; margin:0;"
+              />
+              <span>AUTO START WHEN TIKTOK IS LIVE &amp; HOLD (PAUSE) WHEN TIKTOK IS OFFLINE</span>
+            </label>
+
+            <div class="row">
+              <div>
+                <label>STREAM START WEBHOOK (STARTS SUBMATRON)</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input
+                    type="text"
+                    id="tiktokLiveStartUrl"
+                    readOnly
+                    value=""
+                    style="margin-bottom:0; background:var(--ctp-crust); font-size:12px;"
+                  />
+                  <button
+                    type="button"
+                    id="copyLiveStartBtn"
+                    style="width:auto; padding:10px 12px; font-size:12px; white-space:nowrap;"
+                  >
+                    COPY
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label>STREAM END / OFFLINE WEBHOOK (HOLDS SUBMATRON)</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input
+                    type="text"
+                    id="tiktokLiveHoldUrl"
+                    readOnly
+                    value=""
+                    style="margin-bottom:0; background:var(--ctp-crust); font-size:12px;"
+                  />
+                  <button
+                    type="button"
+                    id="copyLiveHoldBtn"
+                    style="width:auto; padding:10px 12px; font-size:12px; white-space:nowrap;"
+                  >
+                    COPY
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div style="margin-bottom:14px;">
             <label>1. TIKFINITY WEBHOOK URL (GET / POST WITH URL PLACEHOLDERS)</label>

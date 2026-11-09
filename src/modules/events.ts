@@ -15,6 +15,7 @@ import {
   type SubathonState,
   type TtsSettings
 } from './db'
+import { syncSubathonWithTikTokLive } from './tiktok'
 
 export type DonateEvent = {
   id: string
@@ -319,7 +320,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true, items })
   })
   .get('/subathon', async (c) => {
-    const state = await getSubathonState(c.env?.DB)
+    const state = await syncSubathonWithTikTokLive(c.env?.DB)
     return c.json({ ok: true, state })
   })
   .get('/heartbeat', dashboardAuth, (c) => {
