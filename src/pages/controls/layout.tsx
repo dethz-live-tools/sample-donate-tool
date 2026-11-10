@@ -131,17 +131,19 @@ export function ControlLayout({
 
         {children}
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <label style="margin-bottom:0;">REAL-TIME BUS LOG</label>
-          <button
-            type="button"
-            id="clearLogBtn"
-            style="width:auto; padding:2px 10px; font-size:11px; background:var(--ctp-surface1); border-color:var(--ctp-surface2);"
-          >
-            CLEAR LOG
-          </button>
-        </div>
-        <div id="busLog" class="console-log"></div>
+        <details class="card fold-block" style="margin-bottom:0;">
+          <summary>REAL-TIME BUS LOG</summary>
+          <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:8px;">
+            <button
+              type="button"
+              id="clearLogBtn"
+              style="width:auto; padding:2px 10px; font-size:11px; background:var(--ctp-surface1); border-color:var(--ctp-surface2);"
+            >
+              CLEAR LOG
+            </button>
+          </div>
+          <div id="busLog" class="console-log"></div>
+        </details>
       </div>
 
       <script

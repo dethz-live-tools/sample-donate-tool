@@ -96,8 +96,8 @@ export function DashboardPage({
           </div>
         </div>
 
-        <div class="inverted-block" style="margin-bottom: 24px;">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">OVERLAY SETTINGS &amp; CONTROLLERS</label>
+        <details class="inverted-block fold-block" style="margin-bottom: 24px;">
+          <summary>OVERLAY SETTINGS &amp; CONTROLLERS</summary>
           <div style="display:flex; flex-wrap:wrap; gap:8px;">
             <a
               href="/overlay/control"
@@ -130,18 +130,14 @@ export function DashboardPage({
               4. SUBATHON MARATHON
             </a>
           </div>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom: 24px;">
+        <details class="card fold-block" style="margin-bottom: 24px;">
+          <summary>EDGE TTS VOICE OPTIONS</summary>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <div>
-              <h3 style="font-family:var(--font-head); font-size:18px; margin:0; text-transform:uppercase;">
-                EDGE TTS VOICE OPTIONS
-              </h3>
-              <p class="subtitle" style="margin:2px 0 0 0; font-size:11px;">
-                MICROSOFT EDGE NEURAL SYNTHESIS // FREE & FAST // LOADED LOCALLY
-              </p>
-            </div>
+            <p class="subtitle" style="margin:0; font-size:11px; border:none; padding:0;">
+              MICROSOFT EDGE NEURAL SYNTHESIS // FREE &amp; FAST // LOADED LOCALLY
+            </p>
             <div style="display:flex; gap:10px; align-items:center;">
               <button
                 type="button"
@@ -217,18 +213,14 @@ export function DashboardPage({
               <span id="dashTtsMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
           </form>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom: 24px;">
+        <details class="card fold-block" style="margin-bottom: 24px;">
+          <summary>WORD FILTER &amp; PROFANITY CENSOR</summary>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <div>
-              <h3 style="font-family:var(--font-head); font-size:18px; margin:0; text-transform:uppercase;">
-                WORD FILTER & PROFANITY CENSOR
-              </h3>
-              <p class="subtitle" style="margin:2px 0 0 0; font-size:11px;">
-                CENSOR OFFENSIVE WORDS WITH *** OR SILENCE TTS // THAI & ENGLISH
-              </p>
-            </div>
+            <p class="subtitle" style="margin:0; font-size:11px; border:none; padding:0;">
+              CENSOR OFFENSIVE WORDS WITH *** OR SILENCE TTS // THAI &amp; ENGLISH
+            </p>
             <div style="display:flex; gap:10px; align-items:center;">
               <button
                 type="button"
@@ -249,7 +241,7 @@ export function DashboardPage({
                     Censor with *** (TTS speaks censored text)
                   </option>
                   <option value="mute" selected={overlayStatus?.filterAction === 'mute'}>
-                    Mute TTS (Censor text & silence audio completely)
+                    Mute TTS (Censor text &amp; silence audio completely)
                   </option>
                 </select>
               </div>
@@ -270,7 +262,7 @@ export function DashboardPage({
               <span id="dashFilterMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
           </form>
-        </div>
+        </details>
 
         <div style="overflow-x:auto;">
           <table>

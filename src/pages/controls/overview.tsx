@@ -58,26 +58,20 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
       `}
     >
       <div>
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:12px;">
-            SELECT OVERLAY TO CONFIGURE OR COPY OBS BROWSER SOURCE URL
-          </label>
+        <details class="inverted-block fold-block">
+          <summary>SELECT OVERLAY TO CONFIGURE OR COPY OBS BROWSER SOURCE URL</summary>
 
-          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+          <details class="card fold-block" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <summary>1. DONATION ALERT &amp; TTS OVERLAY (800 x 400)</summary>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <div>
-                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
-                  1. DONATION ALERT & TTS OVERLAY (800 x 400)
-                </div>
-                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
-                  Alert queue, Edge Neural TTS voices, profanity censor filter, and test alerts
-                </div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                Alert queue, Edge Neural TTS voices, profanity censor filter, and test alerts
               </div>
               <a
                 href="/overlay/control/alert"
                 style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
               >
-                CONFIGURE ALERT & TTS &rarr;
+                CONFIGURE ALERT &amp; TTS &rarr;
               </a>
             </div>
             <div style="display:flex; gap:12px; align-items:center;">
@@ -103,17 +97,13 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               <input type="checkbox" id="ovAlertTransparent" style="width:auto; margin:0;" />
               <span>TRANSPARENT CARD BACKGROUND</span>
             </label>
-          </div>
+          </details>
 
-          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+          <details class="card fold-block" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <summary>2. TOP DONORS LEADERBOARD OVERLAY (450 x 500)</summary>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <div>
-                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
-                  2. TOP DONORS LEADERBOARD OVERLAY (450 x 500)
-                </div>
-                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
-                  Live ranked top donors list, custom title, and row count limit
-                </div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                Live ranked top donors list, custom title, and row count limit
               </div>
               <a
                 href="/overlay/control/leaderboard"
@@ -145,17 +135,13 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               <input type="checkbox" id="ovLbTransparent" style="width:auto; margin:0;" />
               <span>TRANSPARENT CARD BACKGROUND</span>
             </label>
-          </div>
+          </details>
 
-          <div class="card" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+          <details class="card fold-block" style="background:var(--ctp-mantle); margin-bottom:16px; padding:16px;">
+            <summary>3. COUNTDOWN TIMER OVERLAY (450 x 250)</summary>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <div>
-                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
-                  3. COUNTDOWN TIMER OVERLAY (450 x 250)
-                </div>
-                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
-                  Standard stream countdown timer, quick presets, pause/resume, and custom durations
-                </div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                Standard stream countdown timer, quick presets, pause/resume, and custom durations
               </div>
               <a
                 href="/overlay/control/countdown"
@@ -192,17 +178,13 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               <input type="checkbox" id="ovCdTransparent" style="width:auto; margin:0;" />
               <span>TRANSPARENT CARD BACKGROUND</span>
             </label>
-          </div>
+          </details>
 
-          <div class="card" style="background:var(--ctp-mantle); margin-bottom:12px; padding:16px;">
+          <details class="card fold-block" style="background:var(--ctp-mantle); margin-bottom:12px; padding:16px;">
+            <summary>4. SUBATHON MARATHON OVERLAY (450 x 250)</summary>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-              <div>
-                <div style="font-family:var(--font-head); font-size:16px; color:var(--ctp-mauve);">
-                  4. SUBATHON MARATHON OVERLAY (450 x 250)
-                </div>
-                <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
-                  Auto-extending marathon clock (+seconds per 1 THB donated), rate &amp; cap controls
-                </div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);">
+                Auto-extending marathon clock (+seconds per 1 THB donated), rate &amp; cap controls
               </div>
               <a
                 href="/overlay/control/subathon"
@@ -239,41 +221,41 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               <input type="checkbox" id="ovSubTransparent" style="width:auto; margin:0;" />
               <span>TRANSPARENT CARD BACKGROUND</span>
             </label>
-          </div>
+          </details>
 
           <div style="font-size:13px; color:var(--ctp-subtext0); line-height:1.6;">
             Recommended OBS settings: Check <strong>Control audio via OBS</strong>. Background is transparent.
           </div>
-        </div>
+        </details>
 
-        <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:12px; text-transform:uppercase;">
-          GLOBAL COMMAND BUS ACTIONS
-        </h3>
-        <div class="grid-actions" style="margin-bottom:24px;">
-          <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
-            FORCE RELOAD OVERLAYS
-          </button>
-          <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
-            CLEAR ALERT QUEUE
-          </button>
-          <button
-            type="button"
-            id="cmdDisconnectBtn"
-            style="font-size:14px; padding:14px 20px; background:var(--ctp-red); border-color:var(--ctp-red);"
-          >
-            DISCONNECT / RESET
-          </button>
-          <button
-            type="button"
-            id="cmdPingBtn"
-            style="font-size:14px; padding:14px 20px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
-          >
-            PING HEARTBEAT
-          </button>
-          <button type="button" id="cmdTtsBtn" style="font-size:14px; padding:14px 20px;">
-            TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
-          </button>
-        </div>
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>GLOBAL COMMAND BUS ACTIONS</summary>
+          <div class="grid-actions" style="margin-bottom:0;">
+            <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
+              FORCE RELOAD OVERLAYS
+            </button>
+            <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
+              CLEAR ALERT QUEUE
+            </button>
+            <button
+              type="button"
+              id="cmdDisconnectBtn"
+              style="font-size:14px; padding:14px 20px; background:var(--ctp-red); border-color:var(--ctp-red);"
+            >
+              DISCONNECT / RESET
+            </button>
+            <button
+              type="button"
+              id="cmdPingBtn"
+              style="font-size:14px; padding:14px 20px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
+            >
+              PING HEARTBEAT
+            </button>
+            <button type="button" id="cmdTtsBtn" style="font-size:14px; padding:14px 20px;">
+              TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
+            </button>
+          </div>
+        </details>
       </div>
     </ControlLayout>
   )

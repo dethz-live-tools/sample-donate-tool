@@ -493,10 +493,8 @@ export function SubathonControlPage({
       `}
     >
       <div>
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-            SUBATHON MARATHON OBS BROWSER SOURCE (450 x 250) — PERSISTED IN D1 DB
-          </label>
+        <details class="inverted-block fold-block">
+          <summary>SUBATHON MARATHON OBS BROWSER SOURCE (450 x 250) — PERSISTED IN D1 DB</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -528,7 +526,7 @@ export function SubathonControlPage({
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>. Timer state, coin rate, added seconds, and donation totals are automatically saved in Cloudflare D1 across refreshes.
           </div>
-        </div>
+        </details>
 
         <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
@@ -577,11 +575,9 @@ export function SubathonControlPage({
           </div>
         </div>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            COIN TO TIME CONVERSION (X COINS ➔ +Y SECONDS)
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>COIN TO TIME CONVERSION (X COINS ➔ +Y SECONDS)</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             SET HOW MANY COINS (THB) ADD HOW MANY SECONDS
           </p>
 
@@ -641,13 +637,11 @@ export function SubathonControlPage({
           >
             {initRateCoins} COINS ➔ +{initRateSeconds}s
           </div>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            SUBATHON TIMER &amp; REMOTE CONTROLS
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>SUBATHON TIMER &amp; REMOTE CONTROLS</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             ALL CHANGES ARE IMMEDIATELY SAVED TO D1 DATABASE &amp; BROADCAST TO OBS
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
@@ -720,13 +714,11 @@ export function SubathonControlPage({
               SAVE &amp; RESTART SUBATHON TIMER IN D1
             </button>
           </form>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px; border-color:var(--ctp-sapphire);">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase; color:var(--ctp-sapphire);">
-            TIKTOK LIVE STATUS &amp; GIFT INTEGRATION (SUBMATRON)
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px; border-color:var(--ctp-sapphire);">
+          <summary style="color:var(--ctp-sapphire);">TIKTOK LIVE STATUS &amp; GIFT INTEGRATION (SUBMATRON)</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             AUTO START &amp; HOLD SUBMATRON WITH TIKTOK LIVE STATUS // RECEIVE GIFTS VIA WEBHOOK (% COIN RATE)
           </p>
 
@@ -921,13 +913,11 @@ export function SubathonControlPage({
               </button>
             </form>
           </div>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            DONATE TEST (SUBMATRON TIME ADDITION)
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>DONATE TEST (SUBMATRON TIME ADDITION)</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             DISPATCH A TEST DONATION TO ADD TIME TO SUBMATRON D1 TIMER &amp; TRIGGER OVERLAY POPUP
           </p>
 
@@ -991,7 +981,7 @@ export function SubathonControlPage({
               </button>
             </div>
           </form>
-        </div>
+        </details>
       </div>
     </ControlLayout>
   )

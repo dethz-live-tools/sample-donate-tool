@@ -84,10 +84,8 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
       `}
     >
       <div>
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-            COUNTDOWN TIMER OBS BROWSER SOURCE (450 x 250)
-          </label>
+        <details class="inverted-block fold-block">
+          <summary>COUNTDOWN TIMER OBS BROWSER SOURCE (450 x 250)</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -119,13 +117,11 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>.
           </div>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            COUNTDOWN REMOTE CONTROLS
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>COUNTDOWN REMOTE CONTROLS</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             QUICK PRESETS, PAUSE / RESUME, AND TIME ADJUSTMENTS
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
@@ -208,7 +204,7 @@ export function CountdownControlPage({ overlayStatus }: { overlayStatus?: Overla
               APPLY COUNTDOWN &amp; UPDATE URL
             </button>
           </form>
-        </div>
+        </details>
       </div>
     </ControlLayout>
   )

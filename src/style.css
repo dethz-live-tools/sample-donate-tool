@@ -105,6 +105,53 @@ a:hover {
   font-size: 15px;
 }
 
+details.fold-block > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  user-select: none;
+  font-family: var(--font-head);
+  font-size: 18px;
+  text-transform: uppercase;
+  color: var(--ctp-mauve);
+}
+
+details.inverted-block.fold-block > summary {
+  font-size: 14px;
+  color: var(--ctp-lavender);
+}
+
+details.fold-block > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.fold-block > summary::after {
+  content: '[+ SHOW]';
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ctp-lavender);
+  border: 2px solid var(--ctp-surface2);
+  background: var(--ctp-crust);
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+details.fold-block[open] > summary {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid var(--ctp-surface1);
+}
+
+details.fold-block[open] > summary::after {
+  content: '[- HIDE]';
+  border-color: var(--ctp-mauve);
+  color: var(--ctp-mauve);
+}
+
 h1 {
   font-family: var(--font-head);
   font-size: 48px;

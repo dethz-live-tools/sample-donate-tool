@@ -253,10 +253,8 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
       `}
     >
       <div>
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-            DONATION ALERT OBS BROWSER SOURCE (800 x 400)
-          </label>
+        <details class="inverted-block fold-block">
+          <summary>DONATION ALERT OBS BROWSER SOURCE (800 x 400)</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -283,25 +281,26 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>800</strong>, Height <strong>400</strong>, check <strong>Control audio via OBS</strong>.
           </div>
-        </div>
+        </details>
 
-        <div class="grid-actions" style="margin-bottom:24px;">
-          <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
-            CLEAR ALERT QUEUE
-          </button>
-          <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
-            FORCE RELOAD OVERLAY
-          </button>
-          <button type="button" id="cmdTtsBtn" style="font-size:14px; padding:14px 20px;">
-            TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
-          </button>
-        </div>
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>ALERT QUICK ACTIONS</summary>
+          <div class="grid-actions" style="margin-bottom:0;">
+            <button type="button" id="cmdClearBtn" style="font-size:14px; padding:14px 20px;">
+              CLEAR ALERT QUEUE
+            </button>
+            <button type="button" id="cmdReloadBtn" style="font-size:14px; padding:14px 20px;">
+              FORCE RELOAD OVERLAY
+            </button>
+            <button type="button" id="cmdTtsBtn" style="font-size:14px; padding:14px 20px;">
+              TTS VOICE: {ttsEnabled ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)'}
+            </button>
+          </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:16px; text-transform:uppercase;">
-            EDGE TTS VOICE CONFIGURATION
-          </h3>
-          <p class="subtitle" style="margin-top:-8px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>EDGE TTS VOICE CONFIGURATION</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             MICROSOFT EDGE NEURAL TTS // NO API KEY REQUIRED // PROCESSED AND LOADED LOCALLY
           </p>
           <form id="ttsConfigForm">
@@ -368,18 +367,14 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
               <span id="ttsConfigMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
           </form>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>WORD FILTERING &amp; PROFANITY CENSOR</summary>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <div>
-              <h3 style="font-family:var(--font-head); font-size:20px; margin:0; text-transform:uppercase;">
-                WORD FILTERING & PROFANITY CENSOR
-              </h3>
-              <p class="subtitle" style="margin:2px 0 0 0;">
-                FILTER PROFANITY IN DONOR NAMES AND MESSAGES // THAI & ENGLISH
-              </p>
-            </div>
+            <p class="subtitle" style="margin:0; border:none; padding:0;">
+              FILTER PROFANITY IN DONOR NAMES AND MESSAGES // THAI &amp; ENGLISH
+            </p>
             <button
               type="button"
               id="toggleFilterBtn"
@@ -418,12 +413,10 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
               <span id="filterConfigMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
           </form>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:16px; text-transform:uppercase;">
-            TRIGGER TEST DONATION ALERT
-          </h3>
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>TRIGGER TEST DONATION ALERT</summary>
           <form id="testAlertForm">
             <div class="row">
               <div>
@@ -441,7 +434,7 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
               DISPATCH TEST DONATE TO OVERLAY
             </button>
           </form>
-        </div>
+        </details>
       </div>
     </ControlLayout>
   )

@@ -68,10 +68,8 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
       `}
     >
       <div>
-        <div class="inverted-block">
-          <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-            TOP DONORS LEADERBOARD OBS BROWSER SOURCE (450 x 500)
-          </label>
+        <details class="inverted-block fold-block">
+          <summary>TOP DONORS LEADERBOARD OBS BROWSER SOURCE (450 x 500)</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -103,13 +101,11 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
           <div style="font-size:13px; color:var(--ctp-subtext0);">
             Recommended OBS settings: Width <strong>450</strong>, Height <strong>500</strong>. Automatically refreshes when new donations arrive.
           </div>
-        </div>
+        </details>
 
-        <div class="card" style="margin-bottom:24px;">
-          <h3 style="font-family:var(--font-head); font-size:20px; margin-bottom:8px; text-transform:uppercase;">
-            LEADERBOARD DISPLAY OPTIONS
-          </h3>
-          <p class="subtitle" style="margin-top:-4px; margin-bottom:16px;">
+        <details class="card fold-block" style="margin-bottom:24px;">
+          <summary>LEADERBOARD DISPLAY OPTIONS</summary>
+          <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
             CUSTOMIZE HEADER TITLE AND NUMBER OF TOP DONORS SHOWN
           </p>
 
@@ -150,7 +146,7 @@ export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: Over
               APPLY TO LIVE OVERLAY &amp; UPDATE URL
             </button>
           </form>
-        </div>
+        </details>
       </div>
     </ControlLayout>
   )
