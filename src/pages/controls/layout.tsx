@@ -68,8 +68,8 @@ export function ControlLayout({
               <a
                 href={tab.href}
                 style={`text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:13px; border:3px solid ${
-                  isActive ? 'var(--ctp-mauve)' : 'var(--ctp-surface2)'
-                }; background:${isActive ? 'var(--ctp-mauve)' : 'var(--ctp-crust)'}; color:${
+                  isActive ? 'var(--ctp-accent)' : 'var(--ctp-surface2)'
+                }; background:${isActive ? 'var(--ctp-accent)' : 'var(--ctp-crust)'}; color:${
                   isActive ? 'var(--ctp-crust)' : 'var(--ctp-text)'
                 };`}
               >

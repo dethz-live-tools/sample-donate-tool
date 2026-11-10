@@ -86,7 +86,9 @@ app.put('/tts', dashboardAuth, async (c) => {
   return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
 })
 
-app.get('/', (c) => c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} />))
+app.get('/', (c) =>
+  c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} mobileSid={c.req.query('sid') || ''} />)
+)
 app.get('/setup', async (c) => {
   const admin = await getAdmin(c.env?.DB)
   if (admin) return c.redirect('/login')

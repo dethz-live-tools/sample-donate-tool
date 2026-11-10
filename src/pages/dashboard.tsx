@@ -107,25 +107,25 @@ export function DashboardPage({
             </a>
             <a
               href="/overlay/control/alert"
-              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
               1. DONATION ALERT &amp; TTS
             </a>
             <a
               href="/overlay/control/leaderboard"
-              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
               2. LEADERBOARD
             </a>
             <a
               href="/overlay/control/countdown"
-              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
               3. COUNTDOWN TIMER
             </a>
             <a
               href="/overlay/control/subathon"
-              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-mauve); background:var(--ctp-mantle); color:var(--ctp-mauve);"
+              style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
               4. SUBATHON MARATHON
             </a>

@@ -3,13 +3,16 @@ import type { AppConfig } from "../modules/config";
 export function HomePage({
   config,
   overlayOnline = false,
+  mobileSid = "",
 }: {
   config: AppConfig;
   overlayOnline?: boolean;
+  mobileSid?: string;
 }) {
   const hasBankOrPP = Boolean(config.bankAccount || config.promptpayId);
   const hasTrueMoney = Boolean(config.truewalletId);
   const hasPaymentInfo = hasBankOrPP || hasTrueMoney;
+  const isMobileSession = Boolean(mobileSid);
 
   return (
     <div class="container">
@@ -26,12 +29,14 @@ export function HomePage({
             </span>
           </div>
         </div>
-        <h1>DONATE</h1>
+        <h1>{isMobileSession ? "MOBILE SLIP UPLOAD" : "DONATE"}</h1>
         <p class="subtitle">
-          deth'z vibing ai generate donate website (i got no time ;w;)
+          {isMobileSession
+            ? "LINKED TO DESKTOP SESSION // UPLOAD SLIP IMAGE BELOW"
+            : "deth'z vibing ai generate donate website (i got no time ;w;)"}
         </p>
 
-        {hasPaymentInfo && (
+        {!isMobileSession && hasPaymentInfo && (
           <div class="inverted-block">
             {config.accountName && (
               <div>
@@ -74,18 +79,51 @@ export function HomePage({
         )}
 
         <form id="donateForm">
-          <label>DONOR NAME (OPTIONAL — DEFAULTS TO SLIP NAME)</label>
-          <input type="text" name="donor" placeholder="SOMCHAI" />
+          <input type="hidden" name="sid" id="sessionSidInput" value={mobileSid} />
 
-          <label>PAYMENT CHANNEL</label>
-          <select name="type" id="slipType">
-            {hasBankOrPP && (
-              <option value="bank-image">BANK / PROMPTPAY SLIP (IMAGE)</option>
-            )}
-            {hasTrueMoney && (
-              <option value="truemoney">TRUEMONEY SLIP (IMAGE)</option>
-            )}
-          </select>
+          {isMobileSession ? (
+            <div class="inverted-block" id="mobileSummaryBox" style="margin-bottom:16px;">
+              <label style="color:var(--ctp-lavender); margin-bottom:8px;">
+                SESSION SUMMARY
+              </label>
+              <div>
+                DONOR: <strong id="sumDonor">- (SLIP NAME)</strong>
+              </div>
+              <div>
+                CHANNEL: <strong id="sumChannel">BANK / PROMPTPAY</strong>
+              </div>
+              <div>
+                MESSAGE: <strong id="sumMessage">-</strong>
+              </div>
+              <div
+                id="mobileLinkedBanner"
+                style="margin-top:10px; padding-top:8px; border-top:2px solid var(--ctp-surface1); color:var(--ctp-green); font-size:13px;"
+              >
+                CONNECTED TO DESKTOP // SELECT SLIP TO SYNC
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label>DONOR NAME (OPTIONAL — DEFAULTS TO SLIP NAME)</label>
+              <input type="text" name="donor" id="donorInput" placeholder="SOMCHAI" style="margin-bottom:8px;" />
+              <label
+                style="display:inline-flex; align-items:center; gap:8px; margin-bottom:16px; cursor:pointer; font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);"
+              >
+                <input type="checkbox" id="rememberDonor" checked style="width:auto; margin:0;" />
+                <span>REMEMBER USERNAME</span>
+              </label>
+
+              <label>PAYMENT CHANNEL</label>
+              <select name="type" id="slipType">
+                {hasBankOrPP && (
+                  <option value="bank-image">BANK / PROMPTPAY SLIP (IMAGE)</option>
+                )}
+                {hasTrueMoney && (
+                  <option value="truemoney">TRUEMONEY SLIP (IMAGE)</option>
+                )}
+              </select>
+            </div>
+          )}
 
           <div id="fileField">
             <label>SLIP IMAGE (PNG / JPG)</label>
@@ -98,32 +136,69 @@ export function HomePage({
                 required
               />
               <div id="dropzoneText">
-                DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE
+                {isMobileSession
+                  ? "TAP HERE TO SELECT SLIP IMAGE FROM PHONE"
+                  : "DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE"}
               </div>
             </div>
+
+            {!isMobileSession && (
+              <details class="inverted-block fold-block desktop-only" id="mobileUploadBlock" style="margin-bottom:16px;">
+                <summary>UPLOAD SLIP ON MOBILE (KEEP SAME SESSION)</summary>
+                <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                  <div
+                    id="mobileSessionQr"
+                    style="background:#FFFFFF; padding:10px; border:3px solid var(--ctp-lavender); display:inline-block; flex-shrink:0;"
+                  ></div>
+                  <div style="flex:1; min-width:200px;">
+                    <div style="font-size:13px; color:var(--ctp-text); margin-bottom:8px;">
+                      SCAN QR TO UPLOAD SLIP FROM PHONE IN THIS SAME SESSION
+                    </div>
+                    <div
+                      id="mobileSessionStatus"
+                      style="font-size:12px; color:var(--ctp-yellow); margin-bottom:10px;"
+                    >
+                      SESSION ACTIVE // WAITING FOR MOBILE SLIP...
+                    </div>
+                    <button
+                      type="button"
+                      id="copyMobileLinkBtn"
+                      style="width:auto; padding:8px 14px; font-size:12px;"
+                    >
+                      COPY MOBILE UPLOAD LINK
+                    </button>
+                  </div>
+                </div>
+              </details>
+            )}
           </div>
 
-          <label>MESSAGE (TTS VOICE)</label>
-          <textarea
-            name="message"
-            rows={2}
-            placeholder="KEEP GOING!"
-          ></textarea>
+          {!isMobileSession && (
+            <div>
+              <label>MESSAGE (TTS VOICE)</label>
+              <textarea
+                name="message"
+                id="messageInput"
+                rows={2}
+                placeholder="KEEP GOING!"
+              ></textarea>
 
-          {config.turnstileSiteKey && (
-            <div
-              class="cf-turnstile"
-              data-sitekey={config.turnstileSiteKey}
-              data-theme="dark"
-              style="margin-bottom:16px;"
-            ></div>
+              {config.turnstileSiteKey && (
+                <div
+                  class="cf-turnstile"
+                  data-sitekey={config.turnstileSiteKey}
+                  data-theme="dark"
+                  style="margin-bottom:16px;"
+                ></div>
+              )}
+
+              <button type="submit" id="submitBtn" disabled={!hasPaymentInfo}>
+                {hasPaymentInfo
+                  ? "SUBMIT DONATION"
+                  : "NO RECEIVING ACCOUNT CONFIGURED"}
+              </button>
+            </div>
           )}
-
-          <button type="submit" id="submitBtn" disabled={!hasPaymentInfo}>
-            {hasPaymentInfo
-              ? "SUBMIT DONATION"
-              : "NO RECEIVING ACCOUNT CONFIGURED"}
-          </button>
           <div id="statusBox" class="status"></div>
         </form>
       </div>
@@ -186,6 +261,209 @@ export function HomePage({
           const dz = document.getElementById('dropzone');
           const fileInput = document.getElementById('slipFile');
           const dzText = document.getElementById('dropzoneText');
+          const donorInput = document.getElementById('donorInput');
+          const rememberDonor = document.getElementById('rememberDonor');
+          const slipType = document.getElementById('slipType');
+          const msgInput = document.getElementById('messageInput');
+          const sidInput = document.getElementById('sessionSidInput');
+          const mobileQrBox = document.getElementById('mobileSessionQr');
+          const mobileStatusEl = document.getElementById('mobileSessionStatus');
+          const copyMobileBtn = document.getElementById('copyMobileLinkBtn');
+          const mobileLinkedBanner = document.getElementById('mobileLinkedBanner');
+          const mobileUploadBlock = document.getElementById('mobileUploadBlock');
+
+          // Username remember in localStorage
+          const REMEMBER_KEY = 'donate_remember_donor';
+          const DONOR_NAME_KEY = 'donate_donor_name';
+          try {
+            const remPref = localStorage.getItem(REMEMBER_KEY);
+            if (remPref === '0' && rememberDonor) rememberDonor.checked = false;
+            const savedDonor = localStorage.getItem(DONOR_NAME_KEY);
+            if (savedDonor && donorInput && (!rememberDonor || rememberDonor.checked)) {
+              donorInput.value = savedDonor;
+            }
+          } catch {}
+
+          function syncRememberedDonor() {
+            if (!donorInput || !rememberDonor) return;
+            try {
+              if (rememberDonor.checked) {
+                localStorage.setItem(REMEMBER_KEY, '1');
+                localStorage.setItem(DONOR_NAME_KEY, donorInput.value.trim());
+              } else {
+                localStorage.setItem(REMEMBER_KEY, '0');
+                localStorage.removeItem(DONOR_NAME_KEY);
+              }
+            } catch {}
+          }
+          donorInput?.addEventListener('input', () => {
+            syncRememberedDonor();
+            pushSessionMeta();
+          });
+          rememberDonor?.addEventListener('change', syncRememberedDonor);
+
+          // Same-session desktop <-> mobile slip upload
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlSid = urlParams.get('sid') || '';
+          const isMobileLinked = Boolean(urlSid);
+          let sid = urlSid;
+          if (!sid) {
+            try { sid = sessionStorage.getItem('donate_sid') || ''; } catch {}
+          }
+          if (!sid || sid.length < 8) {
+            sid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : ('sess_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+          }
+          try { sessionStorage.setItem('donate_sid', sid); } catch {}
+          if (sidInput) sidInput.value = sid;
+
+          const mobileUploadUrl = window.location.origin + '/?sid=' + encodeURIComponent(sid);
+          if (isMobileLinked) {
+            if (mobileLinkedBanner) mobileLinkedBanner.style.display = 'block';
+            if (mobileUploadBlock) mobileUploadBlock.style.display = 'none';
+          } else if (mobileQrBox && typeof qrcode !== 'undefined') {
+            const mQr = qrcode(0, 'M');
+            mQr.addData(mobileUploadUrl);
+            mQr.make();
+            mobileQrBox.innerHTML = mQr.createSvgTag(3, 0);
+          }
+
+          copyMobileBtn?.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(mobileUploadUrl);
+              const orig = copyMobileBtn.textContent;
+              copyMobileBtn.textContent = 'COPIED!';
+              setTimeout(() => { copyMobileBtn.textContent = orig; }, 2000);
+            } catch {}
+          });
+
+          let lastSyncedSlipAt = 0;
+          let lastCompletedId = '';
+          let metaTimer = null;
+          const sumDonor = document.getElementById('sumDonor');
+          const sumChannel = document.getElementById('sumChannel');
+          const sumMessage = document.getElementById('sumMessage');
+
+          function pushSessionMeta() {
+            if (isMobileLinked) return;
+            if (metaTimer) clearTimeout(metaTimer);
+            metaTimer = setTimeout(() => {
+              fetch('/api/donate/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sid,
+                  donor: donorInput?.value || '',
+                  type: slipType?.value || 'bank-image',
+                  message: msgInput?.value || ''
+                })
+              }).catch(() => {});
+            }, 250);
+          }
+
+          slipType?.addEventListener('change', pushSessionMeta);
+          msgInput?.addEventListener('input', pushSessionMeta);
+
+          async function uploadSlipToSession(file) {
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('sid', sid);
+            if (donorInput) fd.append('donor', donorInput.value || '');
+            if (slipType) fd.append('type', slipType.value || 'bank-image');
+            if (msgInput) fd.append('message', msgInput.value || '');
+            fd.append('image', file);
+            if (isMobileLinked && mobileLinkedBanner) {
+              mobileLinkedBanner.style.color = 'var(--ctp-yellow)';
+              mobileLinkedBanner.textContent = 'SYNCING SLIP TO DESKTOP SESSION...';
+            }
+            try {
+              const r = await fetch('/api/donate/session', { method: 'POST', body: fd });
+              const d = await r.json();
+              if (d && d.ok) {
+                lastSyncedSlipAt = d.slipUpdatedAt || Date.now();
+                if (isMobileLinked && mobileLinkedBanner) {
+                  mobileLinkedBanner.style.color = 'var(--ctp-green)';
+                  mobileLinkedBanner.textContent = 'SLIP SYNCED TO DESKTOP (' + (d.slipName || file.name) + ')';
+                }
+                if (mobileStatusEl) {
+                  mobileStatusEl.style.color = 'var(--ctp-green)';
+                  mobileStatusEl.textContent = 'SLIP READY: ' + (d.slipName || file.name);
+                }
+              }
+            } catch {}
+          }
+
+          async function pollSessionState() {
+            try {
+              const r = await fetch('/api/donate/session?sid=' + encodeURIComponent(sid));
+              const d = await r.json();
+              if (!d || !d.ok || !d.exists) return;
+
+              if (sumDonor) sumDonor.textContent = d.donor || '- (SLIP NAME)';
+              if (sumChannel) sumChannel.textContent = d.type === 'truemoney' ? 'TRUEMONEY' : 'BANK / PROMPTPAY';
+              if (sumMessage) sumMessage.textContent = d.message || '-';
+
+              if (donorInput && document.activeElement !== donorInput && d.donor && !donorInput.value) {
+                donorInput.value = d.donor;
+                syncRememberedDonor();
+              }
+              if (slipType && document.activeElement !== slipType && d.type) {
+                slipType.value = d.type;
+              }
+              if (msgInput && document.activeElement !== msgInput && d.message && !msgInput.value) {
+                msgInput.value = d.message;
+              }
+
+              if (d.hasSlip && d.slipUpdatedAt > lastSyncedSlipAt) {
+                lastSyncedSlipAt = d.slipUpdatedAt;
+                fileInput.required = false;
+                dzText.textContent = 'SELECTED VIA MOBILE: ' + (d.slipName || 'slip.jpg');
+                if (mobileStatusEl) {
+                  mobileStatusEl.style.color = 'var(--ctp-green)';
+                  mobileStatusEl.textContent = 'SLIP RECEIVED FROM MOBILE: ' + (d.slipName || 'slip.jpg');
+                }
+                if (!isMobileLinked) {
+                  try {
+                    const imgRes = await fetch('/api/donate/session/slip?sid=' + encodeURIComponent(sid));
+                    if (imgRes.ok) {
+                      const blob = await imgRes.blob();
+                      const dt = new DataTransfer();
+                      dt.items.add(new File([blob], d.slipName || 'slip.jpg', { type: d.slipMime || blob.type || 'image/jpeg' }));
+                      fileInput.files = dt.files;
+                    }
+                  } catch {}
+                }
+              }
+
+              if (d.completedEvent && d.completedEvent.id !== lastCompletedId) {
+                lastCompletedId = d.completedEvent.id;
+                const status = document.getElementById('statusBox');
+                if (status) {
+                  status.className = 'status ok';
+                  status.textContent = 'OK // DONATED ' + d.completedEvent.amount + ' THB FROM ' + d.completedEvent.donor;
+                }
+                if (isMobileLinked && mobileLinkedBanner) {
+                  mobileLinkedBanner.style.color = 'var(--ctp-green)';
+                  mobileLinkedBanner.textContent = 'DONATION COMPLETED ON DESKTOP (' + d.completedEvent.amount + ' THB)';
+                }
+                fileInput.value = '';
+                fileInput.required = true;
+                dzText.textContent = isMobileLinked
+                  ? 'TAP HERE TO SELECT SLIP IMAGE FROM PHONE'
+                  : 'DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE';
+                if (mobileStatusEl) {
+                  mobileStatusEl.style.color = 'var(--ctp-green)';
+                  mobileStatusEl.textContent = 'DONATION COMPLETED (' + d.completedEvent.amount + ' THB)';
+                }
+              }
+            } catch {}
+          }
+
+          pushSessionMeta();
+          pollSessionState();
+          setInterval(pollSessionState, 2000);
+
           ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => {
             e.preventDefault();
             dz.classList.add('dragover');
@@ -198,11 +476,13 @@ export function HomePage({
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
               fileInput.files = e.dataTransfer.files;
               dzText.textContent = 'SELECTED: ' + e.dataTransfer.files[0].name;
+              uploadSlipToSession(e.dataTransfer.files[0]);
             }
           });
           fileInput.addEventListener('change', () => {
             if (fileInput.files && fileInput.files.length) {
               dzText.textContent = 'SELECTED: ' + fileInput.files[0].name;
+              uploadSlipToSession(fileInput.files[0]);
             }
           });
 
@@ -211,6 +491,7 @@ export function HomePage({
             const form = e.target;
             const btn = document.getElementById('submitBtn');
             const status = document.getElementById('statusBox');
+            syncRememberedDonor();
             btn.disabled = true;
             btn.textContent = 'VERIFYING SLIP & GENERATING TTS...';
             status.className = 'status';
@@ -226,10 +507,17 @@ export function HomePage({
               if (!res.ok || !data.ok) {
                 throw new Error((data.code ? '[' + data.code + '] ' : '') + (data.error || 'ERROR'));
               }
+              lastCompletedId = data.event?.id || '';
               status.className = 'status ok';
               status.textContent = 'OK // DONATED ' + data.event.amount + ' THB FROM ' + data.event.donor;
+              const keepChecked = Boolean(rememberDonor?.checked);
+              const keepName = keepChecked ? (donorInput?.value || '') : '';
               form.reset();
+              if (sidInput) sidInput.value = sid;
+              if (rememberDonor) rememberDonor.checked = keepChecked;
+              if (donorInput && keepChecked) donorInput.value = keepName;
               fileInput.value = '';
+              fileInput.required = true;
               dzText.textContent = 'DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE';
               if (ppAmt) {
                 ppAmt.value = '10';

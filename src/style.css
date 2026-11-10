@@ -16,6 +16,7 @@
   --ctp-peach: #f5a97f;
   --ctp-red: #ed8796;
   --ctp-mauve: #c6a0f6;
+  --ctp-accent: var(--ctp-sapphire);
   --font-head: 'Archivo Black', 'IBM Plex Sans Thai', sans-serif;
   --font-body: 'Work Sans', 'IBM Plex Sans Thai', sans-serif;
   --font-mono: 'Space Mono', 'IBM Plex Sans Thai', monospace;
@@ -69,7 +70,7 @@ a {
 }
 
 a:hover {
-  background: var(--ctp-mauve);
+  background: var(--ctp-accent);
   color: var(--ctp-crust);
 }
 
@@ -92,7 +93,7 @@ a:hover {
 
 .card.elevated {
   border-width: 5px;
-  border-color: var(--ctp-mauve);
+  border-color: var(--ctp-accent);
 }
 
 .inverted-block {
@@ -116,7 +117,7 @@ details.fold-block > summary {
   font-family: var(--font-head);
   font-size: 18px;
   text-transform: uppercase;
-  color: var(--ctp-mauve);
+  color: var(--ctp-accent);
 }
 
 details.inverted-block.fold-block > summary {
@@ -148,8 +149,8 @@ details.fold-block[open] > summary {
 
 details.fold-block[open] > summary::after {
   content: '[- HIDE]';
-  border-color: var(--ctp-mauve);
-  color: var(--ctp-mauve);
+  border-color: var(--ctp-accent);
+  color: var(--ctp-accent);
 }
 
 h1 {
@@ -159,7 +160,7 @@ h1 {
   font-weight: 400;
   text-transform: uppercase;
   margin-bottom: 8px;
-  color: var(--ctp-mauve);
+  color: var(--ctp-accent);
 }
 
 .subtitle {
@@ -209,7 +210,7 @@ input:focus,
 select:focus,
 textarea:focus {
   border-width: 5px;
-  border-color: var(--ctp-mauve);
+  border-color: var(--ctp-accent);
 }
 
 input:disabled,
@@ -236,7 +237,7 @@ textarea:disabled {
 .dropzone:hover,
 .dropzone.dragover {
   background: var(--ctp-surface1);
-  border: 5px solid var(--ctp-mauve);
+  border: 5px solid var(--ctp-accent);
   color: var(--ctp-text);
 }
 
@@ -271,11 +272,17 @@ textarea:disabled {
   }
 }
 
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
 button {
   width: 100%;
-  background: var(--ctp-mauve);
+  background: var(--ctp-accent);
   color: var(--ctp-crust);
-  border: 3px solid var(--ctp-mauve);
+  border: 3px solid var(--ctp-accent);
   padding: 16px 40px;
   font-family: var(--font-head);
   font-size: 18px;
@@ -286,11 +293,11 @@ button {
 
 button:hover:not(:disabled) {
   background: var(--ctp-mantle);
-  color: var(--ctp-mauve);
+  color: var(--ctp-accent);
 }
 
 button:active:not(:disabled) {
-  background: var(--ctp-mauve);
+  background: var(--ctp-accent);
   color: var(--ctp-crust);
   border-width: 5px;
 }
@@ -437,7 +444,7 @@ th {
   text-transform: uppercase;
   letter-spacing: 1px;
   background: var(--ctp-crust);
-  color: var(--ctp-mauve);
+  color: var(--ctp-accent);
   padding: 12px;
   text-align: left;
   border: 3px solid var(--ctp-surface2);
@@ -457,7 +464,7 @@ tr:hover td {
 .alert-box {
   background: var(--ctp-mantle);
   color: var(--ctp-text);
-  border: 5px solid var(--ctp-mauve);
+  border: 5px solid var(--ctp-accent);
   padding: 24px 40px;
   text-align: left;
   max-width: 600px;
@@ -480,7 +487,7 @@ tr:hover td {
 }
 
 .alert-amount {
-  background: var(--ctp-mauve);
+  background: var(--ctp-accent);
   color: var(--ctp-crust);
   padding: 0 8px;
 }
@@ -527,7 +534,7 @@ tr:hover td {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
-  background: var(--ctp-mauve);
+  background: var(--ctp-accent);
   color: var(--ctp-crust);
   padding: 2px 8px;
   letter-spacing: 1px;
@@ -694,7 +701,7 @@ tr:hover td {
 }
 
 .countdown-card.subathon {
-  border-color: var(--ctp-mauve);
+  border-color: var(--ctp-accent);
 }
 
 .countdown-card.pulse {

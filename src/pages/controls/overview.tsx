@@ -69,7 +69,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               </div>
               <a
                 href="/overlay/control/alert"
-                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-accent); color:var(--ctp-crust);"
               >
                 CONFIGURE ALERT &amp; TTS &rarr;
               </a>
@@ -107,7 +107,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               </div>
               <a
                 href="/overlay/control/leaderboard"
-                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-accent); color:var(--ctp-crust);"
               >
                 CONFIGURE LEADERBOARD &rarr;
               </a>
@@ -145,7 +145,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               </div>
               <a
                 href="/overlay/control/countdown"
-                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-accent); color:var(--ctp-crust);"
               >
                 CONFIGURE COUNTDOWN &rarr;
               </a>
@@ -188,7 +188,7 @@ export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: 
               </div>
               <a
                 href="/overlay/control/subathon"
-                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-mauve); color:var(--ctp-crust);"
+                style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; background:var(--ctp-accent); color:var(--ctp-crust);"
               >
                 CONFIGURE SUBATHON &rarr;
               </a>

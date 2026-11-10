@@ -531,7 +531,7 @@ export function SubathonControlPage({
         <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
             <label>PERSISTED DB CLOCK</label>
-            <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-mauve);" id="subDbClock">
+            <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-accent);" id="subDbClock">
               --:--:--
             </div>
           </div>
