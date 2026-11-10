@@ -38,8 +38,8 @@ export function CountdownOverlayPage({
           if (${Boolean(transparent)}) setTransparentBg(true);
 
           let initialSecs = ${initialDuration};
-          const targetStr = ${JSON.stringify(target || '')};
-          let endText = ${JSON.stringify(endMsg || 'LIVE NOW')};
+          const targetStr = ${JSON.stringify(target || '').replace(/</g, '\\u003c')};
+          let endText = ${JSON.stringify(endMsg || 'LIVE NOW').replace(/</g, '\\u003c')};
 
           let remaining = initialSecs;
           let targetEpoch = null;

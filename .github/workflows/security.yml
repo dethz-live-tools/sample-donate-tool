@@ -1,0 +1,57 @@
+name: Security & Vulnerability Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sast-scan:
+    name: Semgrep SAST (OWASP Top 10 & XSS)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep Security Rules
+        run: |
+          semgrep scan \
+            --config "p/security-audit" \
+            --config "p/owasp-top-ten" \
+            --config "p/xss" \
+            --config "p/javascript" \
+            --config "p/typescript" \
+            --sarif \
+            --output semgrep.sarif
+
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+
+  build-check:
+    name: Build & Integrity Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Project
+        run: bun run build

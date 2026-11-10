@@ -65,7 +65,7 @@ export function SubathonControlPage({
         let subRateSeconds = ${initRateSeconds};
         let subAddedSecs = ${initAddedSecs};
         let subTotalThb = ${initTotalThb};
-        let subTiktokUser = ${JSON.stringify(initTiktokUser)};
+        let subTiktokUser = ${JSON.stringify(initTiktokUser).replace(/</g, '\\u003c')};
         let subTiktokAutoSync = ${initTiktokAutoSync ? 'true' : 'false'};
         let subTiktokIsLive = ${initTiktokIsLive ? 'true' : 'false'};
 
@@ -377,7 +377,7 @@ export function SubathonControlPage({
         });
 
         // TikTok Gift Webhook Setup & Tester
-        const webhookKey = ${JSON.stringify(tiktokWebhookKey || '')};
+        const webhookKey = ${JSON.stringify(tiktokWebhookKey || '').replace(/</g, '\\u003c')};
         const tikfinityUrlInput = document.getElementById('tiktokTikfinityUrl');
         const copyTikfinityBtn = document.getElementById('copyTikfinityBtn');
         const webhookJsonUrlInput = document.getElementById('tiktokJsonUrl');

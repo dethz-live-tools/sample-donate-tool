@@ -61,8 +61,8 @@ export function SubathonOverlayPage({
 
           const GRACE_SECS = 180;
           let initialSecs = ${resolvedInitialSecs};
-          const targetStr = ${JSON.stringify(target || '')};
-          let endText = ${JSON.stringify(resolvedEndMsg)};
+          const targetStr = ${JSON.stringify(target || '').replace(/</g, '\\u003c')};
+          let endText = ${JSON.stringify(resolvedEndMsg).replace(/</g, '\\u003c')};
           let rateCoins = ${resolvedRateCoins};
           let rateSeconds = ${resolvedRateSeconds};
           let maxCapSecs = ${Math.max(1, resolvedMaxHours)} * 3600;
