@@ -10,6 +10,7 @@ import {
   getDonationStats,
   getSubathonState,
   listDonations,
+  saveAdminDiscord,
   setApiEnabled,
   updateAdmin,
   type SubathonState
@@ -141,76 +142,141 @@ export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Ne
   await next()
 }
 
+function getDiscordRedirectUri(c: Context<{ Bindings: Bindings }>): string {
+  if (c.env?.DISCORD_REDIRECT_URI) return c.env.DISCORD_REDIRECT_URI
+  const u = new URL(c.req.url)
+  return `${u.protocol}//${u.host}/auth/discord/callback`
+}
+
+async function handleDiscordLogin(c: Context<{ Bindings: Bindings }>) {
+  const clientId = c.env?.DISCORD_CLIENT_ID || c.env?.VITE_DISCORD_CLIENT_ID
+  if (!clientId) {
+    return c.redirect('/login?error=not_configured')
+  }
+  const state = toHex(crypto.getRandomValues(new Uint8Array(16)))
+  const redirectUri = getDiscordRedirectUri(c)
+  setCookie(c, 'discord_oauth_state', state, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === 'https:',
+    path: '/',
+    sameSite: 'Lax',
+    maxAge: 300
+  })
+  const url = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(
+    clientId
+  )}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify&prompt=consent&state=${encodeURIComponent(state)}`
+  return c.redirect(url)
+}
+
+async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
+  const queryState = c.req.query('state') || ''
+  const cookieState = getCookie(c, 'discord_oauth_state') || ''
+  deleteCookie(c, 'discord_oauth_state', { path: '/' })
+
+  if (c.req.query('error')) {
+    return c.redirect('/login?error=cancelled')
+  }
+
+  if (!queryState || !cookieState || queryState !== cookieState) {
+    return c.redirect('/login?error=state_mismatch')
+  }
+
+  const code = c.req.query('code')
+  if (!code) {
+    return c.redirect('/login?error=no_code')
+  }
+
+  const clientId = c.env?.DISCORD_CLIENT_ID || c.env?.VITE_DISCORD_CLIENT_ID || ''
+  const clientSecret = c.env?.DISCORD_CLIENT_SECRET || ''
+  if (!clientId || !clientSecret) {
+    return c.redirect('/login?error=not_configured')
+  }
+
+  const redirectUri = getDiscordRedirectUri(c)
+  const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json'
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri
+    }).toString()
+  }).catch(() => null)
+
+  if (!tokenRes || !tokenRes.ok) {
+    return c.redirect('/login?error=token_failed')
+  }
+
+  const tokenData = ((await tokenRes.json().catch(() => ({}))) as Record<string, any>) || {}
+  const accessToken = tokenData.access_token
+  if (!accessToken) {
+    return c.redirect('/login?error=token_failed')
+  }
+
+  const userRes = await fetch('https://discord.com/api/users/@me', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json'
+    }
+  }).catch(() => null)
+
+  if (!userRes || !userRes.ok) {
+    return c.redirect('/login?error=user_failed')
+  }
+
+  const userData = ((await userRes.json().catch(() => ({}))) as Record<string, any>) || {}
+  const discordId = String(userData.id || '').trim()
+  const discordUsername =
+    String(userData.global_name || userData.username || '').trim() || `discord_${discordId.slice(-4)}`
+
+  if (!discordId) {
+    return c.redirect('/login?error=user_failed')
+  }
+
+  const allowedRaw = String(c.env?.DISCORD_ALLOWED_USER_IDS || c.env?.DISCORD_ADMIN_USER_ID || '').trim()
+  const allowedList = allowedRaw
+    ? allowedRaw.split(',').map((id) => id.trim()).filter(Boolean)
+    : []
+
+  const admin = await getAdmin(c.env?.DB)
+  let authorized = false
+
+  if (allowedList.length > 0) {
+    authorized = allowedList.includes(discordId)
+  } else if (!admin) {
+    authorized = true
+  } else if (admin.discordId) {
+    authorized = admin.discordId === discordId
+  } else {
+    authorized = true
+  }
+
+  if (!authorized) {
+    return c.redirect('/login?error=unauthorized')
+  }
+
+  await saveAdminDiscord(c.env?.DB, discordUsername, discordId)
+  const currentAdmin = await getAdmin(c.env?.DB)
+  const passwordHash = currentAdmin?.passwordHash || `discord:${discordId}`
+  const tokenVersion = currentAdmin?.tokenVersion || 1
+  const token = await createSessionToken(c.env, discordUsername, passwordHash, tokenVersion)
+
+  setSessionCookie(c, token)
+  return c.redirect('/dashboard')
+}
+
 export const authRoute = new Hono<{ Bindings: Bindings }>()
-  .post('/setup', async (c) => {
-    const existing = await getAdmin(c.env?.DB)
-    if (existing) return c.redirect('/login')
-
-    const form = await c.req.formData()
-    const username = String(form.get('username') || '').trim().slice(0, 50)
-    const password = String(form.get('password') || '')
-    const confirm = String(form.get('confirm') || '')
-
-    if (!username || password.length < 8 || password.length > 128 || password !== confirm) {
-      return c.redirect('/setup?error=1')
-    }
-
-    const passwordHash = await hashPassword(password)
-    if (!(await createAdmin(c.env?.DB, username, passwordHash))) {
-      return c.redirect('/setup?error=1')
-    }
-
-    const token = await createSessionToken(c.env, username, passwordHash)
-    setCookie(c, COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: new URL(c.req.url).protocol === 'https:',
-      path: '/',
-      sameSite: 'Lax',
-      maxAge: SESSION_TTL_MS / 1000
-    })
-    return c.redirect('/dashboard')
-  })
-  .post('/login', async (c) => {
-    const admin = await getAdmin(c.env?.DB)
-    if (!admin) return c.redirect('/setup')
-
-    const ip = c.req.header('cf-connecting-ip') || 'local'
-    const now = Date.now()
-    if (loginAttempts.size > 500) {
-      for (const [k, v] of loginAttempts) if (now >= v.resetAt) loginAttempts.delete(k)
-    }
-    const rate = loginAttempts.get(ip)
-    if (rate && now < rate.resetAt && rate.count >= 3) {
-      return c.redirect('/login?error=1')
-    }
-
-    const form = await c.req.formData()
-    const username = String(form.get('username') || '').trim()
-    const password = String(form.get('password') || '')
-
-    if (!username || password.length > 128) {
-      return c.redirect('/login?error=1')
-    }
-
-    if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
-      loginAttempts.delete(ip)
-      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
-      setCookie(c, COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: new URL(c.req.url).protocol === 'https:',
-        path: '/',
-        sameSite: 'Lax',
-        maxAge: SESSION_TTL_MS / 1000
-      })
-      return c.redirect('/dashboard')
-    }
-
-    loginAttempts.set(ip, {
-      count: rate && now < rate.resetAt ? rate.count + 1 : 1,
-      resetAt: rate && now < rate.resetAt ? rate.resetAt : now + 60_000
-    })
-    return c.redirect('/login?error=1')
-  })
+  .get('/auth/discord', handleDiscordLogin)
+  .get('/login/discord', handleDiscordLogin)
+  .get('/auth/discord/callback', handleDiscordCallback)
+  .get('/login/discord/callback', handleDiscordCallback)
+  .post('/login', (c) => c.redirect('/auth/discord'))
+  .post('/setup', (c) => c.redirect('/auth/discord'))
   .post('/logout', (c) => {
     deleteCookie(c, COOKIE_NAME, { path: '/' })
     return c.redirect('/login')

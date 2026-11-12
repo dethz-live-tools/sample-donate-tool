@@ -20,7 +20,6 @@ import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
 import { AlertOverlayPage, CountdownOverlayPage, LeaderboardOverlayPage, SubathonOverlayPage } from './pages/overlays'
-import { SetupPage } from './pages/setup'
 import { renderer } from './renderer'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -89,15 +88,10 @@ app.put('/tts', dashboardAuth, async (c) => {
 app.get('/', (c) =>
   c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} mobileSid={c.req.query('sid') || ''} />)
 )
-app.get('/setup', async (c) => {
-  const admin = await getAdmin(c.env?.DB)
-  if (admin) return c.redirect('/login')
-  return c.render(<SetupPage error={c.req.query('error') === '1'} />)
-})
+app.get('/setup', (c) => c.redirect('/login'))
 app.get('/login', async (c) => {
-  const admin = await getAdmin(c.env?.DB)
-  if (!admin) return c.redirect('/setup')
-  return c.render(<LoginPage error={c.req.query('error') === '1'} />)
+  const configured = Boolean(c.env?.DISCORD_CLIENT_ID || c.env?.VITE_DISCORD_CLIENT_ID)
+  return c.render(<LoginPage error={c.req.query('error') || undefined} configured={configured} />)
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
   const [items] = await Promise.all([listDonations(c.env?.DB), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])

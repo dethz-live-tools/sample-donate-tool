@@ -33,6 +33,12 @@ export type Bindings = {
   VITE_TURNSTILE_SITE_KEY?: string
   TURNSTILE_SECRET_KEY?: string
   VITE_TURNSTILE_SECRET_KEY?: string
+  DISCORD_CLIENT_ID?: string
+  VITE_DISCORD_CLIENT_ID?: string
+  DISCORD_CLIENT_SECRET?: string
+  DISCORD_REDIRECT_URI?: string
+  DISCORD_ALLOWED_USER_IDS?: string
+  DISCORD_ADMIN_USER_ID?: string
 }
 
 export function getConfig(env?: Bindings): AppConfig {

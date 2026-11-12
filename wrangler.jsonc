@@ -11,7 +11,9 @@
     "PROMPTPAY_ID": "0947293181",
     "TRUEWALLET_ID": "",
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFsDEJrv5csefss-",
-    "TTS_ENABLED": "true"
+    "TTS_ENABLED": "true",
+    "DISCORD_CLIENT_ID": "1277891155022970900",
+    "DISCORD_ALLOWED_USER_IDS": "387465159322632202"
   },
   "d1_databases": [
     {

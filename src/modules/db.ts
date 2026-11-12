@@ -10,6 +10,7 @@ export type AdminRecord = {
   passwordHash: string
   tokenVersion: number
   apiEnabled: boolean
+  discordId?: string
 }
 
 // ponytail: auto-init tables via D1 prepare.run instead of migration framework
@@ -68,6 +69,10 @@ async function ensureSchema(db: D1Binding) {
     .catch(() => {})
   await db
     .prepare('ALTER TABLE admins ADD COLUMN api_enabled INTEGER DEFAULT 1')
+    .run()
+    .catch(() => {})
+  await db
+    .prepare("ALTER TABLE admins ADD COLUMN discord_id TEXT DEFAULT ''")
     .run()
     .catch(() => {})
   await db
@@ -194,14 +199,15 @@ export async function getAdmin(db: D1Binding | undefined): Promise<AdminRecord |
   if (!db) return null
   await ensureSchema(db)
   const row = (await db
-    .prepare('SELECT username, password_hash, token_version, api_enabled FROM admins WHERE id = 1')
+    .prepare('SELECT username, password_hash, token_version, api_enabled, discord_id FROM admins WHERE id = 1')
     .first()) as any
   if (!row) return null
   return {
     username: String(row.username),
     passwordHash: String(row.password_hash),
     tokenVersion: Number(row.token_version || 1),
-    apiEnabled: row.api_enabled === null || row.api_enabled === undefined ? true : Number(row.api_enabled) !== 0
+    apiEnabled: row.api_enabled === null || row.api_enabled === undefined ? true : Number(row.api_enabled) !== 0,
+    discordId: row.discord_id ? String(row.discord_id) : undefined
   }
 }
 
@@ -223,18 +229,41 @@ export async function setApiEnabled(db: D1Binding | undefined, enabled: boolean)
   return enabled
 }
 
-export async function createAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
+export async function createAdmin(
+  db: D1Binding | undefined,
+  username: string,
+  passwordHash: string,
+  discordId = ''
+): Promise<boolean> {
   if (!db) return false
   await ensureSchema(db)
   try {
     await db
-      .prepare('INSERT INTO admins (id, username, password_hash, created_at) VALUES (1, ?, ?, ?)')
-      .bind(username, passwordHash, Date.now())
+      .prepare('INSERT INTO admins (id, username, password_hash, created_at, discord_id) VALUES (1, ?, ?, ?, ?)')
+      .bind(username, passwordHash, Date.now(), discordId)
       .run()
     return true
   } catch {
     return false
   }
+}
+
+export async function saveAdminDiscord(
+  db: D1Binding | undefined,
+  username: string,
+  discordId: string
+): Promise<boolean> {
+  if (!db) return false
+  await ensureSchema(db)
+  const existing = await getAdmin(db)
+  if (existing) {
+    await db
+      .prepare('UPDATE admins SET discord_id = ?, username = ? WHERE id = 1')
+      .bind(discordId, username)
+      .run()
+    return true
+  }
+  return createAdmin(db, username, `discord:${discordId}`, discordId)
 }
 
 export async function updateAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
