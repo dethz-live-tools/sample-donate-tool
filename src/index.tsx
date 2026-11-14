@@ -3,6 +3,7 @@ import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
 import { authRoute, dashboardAuth, getTikTokWebhookKey, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
+import { getDb } from './db/client'
 import { getAdmin, getLeaderboard, getSubathonState, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
 import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
@@ -94,7 +95,7 @@ app.get('/login', async (c) => {
   return c.render(<LoginPage error={c.req.query('error') || undefined} configured={configured} />)
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
-  const [items] = await Promise.all([listDonations(c.env?.DB), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  const [items] = await Promise.all([listDonations(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
 })
 app.get('/overlay/control', dashboardAuth, async (c) => {
@@ -117,7 +118,7 @@ app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
   const [, , subathonState, tiktokWebhookKey] = await Promise.all([
     resolveTtsConfig(c.env),
     resolveFilterConfig(c.env),
-    getSubathonState(c.env?.DB),
+    getSubathonState(getDb(c.env)),
     getTikTokWebhookKey(c.env)
   ])
   return c.render(
@@ -151,7 +152,7 @@ app.get('/overlay/leaderboard', async (c) => {
   const rawLimit = Number(c.req.query('limit'))
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
   const title = c.req.query('title') || 'TOP DONORS'
-  const items = await getLeaderboard(c.env?.DB, limit)
+  const items = await getLeaderboard(getDb(c.env), limit)
   return c.render(
     <LeaderboardOverlayPage
       initialItems={items}
@@ -179,7 +180,7 @@ app.get('/overlay/countdown', (c) => {
   )
 })
 app.get('/overlay/subathon', async (c) => {
-  const initialState = await getSubathonState(c.env?.DB)
+  const initialState = await getSubathonState(getDb(c.env))
   const title = c.req.query('title') || initialState.title || 'SUBATHON'
   const minutes = c.req.query('minutes') !== undefined ? Number(c.req.query('minutes')) : Math.round(initialState.initialSeconds / 60)
   const seconds = Number(c.req.query('seconds')) || 0

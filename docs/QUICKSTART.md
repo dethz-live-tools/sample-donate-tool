@@ -92,6 +92,18 @@ bunx wrangler secret put TURNSTILE_SECRET_KEY
 
 ---
 
+## 5b. Alternative: PostgreSQL
+
+D1 is the default backend; set `POSTGRES_URL` (e.g. `postgresql://user:pass@host:5432/dbname`) to use Postgres instead — it takes precedence and D1 is unused. Tables auto-create on first request either way.
+
+In Docker, set `POSTGRES_URL=postgresql://donate:donate@postgres:5432/donate` in `.env` and start both services:
+
+```sh
+docker compose up -d --build app postgres
+```
+
+---
+
 ## 6. Production Deployment
 
 Build and deploy to Cloudflare Workers:
@@ -102,7 +114,24 @@ bun run deploy
 
 ---
 
-## 7. Next Steps
+## 7. Running in Docker
+
+Works without a Cloudflare account — the app runs in a local `workerd` instance (via `vite preview`), with D1 backed by SQLite in a named volume.
+
+```sh
+cp .env.example .env   # edit with your values
+docker compose up -d --build
+```
+
+- App: `http://localhost:4173/`
+- All env values in `.env` reach the worker (no `.dev.vars` needed)
+- D1 state lives in the `d1` volume — survives container/image rebuilds, lost with `docker compose rm -v`
+- Behind a reverse proxy with a custom domain, uncomment `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS` in `compose.yaml` (Vite otherwise rejects unknown `Host` headers with 403)
+- To start from a clean database: `docker compose down && docker volume rm donate-tool_d1 && docker compose up -d`
+
+---
+
+## 8. Next Steps
 
 - [API Reference](./API.md) — Comprehensive documentation of all donation, SSE, and management endpoints.
 - [Setup & Architecture](./README.md) — Environment variables, error codes, and security threat model.

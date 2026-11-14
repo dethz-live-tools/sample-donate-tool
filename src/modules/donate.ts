@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { dashboardAuth } from './auth'
 import { getConfig, type Bindings } from './config'
+import { getDb } from '../db/client'
 import { addSubathonDonation, insertDonation } from './db'
 import { broadcast, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
 import { filterWordContent } from './filter'
@@ -193,7 +194,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       }
     }
 
-    const verified = await verifySlip(form, cfg, c.env?.DB)
+    const verified = await verifySlip(form, cfg, getDb(c.env))
     if (!verified.ok) {
       return c.json({ ok: false, code: verified.code, error: verified.error }, verified.status as any)
     }
@@ -250,7 +251,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
         createdAt: Date.now()
       }
 
-      if (!(await insertDonation(c.env?.DB, ev))) {
+      if (!(await insertDonation(getDb(c.env), ev))) {
         return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
       }
       if (sess) {
@@ -261,7 +262,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
         sess.completedEvent = { id: ev.id, donor: ev.donor, amount: ev.amount, createdAt: ev.createdAt }
         sess.updatedAt = Date.now()
       }
-      const subathonState = await addSubathonDonation(c.env?.DB, verified.amount)
+      const subathonState = await addSubathonDonation(getDb(c.env), verified.amount)
       broadcast(ev)
       return c.json({ ok: true, event: ev, subathonState })
     } finally {
@@ -316,8 +317,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       ttsEnabled,
       createdAt: Date.now()
     }
-    await insertDonation(c.env?.DB, ev)
-    const subathonState = await addSubathonDonation(c.env?.DB, amount)
+    await insertDonation(getDb(c.env), ev)
+    const subathonState = await addSubathonDonation(getDb(c.env), amount)
     broadcast(ev)
     return c.json({ ok: true, event: ev, subathonState })
   })

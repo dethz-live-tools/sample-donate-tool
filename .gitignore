@@ -30,5 +30,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# pentest
+pentest_log/
+
 # misc
 .DS_Store

@@ -1,4 +1,4 @@
-import type { D1Binding } from './db'
+import type { D1Like } from '../db/client'
 
 export type AppConfig = {
   s2sKey: string
@@ -13,7 +13,8 @@ export type AppConfig = {
 }
 
 export type Bindings = {
-  DB?: D1Binding
+  DB?: D1Like | null
+  POSTGRES_URL?: string
   SESSION_SECRET?: string
   SLIP2SURE_API_KEY?: string
   VITE_SLIP2SURE_API_KEY?: string

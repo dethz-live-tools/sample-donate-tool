@@ -1,6 +1,7 @@
 import { Hono, type Context, type Next } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { Bindings } from './config'
+import { getDb } from '../db/client'
 import {
   applySubathonCommand,
   bumpTokenVersion,
@@ -86,7 +87,7 @@ function getSecret(env: Bindings | undefined, passwordHash: string, tokenVersion
 }
 
 export async function getTikTokWebhookKey(env: Bindings | undefined): Promise<string> {
-  const admin = await getAdmin(env?.DB)
+  const admin = await getAdmin(getDb(env))
   const baseSecret = admin
     ? getSecret(env, admin.passwordHash, admin.tokenVersion)
     : `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:default`
@@ -113,7 +114,7 @@ function extractToken(c: Context<{ Bindings: Bindings }>): { token: string; isBe
 }
 
 export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
-  const admin = await getAdmin(c.env?.DB)
+  const admin = await getAdmin(getDb(c.env))
   if (!admin) return false
   const { token, isBearer } = extractToken(c)
   if (isBearer && !admin.apiEnabled) return false
@@ -132,7 +133,7 @@ export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promis
 
 export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
   const isApi = c.req.path.startsWith('/api/')
-  const admin = await getAdmin(c.env?.DB)
+  const admin = await getAdmin(getDb(c.env))
   if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
   const { isBearer } = extractToken(c)
   if (isBearer && !admin.apiEnabled) {
@@ -243,7 +244,7 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
     ? allowedRaw.split(',').map((id) => id.trim()).filter(Boolean)
     : []
 
-  const admin = await getAdmin(c.env?.DB)
+  const admin = await getAdmin(getDb(c.env))
   let authorized = false
 
   if (allowedList.length > 0) {
@@ -260,8 +261,8 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
     return c.redirect('/login?error=unauthorized')
   }
 
-  await saveAdminDiscord(c.env?.DB, discordUsername, discordId)
-  const currentAdmin = await getAdmin(c.env?.DB)
+  await saveAdminDiscord(getDb(c.env), discordUsername, discordId)
+  const currentAdmin = await getAdmin(getDb(c.env))
   const passwordHash = currentAdmin?.passwordHash || `discord:${discordId}`
   const tokenVersion = currentAdmin?.tokenVersion || 1
   const token = await createSessionToken(c.env, discordUsername, passwordHash, tokenVersion)
@@ -322,7 +323,7 @@ function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string) {
 // ponytail: single Hono router for JSON management API using existing PBKDF2 + HMAC token (cookie or Bearer)
 export const manageRoute = new Hono<{ Bindings: Bindings }>()
   .post('/setup', async (c) => {
-    const existing = await getAdmin(c.env?.DB)
+    const existing = await getAdmin(getDb(c.env))
     if (existing) return c.json({ ok: false, error: 'ADMIN_ALREADY_EXISTS' }, 409)
 
     const body = (await c.req.json().catch(() => ({}))) as any
@@ -333,7 +334,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     }
 
     const passwordHash = await hashPassword(password)
-    if (!(await createAdmin(c.env?.DB, username, passwordHash))) {
+    if (!(await createAdmin(getDb(c.env), username, passwordHash))) {
       return c.json({ ok: false, error: 'SETUP_FAILED' }, 409)
     }
 
@@ -342,7 +343,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true, username, token, expiresAt: Number(token.split('.')[0]) })
   })
   .post('/login', async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     if (!admin.apiEnabled) return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
 
@@ -388,7 +389,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true })
   })
   .get('/auth/status', async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     const authenticated = await isValidSession(c)
     const { token, isBearer } = extractToken(c)
     const exp = authenticated && token.includes('.') ? Number(token.split('.')[0]) : null
@@ -408,7 +409,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .post('/auth/refresh', dashboardAuth, async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
     setSessionCookie(c, token)
@@ -421,11 +422,11 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .post('/auth/revoke', dashboardAuth, async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const body = (await c.req.json().catch(() => ({}))) as any
     const keepCurrent = Boolean(body.keepCurrent)
-    const nextVersion = await bumpTokenVersion(c.env?.DB)
+    const nextVersion = await bumpTokenVersion(getDb(c.env))
     if (keepCurrent) {
       const token = await createSessionToken(c.env, admin.username, admin.passwordHash, nextVersion)
       setSessionCookie(c, token)
@@ -441,12 +442,12 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true, revoked: true, tokenVersion: nextVersion })
   })
   .put('/auth/config', dashboardAuth, async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const body = (await c.req.json().catch(() => ({}))) as any
     let apiEnabled = admin.apiEnabled
     if (typeof body.apiEnabled === 'boolean') {
-      apiEnabled = await setApiEnabled(c.env?.DB, body.apiEnabled)
+      apiEnabled = await setApiEnabled(getDb(c.env), body.apiEnabled)
     }
     if (body.unlockRateLimit) {
       loginAttempts.clear()
@@ -460,8 +461,8 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
   })
   .get('/me', dashboardAuth, async (c) => {
     const [admin, stats, ttsEnabled] = await Promise.all([
-      getAdmin(c.env?.DB),
-      getDonationStats(c.env?.DB),
+      getAdmin(getDb(c.env)),
+      getDonationStats(getDb(c.env)),
       resolveTtsEnabled(c.env)
     ])
     return c.json({
@@ -500,7 +501,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
   })
   .put('/credentials', dashboardAuth, async (c) => {
-    const admin = await getAdmin(c.env?.DB)
+    const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
 
     const body = (await c.req.json().catch(() => ({}))) as any
@@ -516,11 +517,11 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     }
 
     const nextHash = newPassword ? await hashPassword(newPassword) : admin.passwordHash
-    if (!(await updateAdmin(c.env?.DB, newUsername, nextHash))) {
+    if (!(await updateAdmin(getDb(c.env), newUsername, nextHash))) {
       return c.json({ ok: false, error: 'UPDATE_FAILED' }, 500)
     }
 
-    const nextVersion = newPassword ? await bumpTokenVersion(c.env?.DB) : admin.tokenVersion
+    const nextVersion = newPassword ? await bumpTokenVersion(getDb(c.env)) : admin.tokenVersion
     const token = await createSessionToken(c.env, newUsername, nextHash, nextVersion)
     setSessionCookie(c, token)
     return c.json({
@@ -538,24 +539,24 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const since = Number.isFinite(rawSince) ? Math.max(0, rawSince) : 0
     const includeTest = c.req.query('includeTest') === '1' || c.req.query('includeTest') === 'true'
     const [items, stats] = await Promise.all([
-      listDonations(c.env?.DB, limit, since, includeTest),
-      getDonationStats(c.env?.DB)
+      listDonations(getDb(c.env), limit, since, includeTest),
+      getDonationStats(getDb(c.env))
     ])
     return c.json({ ok: true, stats, items })
   })
   .delete('/donations/:id', dashboardAuth, async (c) => {
     const id = c.req.param('id')
-    const deleted = await deleteDonation(c.env?.DB, id)
+    const deleted = await deleteDonation(getDb(c.env), id)
     if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     return c.json({ ok: true, id })
   })
   .get('/subathon', dashboardAuth, async (c) => {
-    const state = await getSubathonState(c.env?.DB)
+    const state = await getSubathonState(getDb(c.env))
     return c.json({ ok: true, state })
   })
   .put('/subathon', dashboardAuth, async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
-    const subathonState = await applySubathonCommand(c.env?.DB, { cmd: 'set', ...body })
+    const subathonState = await applySubathonCommand(getDb(c.env), { cmd: 'set', ...body })
     const payload = { action: 'subathon', cmd: 'set', ...body, subathonState, timestamp: Date.now() }
     broadcastControl(payload)
     return c.json({ ok: true, state: subathonState })
@@ -597,7 +598,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     }
     let subathonState: SubathonState | undefined
     if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
-      subathonState = await applySubathonCommand(c.env?.DB, body)
+      subathonState = await applySubathonCommand(getDb(c.env), body)
     }
     const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)

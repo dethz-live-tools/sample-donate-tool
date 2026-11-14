@@ -1,9 +1,9 @@
+import { and, desc, eq, gt, ne, sql } from 'drizzle-orm'
+import { admins, donations, subathonState } from '../db/schema'
+import { getDb, type AppDatabase } from '../db/client'
 import type { DonateEvent } from './events'
 
-export type D1Binding = {
-  prepare(query: string): any
-  exec(query: string): Promise<any>
-}
+export type { AppDatabase }
 
 export type AdminRecord = {
   username: string
@@ -13,94 +13,74 @@ export type AdminRecord = {
   discordId?: string
 }
 
-// ponytail: auto-init tables via D1 prepare.run instead of migration framework
-let initialized = false
-async function ensureSchema(db: D1Binding) {
-  if (initialized) return
-  await db
-    .prepare(
-      'CREATE TABLE IF NOT EXISTS donations (id TEXT PRIMARY KEY, donor TEXT NOT NULL, amount REAL NOT NULL, message TEXT NOT NULL, type TEXT NOT NULL, trans_ref TEXT UNIQUE NOT NULL, created_at INTEGER NOT NULL, audio_base64 TEXT, sample_rate INTEGER)'
+// ponytail: drizzle re-keys full-table selects to camelCase property names; decode defensively since D1/sqlite
+// and Postgres return different native types for the same column (int/numeric/bool).
+const num = (v: unknown, fallback = 0): number => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
+const bool = (v: unknown, fallback: boolean): boolean =>
+  v === null || v === undefined ? fallback : v === true || v === 1 || v === '1' || v === 't' || v === 'true'
+
+// ponytail: auto-init tables on first use instead of a migration framework (as before); DDL is dialect-portable.
+let schemaReady: Promise<void> | null = null
+function ensureSchema(db: AppDatabase): Promise<void> {
+  schemaReady ??= (async () => {
+    await db.execute(
+      sql`create table if not exists donations (
+        id text primary key,
+        donor text not null,
+        amount numeric not null,
+        message text not null,
+        type text not null default 'bank-image',
+        trans_ref text unique not null,
+        created_at bigint not null,
+        audio_base64 text,
+        sample_rate integer
+      )`
     )
-    .run()
-  await db
-    .prepare('ALTER TABLE donations ADD COLUMN audio_base64 TEXT')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE donations ADD COLUMN sample_rate INTEGER')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare(
-      "CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL, created_at INTEGER NOT NULL, tts_enabled INTEGER, tts_voice TEXT DEFAULT 'th-TH-NiwatNeural', tts_rate TEXT DEFAULT '+0%', tts_pitch TEXT DEFAULT '+0Hz', filter_enabled INTEGER DEFAULT 1, filter_words TEXT DEFAULT '', filter_action TEXT DEFAULT 'censor', token_version INTEGER DEFAULT 1, api_enabled INTEGER DEFAULT 1)"
+    await db.execute(
+      sql`create table if not exists admins (
+        id integer primary key,
+        username text not null,
+        password_hash text not null,
+        created_at bigint not null,
+        tts_enabled boolean,
+        tts_voice text not null default 'th-TH-NiwatNeural',
+        tts_rate text not null default '+0%',
+        tts_pitch text not null default '+0Hz',
+        filter_enabled boolean not null default true,
+        filter_words text not null default '',
+        filter_action text not null default 'censor',
+        token_version integer not null default 1,
+        api_enabled boolean not null default true,
+        discord_id text not null default ''
+      )`
     )
-    .run()
-  await db
-    .prepare('ALTER TABLE admins ADD COLUMN tts_enabled INTEGER')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN tts_voice TEXT DEFAULT 'th-TH-NiwatNeural'")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN tts_rate TEXT DEFAULT '+0%'")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN tts_pitch TEXT DEFAULT '+0Hz'")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE admins ADD COLUMN filter_enabled INTEGER DEFAULT 1')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN filter_words TEXT DEFAULT ''")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN filter_action TEXT DEFAULT 'censor'")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE admins ADD COLUMN token_version INTEGER DEFAULT 1')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE admins ADD COLUMN api_enabled INTEGER DEFAULT 1')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE admins ADD COLUMN discord_id TEXT DEFAULT ''")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare(
-      "CREATE TABLE IF NOT EXISTS subathon_state (id INTEGER PRIMARY KEY CHECK (id = 1), title TEXT DEFAULT 'SUBATHON', end_msg TEXT DEFAULT 'TIME UP', initial_seconds INTEGER DEFAULT 600, remaining_seconds INTEGER DEFAULT 600, target_epoch INTEGER DEFAULT 0, is_running INTEGER DEFAULT 1, rate_coins REAL DEFAULT 10, rate_seconds INTEGER DEFAULT 60, sec_per_thb REAL DEFAULT 6, max_hours INTEGER DEFAULT 24, total_added_secs INTEGER DEFAULT 0, total_donations REAL DEFAULT 0, updated_at INTEGER NOT NULL)"
+    await db.execute(
+      sql`create table if not exists subathon_state (
+        id integer primary key,
+        title text not null default 'SUBATHON',
+        end_msg text not null default 'TIME UP',
+        initial_seconds integer not null default 600,
+        remaining_seconds integer not null default 600,
+        target_epoch bigint not null default 0,
+        is_running boolean not null default true,
+        rate_coins numeric not null default 10,
+        rate_seconds integer not null default 60,
+        sec_per_thb numeric not null default 6,
+        max_hours integer not null default 24,
+        total_added_secs integer not null default 0,
+        total_donations numeric not null default 0,
+        tiktok_username text not null default '',
+        tiktok_auto_sync boolean not null default true,
+        tiktok_is_live boolean not null default false,
+        updated_at bigint not null
+      )`
     )
-    .run()
-  await db
-    .prepare('ALTER TABLE subathon_state ADD COLUMN rate_coins REAL DEFAULT 10')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE subathon_state ADD COLUMN rate_seconds INTEGER DEFAULT 60')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare("ALTER TABLE subathon_state ADD COLUMN tiktok_username TEXT DEFAULT ''")
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE subathon_state ADD COLUMN tiktok_auto_sync INTEGER DEFAULT 1')
-    .run()
-    .catch(() => {})
-  await db
-    .prepare('ALTER TABLE subathon_state ADD COLUMN tiktok_is_live INTEGER DEFAULT 0')
-    .run()
-    .catch(() => {})
-  initialized = true
+  })()
+  return schemaReady
 }
 
 export type FilterSettings = {
@@ -109,36 +89,30 @@ export type FilterSettings = {
   action: 'censor' | 'mute'
 }
 
-export async function getFilterConfig(db: D1Binding | undefined): Promise<FilterSettings> {
-  const def: FilterSettings = {
-    enabled: true,
-    words: '',
-    action: 'censor'
-  }
-  if (!db) return def
+export async function getFilterConfig(db: AppDatabase): Promise<FilterSettings> {
+  const def: FilterSettings = { enabled: true, words: '', action: 'censor' }
   await ensureSchema(db)
-  const row = (await db.prepare('SELECT filter_enabled, filter_words, filter_action FROM admins WHERE id = 1').first()) as any
+  const [row] = await db.select().from(admins).where(eq(admins.id, 1)).limit(1)
   if (!row) return def
   return {
-    enabled: row.filter_enabled === null || row.filter_enabled === undefined ? true : Number(row.filter_enabled) !== 0,
-    words: String(row.filter_words || ''),
-    action: row.filter_action === 'mute' ? 'mute' : 'censor'
+    enabled: bool(row.filterEnabled, true),
+    words: str(row.filterWords),
+    action: row.filterAction === 'mute' ? 'mute' : 'censor'
   }
 }
 
-export async function setFilterConfig(db: D1Binding | undefined, config: Partial<FilterSettings>): Promise<FilterSettings> {
+export async function setFilterConfig(db: AppDatabase, config: Partial<FilterSettings>): Promise<FilterSettings> {
   const current = await getFilterConfig(db)
   const updated: FilterSettings = {
     enabled: typeof config.enabled === 'boolean' ? config.enabled : current.enabled,
     words: typeof config.words === 'string' ? config.words : current.words,
     action: config.action === 'mute' ? 'mute' : 'censor'
   }
-  if (!db) return updated
-  await ensureSchema(db)
   await db
-    .prepare('UPDATE admins SET filter_enabled = ?, filter_words = ?, filter_action = ? WHERE id = 1')
-    .bind(updated.enabled ? 1 : 0, updated.words, updated.action)
-    .run()
+    .update(admins)
+    .set({ filterEnabled: updated.enabled, filterWords: updated.words, filterAction: updated.action })
+    .where(eq(admins.id, 1))
+    .returning({ id: admins.id })
   return updated
 }
 
@@ -149,26 +123,20 @@ export type TtsSettings = {
   pitch: string
 }
 
-export async function getTtsConfig(db: D1Binding | undefined, fallbackEnabled = true): Promise<TtsSettings> {
-  const def: TtsSettings = {
-    enabled: fallbackEnabled,
-    voice: 'th-TH-NiwatNeural',
-    rate: '+0%',
-    pitch: '+0Hz'
-  }
-  if (!db) return def
+export async function getTtsConfig(db: AppDatabase, fallbackEnabled = true): Promise<TtsSettings> {
+  const def: TtsSettings = { enabled: fallbackEnabled, voice: 'th-TH-NiwatNeural', rate: '+0%', pitch: '+0Hz' }
   await ensureSchema(db)
-  const row = (await db.prepare('SELECT tts_enabled, tts_voice, tts_rate, tts_pitch FROM admins WHERE id = 1').first()) as any
+  const [row] = await db.select().from(admins).where(eq(admins.id, 1)).limit(1)
   if (!row) return def
   return {
-    enabled: row.tts_enabled === null || row.tts_enabled === undefined ? fallbackEnabled : Number(row.tts_enabled) !== 0,
-    voice: row.tts_voice || 'th-TH-NiwatNeural',
-    rate: row.tts_rate || '+0%',
-    pitch: row.tts_pitch || '+0Hz'
+    enabled: bool(row.ttsEnabled, fallbackEnabled),
+    voice: str(row.ttsVoice) || 'th-TH-NiwatNeural',
+    rate: str(row.ttsRate) || '+0%',
+    pitch: str(row.ttsPitch) || '+0Hz'
   }
 }
 
-export async function setTtsConfig(db: D1Binding | undefined, config: Partial<TtsSettings>): Promise<TtsSettings> {
+export async function setTtsConfig(db: AppDatabase, config: Partial<TtsSettings>): Promise<TtsSettings> {
   const current = await getTtsConfig(db)
   const updated: TtsSettings = {
     enabled: typeof config.enabled === 'boolean' ? config.enabled : current.enabled,
@@ -176,187 +144,185 @@ export async function setTtsConfig(db: D1Binding | undefined, config: Partial<Tt
     rate: typeof config.rate === 'string' ? config.rate : current.rate,
     pitch: typeof config.pitch === 'string' ? config.pitch : current.pitch
   }
-  if (!db) return updated
-  await ensureSchema(db)
   await db
-    .prepare('UPDATE admins SET tts_enabled = ?, tts_voice = ?, tts_rate = ?, tts_pitch = ? WHERE id = 1')
-    .bind(updated.enabled ? 1 : 0, updated.voice, updated.rate, updated.pitch)
-    .run()
+    .update(admins)
+    .set({ ttsEnabled: updated.enabled, ttsVoice: updated.voice, ttsRate: updated.rate, ttsPitch: updated.pitch })
+    .where(eq(admins.id, 1))
+    .returning({ id: admins.id })
   return updated
 }
 
-export async function getTtsSetting(db: D1Binding | undefined, fallback = true): Promise<boolean> {
+export async function getTtsSetting(db: AppDatabase, fallback = true): Promise<boolean> {
   const cfg = await getTtsConfig(db, fallback)
   return cfg.enabled
 }
 
-export async function setTtsSetting(db: D1Binding | undefined, enabled: boolean): Promise<boolean> {
+export async function setTtsSetting(db: AppDatabase, enabled: boolean): Promise<boolean> {
   const updated = await setTtsConfig(db, { enabled })
   return updated.enabled
 }
 
-export async function getAdmin(db: D1Binding | undefined): Promise<AdminRecord | null> {
-  if (!db) return null
+export async function getAdmin(db: AppDatabase): Promise<AdminRecord | null> {
   await ensureSchema(db)
-  const row = (await db
-    .prepare('SELECT username, password_hash, token_version, api_enabled, discord_id FROM admins WHERE id = 1')
-    .first()) as any
+  const [row] = await db.select().from(admins).where(eq(admins.id, 1)).limit(1)
   if (!row) return null
   return {
-    username: String(row.username),
-    passwordHash: String(row.password_hash),
-    tokenVersion: Number(row.token_version || 1),
-    apiEnabled: row.api_enabled === null || row.api_enabled === undefined ? true : Number(row.api_enabled) !== 0,
-    discordId: row.discord_id ? String(row.discord_id) : undefined
+    username: str(row.username),
+    passwordHash: str(row.passwordHash),
+    tokenVersion: num(row.tokenVersion, 1),
+    apiEnabled: bool(row.apiEnabled, true),
+    discordId: row.discordId ? str(row.discordId) : undefined
   }
 }
 
-export async function bumpTokenVersion(db: D1Binding | undefined): Promise<number> {
-  if (!db) return 1
+export async function bumpTokenVersion(db: AppDatabase): Promise<number> {
   await ensureSchema(db)
-  await db.prepare('UPDATE admins SET token_version = COALESCE(token_version, 1) + 1 WHERE id = 1').run()
+  await db
+    .update(admins)
+    .set({ tokenVersion: sql`${admins.tokenVersion} + 1` })
+    .where(eq(admins.id, 1))
+    .returning({ id: admins.id })
   const admin = await getAdmin(db)
   return admin?.tokenVersion || 1
 }
 
-export async function setApiEnabled(db: D1Binding | undefined, enabled: boolean): Promise<boolean> {
-  if (!db) return enabled
+export async function setApiEnabled(db: AppDatabase, enabled: boolean): Promise<boolean> {
   await ensureSchema(db)
-  await db
-    .prepare('UPDATE admins SET api_enabled = ? WHERE id = 1')
-    .bind(enabled ? 1 : 0)
-    .run()
+  await db.update(admins).set({ apiEnabled: enabled }).where(eq(admins.id, 1)).returning({ id: admins.id })
   return enabled
 }
 
 export async function createAdmin(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   username: string,
   passwordHash: string,
   discordId = ''
 ): Promise<boolean> {
-  if (!db) return false
   await ensureSchema(db)
   try {
-    await db
-      .prepare('INSERT INTO admins (id, username, password_hash, created_at, discord_id) VALUES (1, ?, ?, ?, ?)')
-      .bind(username, passwordHash, Date.now(), discordId)
-      .run()
-    return true
+    const rows = await db
+      .insert(admins)
+      .values({ id: 1, username, passwordHash, createdAt: Date.now(), discordId })
+      .onConflictDoNothing()
+      .returning({ id: admins.id })
+    return rows.length > 0
   } catch {
     return false
   }
 }
 
 export async function saveAdminDiscord(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   username: string,
   discordId: string
 ): Promise<boolean> {
-  if (!db) return false
   await ensureSchema(db)
   const existing = await getAdmin(db)
   if (existing) {
     await db
-      .prepare('UPDATE admins SET discord_id = ?, username = ? WHERE id = 1')
-      .bind(discordId, username)
-      .run()
+      .update(admins)
+      .set({ discordId, username })
+      .where(eq(admins.id, 1))
+      .returning({ id: admins.id })
     return true
   }
   return createAdmin(db, username, `discord:${discordId}`, discordId)
 }
 
-export async function updateAdmin(db: D1Binding | undefined, username: string, passwordHash: string): Promise<boolean> {
-  if (!db) return false
+export async function updateAdmin(db: AppDatabase, username: string, passwordHash: string): Promise<boolean> {
   await ensureSchema(db)
   try {
-    const res = await db
-      .prepare('UPDATE admins SET username = ?, password_hash = ? WHERE id = 1')
-      .bind(username, passwordHash)
-      .run()
-    return (res?.meta?.changes ?? 1) > 0
+    await db.update(admins).set({ username, passwordHash }).where(eq(admins.id, 1)).returning({ id: admins.id })
+    return true
   } catch {
     return false
   }
 }
 
-export async function deleteDonation(db: D1Binding | undefined, id: string): Promise<boolean> {
-  if (!db || !id) return false
+export async function deleteDonation(db: AppDatabase, id: string): Promise<boolean> {
+  if (!id) return false
   await ensureSchema(db)
-  const res = await db.prepare('DELETE FROM donations WHERE id = ?').bind(id).run()
-  return (res?.meta?.changes ?? 1) > 0
+  const rows = await db.delete(donations).where(eq(donations.id, id)).returning({ id: donations.id })
+  return rows.length > 0
 }
 
-export async function getDonationStats(db: D1Binding | undefined): Promise<{ count: number; totalAmount: number }> {
-  if (!db) return { count: 0, totalAmount: 0 }
+export async function getDonationStats(db: AppDatabase): Promise<{ count: number; totalAmount: number }> {
   await ensureSchema(db)
-  const row = (await db
-    .prepare("SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as totalAmount FROM donations WHERE type != 'test'")
-    .first()) as any
+  const [row] = await db
+    .select({
+      count: sql`count(*)`.as('count'),
+      totalAmount: sql`coalesce(sum(${donations.amount}), 0)`.as('totalAmount')
+    })
+    .from(donations)
+    .where(ne(donations.type, 'test'))
   return {
-    count: Number(row?.count || 0),
-    totalAmount: Number(row?.totalAmount || 0)
+    count: num(row?.count),
+    totalAmount: num(row?.totalAmount)
   }
 }
 
-export async function isSlipUsed(db: D1Binding | undefined, transRef: string): Promise<boolean> {
-  if (!db || !transRef) return false
+export async function isSlipUsed(db: AppDatabase, transRef: string): Promise<boolean> {
+  if (!transRef) return false
   await ensureSchema(db)
-  const row = await db.prepare('SELECT 1 FROM donations WHERE trans_ref = ? LIMIT 1').bind(transRef).first()
-  return Boolean(row)
+  const rows = await db
+    .select({ id: donations.id })
+    .from(donations)
+    .where(eq(donations.transRef, transRef))
+    .limit(1)
+  return rows.length > 0
 }
 
-export async function insertDonation(db: D1Binding | undefined, ev: DonateEvent): Promise<boolean> {
-  if (!db) return true
+export async function insertDonation(db: AppDatabase, ev: DonateEvent): Promise<boolean> {
   await ensureSchema(db)
   try {
-    const res = await db
-      .prepare(
-        'INSERT OR IGNORE INTO donations (id, donor, amount, message, type, trans_ref, created_at, audio_base64, sample_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      )
-      .bind(
-        ev.id,
-        ev.donor,
-        ev.amount,
-        ev.message,
-        ev.type || 'bank-image',
-        ev.transRef,
-        ev.createdAt,
-        ev.audioBase64 || null,
-        ev.ttsEnabled === false ? 0 : ev.sampleRate || 24000
-      )
-      .run()
-    return (res?.meta?.changes ?? 1) > 0
+    const rows = await db
+      .insert(donations)
+      .values({
+        id: ev.id,
+        donor: ev.donor,
+        amount: ev.amount,
+        message: ev.message,
+        type: ev.type || 'bank-image',
+        transRef: ev.transRef,
+        createdAt: ev.createdAt,
+        audioBase64: ev.audioBase64 || null,
+        sampleRate: ev.ttsEnabled === false ? 0 : ev.sampleRate || 24000
+      })
+      .onConflictDoNothing()
+      .returning({ id: donations.id })
+    return rows.length > 0
   } catch {
     return false
   }
 }
 
 export async function listDonations(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   limit = 100,
   since = 0,
   includeTest = false
 ): Promise<DonateEvent[]> {
-  if (!db) return []
   await ensureSchema(db)
-  const sql = includeTest
-    ? 'SELECT id, donor, amount, message, type, trans_ref as transRef, created_at as createdAt, audio_base64 as audioBase64, sample_rate as sampleRate FROM donations WHERE created_at > ? ORDER BY created_at DESC LIMIT ?'
-    : "SELECT id, donor, amount, message, type, trans_ref as transRef, created_at as createdAt, audio_base64 as audioBase64, sample_rate as sampleRate FROM donations WHERE created_at > ? AND type != 'test' ORDER BY created_at DESC LIMIT ?"
-  const { results } = await db.prepare(sql).bind(since, limit).all()
-  return (results || []).map((r: any) => {
-    const sr = r.sampleRate === null || r.sampleRate === undefined ? 24000 : Number(r.sampleRate)
+  const base = and(gt(donations.createdAt, since), includeTest ? undefined : ne(donations.type, 'test'))
+  const rows = await db
+    .select()
+    .from(donations)
+    .where(base)
+    .orderBy(desc(donations.createdAt))
+    .limit(limit)
+  return rows.map((r) => {
+    const sr = r.sampleRate === null || r.sampleRate === undefined ? 24000 : num(r.sampleRate)
     return {
-      id: r.id,
-      donor: r.donor,
-      amount: Number(r.amount),
-      message: r.message,
-      type: r.type,
-      transRef: r.transRef,
-      audioBase64: r.audioBase64 || undefined,
+      id: str(r.id),
+      donor: str(r.donor),
+      amount: num(r.amount),
+      message: str(r.message),
+      type: str(r.type),
+      transRef: str(r.transRef),
+      audioBase64: r.audioBase64 ? str(r.audioBase64) : undefined,
       sampleRate: sr || 24000,
       ttsEnabled: sr > 0,
-      createdAt: Number(r.createdAt)
+      createdAt: num(r.createdAt)
     }
   })
 }
@@ -367,23 +333,24 @@ export type LeaderboardEntry = {
   count: number
 }
 
-export async function getLeaderboard(
-  db: D1Binding | undefined,
-  limit = 5
-): Promise<LeaderboardEntry[]> {
-  if (!db) return []
+export async function getLeaderboard(db: AppDatabase, limit = 5): Promise<LeaderboardEntry[]> {
   await ensureSchema(db)
   const safeLimit = Math.max(1, Math.min(50, Number(limit) || 5))
-  const { results } = await db
-    .prepare(
-      "SELECT donor, SUM(amount) as total, COUNT(*) as count FROM donations WHERE type != 'test' GROUP BY donor ORDER BY total DESC LIMIT ?"
-    )
-    .bind(safeLimit)
-    .all()
-  return (results || []).map((r: any) => ({
-    donor: String(r.donor || 'Anonymous'),
-    total: Number(r.total || 0),
-    count: Number(r.count || 0)
+  const rows = await db
+    .select({
+      donor: donations.donor,
+      total: sql`sum(${donations.amount})`.as('total'),
+      count: sql`count(*)`.as('count')
+    })
+    .from(donations)
+    .where(ne(donations.type, 'test'))
+    .groupBy(donations.donor)
+    .orderBy(desc(sql`sum(${donations.amount})`))
+    .limit(safeLimit)
+  return rows.map((r) => ({
+    donor: str(r.donor) || 'Anonymous',
+    total: num(r.total),
+    count: num(r.count)
   }))
 }
 
@@ -469,51 +436,47 @@ export function computeLiveSubathonState(state: SubathonState, now = Date.now())
   }
 }
 
-export async function getSubathonState(db: D1Binding | undefined): Promise<SubathonState> {
+export async function getSubathonState(db: AppDatabase): Promise<SubathonState> {
   const now = Date.now()
-  if (!db) {
-    if (!memorySubathonState) {
-      memorySubathonState = createDefaultSubathonState(now)
-    }
-    return computeLiveSubathonState(memorySubathonState, now)
+  if (!memorySubathonState) {
+    memorySubathonState = createDefaultSubathonState(now)
   }
-
   await ensureSchema(db)
-  const row = (await db.prepare('SELECT * FROM subathon_state WHERE id = 1').first()) as any
+  const [row] = await db.select().from(subathonState).where(eq(subathonState.id, 1)).limit(1)
   if (!row) {
-    const def = memorySubathonState ? computeLiveSubathonState(memorySubathonState, now) : createDefaultSubathonState(now)
+    const def = computeLiveSubathonState(memorySubathonState, now)
     await saveSubathonState(db, def)
     return def
   }
 
-  const rateCoins = Number(row.rate_coins) > 0 ? Number(row.rate_coins) : 10
-  const rateSeconds = Number(row.rate_seconds) > 0 ? Number(row.rate_seconds) : (Number(row.sec_per_thb || 6) * rateCoins)
+  const rateCoins = num(row.rateCoins) > 0 ? num(row.rateCoins) : 10
+  const rateSeconds = num(row.rateSeconds) > 0 ? num(row.rateSeconds) : num(row.secPerThb, 6) * rateCoins
   const secPerThb = Number((rateSeconds / rateCoins).toFixed(4)) || 6
 
   const parsed: SubathonState = {
-    title: String(row.title || 'SUBATHON'),
-    endMsg: String(row.end_msg || 'TIME UP'),
-    initialSeconds: Number(row.initial_seconds ?? 600),
-    remainingSeconds: Number(row.remaining_seconds ?? 600),
-    targetEpoch: Number(row.target_epoch ?? 0),
-    isRunning: Number(row.is_running ?? 1) !== 0,
+    title: str(row.title) || 'SUBATHON',
+    endMsg: str(row.endMsg) || 'TIME UP',
+    initialSeconds: num(row.initialSeconds, 600),
+    remainingSeconds: num(row.remainingSeconds, 600),
+    targetEpoch: num(row.targetEpoch),
+    isRunning: bool(row.isRunning, true),
     rateCoins,
     rateSeconds,
     secPerThb,
-    maxHours: Number(row.max_hours || 24),
-    totalAddedSecs: Number(row.total_added_secs || 0),
-    totalDonations: Number(row.total_donations || 0),
-    tiktokUsername: String(row.tiktok_username || ''),
-    tiktokAutoSync: row.tiktok_auto_sync === null || row.tiktok_auto_sync === undefined ? true : Number(row.tiktok_auto_sync) !== 0,
-    tiktokIsLive: Number(row.tiktok_is_live ?? 0) !== 0,
-    updatedAt: Number(row.updated_at || now)
+    maxHours: num(row.maxHours, 24),
+    totalAddedSecs: num(row.totalAddedSecs),
+    totalDonations: num(row.totalDonations),
+    tiktokUsername: str(row.tiktokUsername),
+    tiktokAutoSync: bool(row.tiktokAutoSync, true),
+    tiktokIsLive: bool(row.tiktokIsLive, false),
+    updatedAt: num(row.updatedAt, now)
   }
   const live = computeLiveSubathonState(parsed, now)
   memorySubathonState = live
   return live
 }
 
-export async function saveSubathonState(db: D1Binding | undefined, state: SubathonState): Promise<SubathonState> {
+export async function saveSubathonState(db: AppDatabase, state: SubathonState): Promise<SubathonState> {
   const now = Date.now()
   const rateCoins = Math.max(0.01, Number(state.rateCoins) || 10)
   const rateSeconds = Math.max(1, Math.round(Number(state.rateSeconds) || 60))
@@ -529,38 +492,55 @@ export async function saveSubathonState(db: D1Binding | undefined, state: Subath
     updatedAt: now
   }
   memorySubathonState = updated
-  if (!db) return computeLiveSubathonState(updated, now)
-
   await ensureSchema(db)
   await db
-    .prepare(
-      'INSERT INTO subathon_state (id, title, end_msg, initial_seconds, remaining_seconds, target_epoch, is_running, rate_coins, rate_seconds, sec_per_thb, max_hours, total_added_secs, total_donations, tiktok_username, tiktok_auto_sync, tiktok_is_live, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, end_msg = excluded.end_msg, initial_seconds = excluded.initial_seconds, remaining_seconds = excluded.remaining_seconds, target_epoch = excluded.target_epoch, is_running = excluded.is_running, rate_coins = excluded.rate_coins, rate_seconds = excluded.rate_seconds, sec_per_thb = excluded.sec_per_thb, max_hours = excluded.max_hours, total_added_secs = excluded.total_added_secs, total_donations = excluded.total_donations, tiktok_username = excluded.tiktok_username, tiktok_auto_sync = excluded.tiktok_auto_sync, tiktok_is_live = excluded.tiktok_is_live, updated_at = excluded.updated_at'
-    )
-    .bind(
-      updated.title,
-      updated.endMsg,
-      updated.initialSeconds,
-      updated.remainingSeconds,
-      updated.targetEpoch,
-      updated.isRunning ? 1 : 0,
-      updated.rateCoins,
-      updated.rateSeconds,
-      updated.secPerThb,
-      updated.maxHours,
-      updated.totalAddedSecs,
-      updated.totalDonations,
-      updated.tiktokUsername || '',
-      updated.tiktokAutoSync ? 1 : 0,
-      updated.tiktokIsLive ? 1 : 0,
-      updated.updatedAt
-    )
-    .run()
-
+    .insert(subathonState)
+    .values({
+      id: 1,
+      title: updated.title,
+      endMsg: updated.endMsg,
+      initialSeconds: updated.initialSeconds,
+      remainingSeconds: updated.remainingSeconds,
+      targetEpoch: updated.targetEpoch,
+      isRunning: updated.isRunning,
+      rateCoins: updated.rateCoins,
+      rateSeconds: updated.rateSeconds,
+      secPerThb: updated.secPerThb,
+      maxHours: updated.maxHours,
+      totalAddedSecs: updated.totalAddedSecs,
+      totalDonations: updated.totalDonations,
+      tiktokUsername: updated.tiktokUsername || '',
+      tiktokAutoSync: updated.tiktokAutoSync,
+      tiktokIsLive: updated.tiktokIsLive,
+      updatedAt: updated.updatedAt
+    })
+    .onConflictDoUpdate({
+      target: subathonState.id,
+      set: {
+        title: updated.title,
+        endMsg: updated.endMsg,
+        initialSeconds: updated.initialSeconds,
+        remainingSeconds: updated.remainingSeconds,
+        targetEpoch: updated.targetEpoch,
+        isRunning: updated.isRunning,
+        rateCoins: updated.rateCoins,
+        rateSeconds: updated.rateSeconds,
+        secPerThb: updated.secPerThb,
+        maxHours: updated.maxHours,
+        totalAddedSecs: updated.totalAddedSecs,
+        totalDonations: updated.totalDonations,
+        tiktokUsername: updated.tiktokUsername || '',
+        tiktokAutoSync: updated.tiktokAutoSync,
+        tiktokIsLive: updated.tiktokIsLive,
+        updatedAt: updated.updatedAt
+      }
+    })
+    .returning({ id: subathonState.id })
   return computeLiveSubathonState(updated, now)
 }
 
 export async function applySubathonCommand(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   cmd: Record<string, any>
 ): Promise<SubathonState> {
   const now = Date.now()
@@ -658,7 +638,7 @@ export async function applySubathonCommand(
 }
 
 export async function addSubathonDonation(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   amount: number
 ): Promise<SubathonState> {
   const now = Date.now()

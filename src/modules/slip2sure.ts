@@ -1,5 +1,5 @@
 import type { AppConfig } from './config'
-import { isSlipUsed, type D1Binding } from './db'
+import { isSlipUsed, type AppDatabase } from './db'
 
 export type SlipVerifyResult =
   | { ok: true; amount: number; senderName: string; transRef: string; raw: any }
@@ -28,7 +28,7 @@ function matchMaskedDigits(masked: string, expected: string): boolean {
 export async function verifySlip(
   form: FormData,
   cfg: AppConfig,
-  db?: D1Binding
+  db: AppDatabase
 ): Promise<SlipVerifyResult> {
   if (!cfg.s2sKey) {
     return { ok: false, status: 400, error: 'Missing SLIP2SURE_API_KEY' }

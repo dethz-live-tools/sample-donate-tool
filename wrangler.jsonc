@@ -3,6 +3,7 @@
   "name": "donate-tools",
   "account_id": "407b5567b1ed97c1e84dd8a750048516",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "main": "./src/index.tsx",
   "vars": {
     "ACCOUNT_NAME": "นายศุภกฤต ภิญโญวรพจน์",

@@ -48,6 +48,20 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
 
 See the dedicated [**Quick Start Guide**](./docs/QUICKSTART.md) for full setup instructions, local development, and deployment steps.
 
+Or with Docker (no Cloudflare account needed; local `workerd` + D1 in a volume):
+
+```sh
+cp .env.example .env && docker compose up -d --build
+```
+
+Postgres instead of D1 (D1 is default; `POSTGRES_URL` takes precedence, tables auto-create on first use) — set `POSTGRES_URL=postgresql://donate:donate@postgres:5432/donate` in `.env`, then:
+
+```sh
+docker compose up -d --build app postgres
+```
+
+Native setup:
+
 ```sh
 # 1. Install dependencies
 bun install

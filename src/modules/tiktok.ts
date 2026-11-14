@@ -1,7 +1,8 @@
 import { Hono, type Context } from 'hono'
 import { dashboardAuth, getTikTokWebhookKey, isValidSession } from './auth'
 import type { Bindings } from './config'
-import { addSubathonDonation, applySubathonCommand, getSubathonState, type D1Binding, type SubathonState } from './db'
+import { getDb } from '../db/client'
+import { addSubathonDonation, applySubathonCommand, getSubathonState, type AppDatabase, type SubathonState } from './db'
 import { broadcastControl } from './events'
 
 const seenGiftIds = new Set<string>()
@@ -94,7 +95,7 @@ export async function checkTikTokUserLive(rawUsername: string): Promise<boolean 
 }
 
 export async function syncSubathonWithTikTokLive(
-  db: D1Binding | undefined,
+  db: AppDatabase,
   forceCheck = false
 ): Promise<SubathonState> {
   const current = await getSubathonState(db)
@@ -176,7 +177,7 @@ async function handleTikTokLiveStatusWebhook(c: Context<{ Bindings: Bindings }>)
     nextLive = false
   }
 
-  const current = await getSubathonState(c.env?.DB)
+  const current = await getSubathonState(getDb(c.env))
   const targetUsername =
     typeof rawUsername === 'string' ? rawUsername.replace(/^@+/, '').trim() : current.tiktokUsername || ''
 
@@ -196,7 +197,7 @@ async function handleTikTokLiveStatusWebhook(c: Context<{ Bindings: Bindings }>)
     }
   }
 
-  const updated = await applySubathonCommand(c.env?.DB, {
+  const updated = await applySubathonCommand(getDb(c.env), {
     cmd: 'tiktok_live',
     ...(typeof rawUsername === 'string' ? { tiktokUsername: targetUsername } : {}),
     ...(typeof rawAutoSync === 'boolean'
@@ -343,10 +344,10 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
     )
   }
 
-  let current = await getSubathonState(c.env?.DB)
+  let current = await getSubathonState(getDb(c.env))
   // Receiving a live gift when auto-sync is enabled means the TikTok stream is LIVE
   if (current.tiktokAutoSync && !current.tiktokIsLive) {
-    current = await applySubathonCommand(c.env?.DB, {
+    current = await applySubathonCommand(getDb(c.env), {
       cmd: 'tiktok_live',
       tiktokIsLive: true
     })
@@ -405,7 +406,7 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
   }
 
   const addedSeconds = Math.round(steps * rateSeconds)
-  const updatedState = await addSubathonDonation(c.env?.DB, coins)
+  const updatedState = await addSubathonDonation(getDb(c.env), coins)
 
   broadcastControl({
     action: 'subathon',

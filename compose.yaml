@@ -1,0 +1,38 @@
+# Database backends (pick one):
+# - D1 (default, no config): `docker compose up -d --build app`
+# - Postgres: `docker compose up -d --build app postgres` and set POSTGRES_URL in .env
+#   (compose default: postgresql://donate:donate@postgres:5432/donate)
+services:
+  app:
+    build: .
+    ports:
+      - "4173:4173"
+    env_file: .env
+    environment:
+      # vite preview rejects unknown Host headers; allow the pentest worker's host
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: host.docker.internal
+    volumes:
+      - d1:/app/.wrangler/state # D1 (SQLite) state; unused in Postgres mode
+    # behind a domain / reverse proxy, also set:
+    # environment:
+    #   __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: donate.example.com
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: donate
+      POSTGRES_PASSWORD: donate
+      POSTGRES_DB: donate
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U donate"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  d1:
+  pgdata:

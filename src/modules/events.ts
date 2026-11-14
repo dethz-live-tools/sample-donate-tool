@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { dashboardAuth, isValidSession } from './auth'
 import { getConfig, type Bindings } from './config'
+import { getDb } from '../db/client'
 import {
   applySubathonCommand,
   getFilterConfig,
@@ -63,7 +64,7 @@ const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts',
 
 export async function resolveTtsConfig(env?: Bindings): Promise<TtsSettings> {
   const cfg = getConfig(env)
-  const val = await getTtsConfig(env?.DB, runtimeTtsConfig?.enabled ?? cfg.ttsEnabled)
+  const val = await getTtsConfig(getDb(env), runtimeTtsConfig?.enabled ?? cfg.ttsEnabled)
   runtimeTtsConfig = val
   return val
 }
@@ -74,7 +75,7 @@ export async function resolveTtsEnabled(env?: Bindings): Promise<boolean> {
 }
 
 export async function updateTtsConfig(env: Bindings | undefined, update: Partial<TtsSettings>): Promise<TtsSettings> {
-  const val = await setTtsConfig(env?.DB, update)
+  const val = await setTtsConfig(getDb(env), update)
   runtimeTtsConfig = val
   broadcastOverlayStatus()
   broadcastControl({
@@ -94,13 +95,13 @@ export async function updateTtsEnabled(env: Bindings | undefined, enabled: boole
 }
 
 export async function resolveFilterConfig(env?: Bindings): Promise<FilterSettings> {
-  const val = await getFilterConfig(env?.DB)
+  const val = await getFilterConfig(getDb(env))
   runtimeFilterConfig = val
   return val
 }
 
 export async function updateFilterConfig(env: Bindings | undefined, update: Partial<FilterSettings>): Promise<FilterSettings> {
-  const val = await setFilterConfig(env?.DB, update)
+  const val = await setFilterConfig(getDb(env), update)
   runtimeFilterConfig = val
   broadcastOverlayStatus()
   return val
@@ -301,7 +302,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     const minSince = Date.now() - 60_000
     const rawSince = Number(c.req.query('since'))
     const since = Number.isFinite(rawSince) ? Math.max(rawSince, minSince) : minSince
-    const items = await listDonations(c.env?.DB, 20, since, true)
+    const items = await listDonations(getDb(c.env), 20, since, true)
     return c.json({
       ok: true,
       items: items.reverse().map((ev) => sanitizeEvent(ev, isAdmin)),
@@ -316,11 +317,11 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/leaderboard', async (c) => {
     const rawLimit = Number(c.req.query('limit'))
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 5
-    const items = await getLeaderboard(c.env?.DB, limit)
+    const items = await getLeaderboard(getDb(c.env), limit)
     return c.json({ ok: true, items })
   })
   .get('/subathon', async (c) => {
-    const state = await syncSubathonWithTikTokLive(c.env?.DB)
+    const state = await syncSubathonWithTikTokLive(getDb(c.env))
     return c.json({ ok: true, state })
   })
   .get('/heartbeat', dashboardAuth, (c) => {
@@ -366,7 +367,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
 
     let subathonState: SubathonState | undefined
     if (body.cmd !== 'bg' && (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown'))) {
-      subathonState = await applySubathonCommand(c.env?.DB, body)
+      subathonState = await applySubathonCommand(getDb(c.env), body)
     }
 
     const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
