@@ -1,11 +1,14 @@
 import type { DonateEvent, OverlayStatus } from '../modules/events'
+import { t, type Locale } from '../i18n'
 
 export function DashboardPage({
   items,
-  overlayStatus
+  overlayStatus,
+  lang = 'th'
 }: {
   items: DonateEvent[]
   overlayStatus?: OverlayStatus
+  lang?: Locale
 }) {
   const totalAmount = items.reduce((sum, h) => sum + h.amount, 0)
   const overlayOnline = Boolean(overlayStatus?.online)
@@ -250,7 +253,7 @@ export function DashboardPage({
                 <input
                   type="text"
                   id="dashFilterWords"
-                  placeholder="คำหยาบ, คำต้องห้าม, badword1, badword2"
+                  placeholder={t(lang, 'placeholder_badwords')}
                   style="margin-bottom:0;"
                 />
               </div>
@@ -368,7 +371,7 @@ export function DashboardPage({
               const res = await fetch('/api/donate/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ donor: 'TEST DONOR', amount: 99, message: 'ทดสอบระบบแจ้งเตือนโดเนท!' })
+                body: JSON.stringify({ donor: 'TEST DONOR', amount: 99, message: __t('test_message') })
               });
               const data = await res.json();
               if (!res.ok || !data.ok) throw new Error(data.error || 'TEST FAILED');
@@ -507,7 +510,7 @@ export function DashboardPage({
               previewBtn.textContent = 'LOADING...';
             }
             try {
-              const sampleText = 'ทดสอบระบบเสียง Edge TTS โดเนทสำเร็จครับ';
+              const sampleText = __t('tts_sample');
               const url = '/api/tts?text=' + encodeURIComponent(sampleText) +
                 '&voice=' + encodeURIComponent(voice || '') +
                 '&rate=' + encodeURIComponent(rate || '') +

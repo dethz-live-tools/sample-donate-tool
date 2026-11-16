@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
+import { getCookie } from 'hono/cookie'
 import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
 import { authRoute, dashboardAuth, getTikTokWebhookKey, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
+import { resolveLocale, t, type Locale } from './i18n'
 import { getDb } from './db/client'
 import { getAdmin, getLeaderboard, getSubathonState, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
@@ -31,6 +33,11 @@ app.onError((err, c) => {
 })
 
 app.use(secureHeaders())
+app.use('*', (c, next) => {
+  // ponytail: per-request locale for i18n (query > cookie > Accept-Language > env > th)
+  c.set('lang', resolveLocale(c.req.query(), getCookie(c, 'lang'), c.req.header('accept-language'), c.env?.DEFAULT_LANG))
+  return next()
+})
 app.use('*', async (c, next) => {
   if (c.req.header('authorization')?.toLowerCase().startsWith('bearer ')) return next()
   if (
@@ -96,7 +103,7 @@ app.get('/login', async (c) => {
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
   const [items] = await Promise.all([listDonations(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
-  return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} />)
+  return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
 app.get('/overlay/control', dashboardAuth, async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
@@ -104,7 +111,7 @@ app.get('/overlay/control', dashboardAuth, async (c) => {
 })
 app.get('/overlay/control/alert', dashboardAuth, async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
-  return c.render(<AlertControlPage overlayStatus={getOverlayStatus()} />)
+  return c.render(<AlertControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
 app.get('/overlay/control/leaderboard', dashboardAuth, async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
@@ -126,6 +133,7 @@ app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
       overlayStatus={getOverlayStatus()}
       subathonState={subathonState}
       tiktokWebhookKey={tiktokWebhookKey}
+      lang={c.get('lang') as Locale}
     />
   )
 })

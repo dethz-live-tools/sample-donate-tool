@@ -500,7 +500,7 @@ export function HomePage({
               const fd = new FormData(form);
               // ponytail: verify turnstile token before submit
               if (document.querySelector('.cf-turnstile') && !fd.get('cf-turnstile-response')) {
-                throw new Error('กรุณายืนยันความปลอดภัย (Turnstile) ก่อนส่ง');
+                throw new Error(__t('err_turnstile_required'));
               }
               const res = await fetch('/api/donate', { method: 'POST', body: fd });
               const data = await res.json();

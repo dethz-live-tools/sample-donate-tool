@@ -110,6 +110,7 @@ Complete documentation is maintained in the [`docs/`](./docs) directory:
 | Document | Topic | Description |
 | :--- | :--- | :--- |
 | [**docs/QUICKSTART.md**](./docs/QUICKSTART.md) | [Quick Start Guide](./docs/QUICKSTART.md) | Prerequisites, local development, D1 configuration, and deployment commands. |
+| [**docs/DATABASE.md**](./docs/DATABASE.md) | [Database Layer](./docs/DATABASE.md) | Drizzle layer, D1 vs Postgres backend selection, schema auto-init. |
 | [**docs/README.md**](./docs/README.md) | [Setup & Architecture](./docs/README.md#1-environment-variables) | Environment variables, Cloudflare D1 & Wrangler secrets configuration. |
 | [**docs/README.md**](./docs/README.md) | [Slip2Sure Error Codes](./docs/README.md#3-slip2sure-verification--error-codes) | Validation rules, receiver matching, and upstream Slip2Sure error code troubleshooting. |
 | [**docs/README.md**](./docs/README.md) | [OBS Studio Setup](./docs/README.md#4-obs-studio-setup) | Browser source configuration, dimensions, transparent audio routing, and live controls. |

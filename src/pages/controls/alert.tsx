@@ -1,7 +1,8 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
+import { t, type Locale } from '../../i18n'
 
-export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+export function AlertControlPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
   const ttsEnabled = overlayStatus?.ttsEnabled ?? true
   const ttsVoice = overlayStatus?.ttsVoice || 'th-TH-NiwatNeural'
   const ttsRate = overlayStatus?.ttsRate || '+0%'
@@ -93,7 +94,7 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
             previewBtn.textContent = 'LOADING AUDIO...';
           }
           try {
-            const sampleText = 'ทดสอบเสียงข้อความโดเนท ขอบคุณสำหรับการสนับสนุนครับ';
+            const sampleText = __t('tts_sample');
             const url = '/api/tts?text=' + encodeURIComponent(sampleText) +
               '&voice=' + encodeURIComponent(voice || '') +
               '&rate=' + encodeURIComponent(rate || '') +
@@ -401,7 +402,7 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
                 <input
                   type="text"
                   id="filterWordsInput"
-                  placeholder="คำต้องห้าม, คำหยาบ, badword"
+                  placeholder={t(lang, 'placeholder_badwords')}
                   style="margin-bottom:0;"
                 />
               </div>
@@ -429,7 +430,7 @@ export function AlertControlPage({ overlayStatus }: { overlayStatus?: OverlaySta
               </div>
             </div>
             <label>MESSAGE (EDGE TTS AUDIO)</label>
-            <input type="text" id="testMsg" value="ทดสอบระบบแจ้งเตือนโดเนท!" required />
+            <input type="text" id="testMsg" value={t(lang, 'test_message')} required />
             <button type="submit" id="submitTestBtn" style="font-size:15px; padding:12px 24px;">
               DISPATCH TEST DONATE TO OVERLAY
             </button>

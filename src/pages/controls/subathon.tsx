@@ -1,13 +1,16 @@
 import type { SubathonState } from '../../modules/db'
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
+import { t, type Locale } from '../../i18n'
 
 export function SubathonControlPage({
   overlayStatus,
   subathonState,
-  tiktokWebhookKey = ''
+  tiktokWebhookKey = '',
+  lang = 'th'
 }: {
   overlayStatus?: OverlayStatus
+  lang?: Locale
   subathonState?: SubathonState
   tiktokWebhookKey?: string
 }) {
@@ -321,7 +324,7 @@ export function SubathonControlPage({
           const btn = document.getElementById('subTestBtn');
           const donor = document.getElementById('subTestDonor')?.value || 'SUBATHON SUPPORTER';
           const amount = Number(customAmount ?? document.getElementById('subTestAmount')?.value ?? 100);
-          const message = document.getElementById('subTestMessage')?.value || 'เพิ่มเวลา Subathon!';
+          const message = document.getElementById('subTestMessage')?.value || __t('test_message_subathon');
           const ttsEnabled = Boolean(document.getElementById('subTestTtsToggle')?.checked);
           if (btn) {
             btn.disabled = true;
@@ -964,7 +967,7 @@ export function SubathonControlPage({
               </div>
               <div>
                 <label>TEST MESSAGE</label>
-                <input type="text" id="subTestMessage" value="เพิ่มเวลา Submatron!" />
+                <input type="text" id="subTestMessage" value={t(lang, 'test_message_subathon')} />
               </div>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">

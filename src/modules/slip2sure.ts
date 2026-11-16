@@ -1,5 +1,6 @@
 import type { AppConfig } from './config'
 import { isSlipUsed, type AppDatabase } from './db'
+import { t, type Locale } from '../i18n'
 
 export type SlipVerifyResult =
   | { ok: true; amount: number; senderName: string; transRef: string; raw: any }
@@ -28,27 +29,29 @@ function matchMaskedDigits(masked: string, expected: string): boolean {
 export async function verifySlip(
   form: FormData,
   cfg: AppConfig,
-  db: AppDatabase
+  db: AppDatabase,
+  locale: Locale = 'th'
 ): Promise<SlipVerifyResult> {
+  const T = (key: Parameters<typeof t>[1]) => t(locale, key)
   if (!cfg.s2sKey) {
     return { ok: false, status: 400, error: 'Missing SLIP2SURE_API_KEY' }
   }
 
   const type = String(form.get('type') || 'bank-image')
   if (type === 'truemoney' && !cfg.truewalletId) {
-    return { ok: false, status: 400, error: 'ยังไม่เปิดรับช่องทาง TrueMoney' }
+    return { ok: false, status: 400, error: T('err_truemoney_closed') }
   }
   if (type !== 'truemoney' && !cfg.bankAccount && !cfg.promptpayId) {
-    return { ok: false, status: 400, error: 'ยังไม่เปิดรับช่องทางธนาคาร / PromptPay' }
+    return { ok: false, status: 400, error: T('err_bank_closed') }
   }
 
   const rawFile = form.get('image')
   if (!rawFile || typeof rawFile === 'string' || !(rawFile instanceof File) || !rawFile.size) {
-    return { ok: false, status: 400, error: 'กรุณาแนบรูปสลิป (PNG/JPG)' }
+    return { ok: false, status: 400, error: T('err_slip_required') }
   }
   const file = rawFile as File
   if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    return { ok: false, status: 400, error: 'รองรับเฉพาะไฟล์รูปภาพ PNG/JPG ขนาดไม่เกิน 5MB' }
+    return { ok: false, status: 400, error: T('err_file_type') }
   }
   const upstream = new FormData()
   const safeName = (file.name || 'slip.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50) || 'slip.jpg'
@@ -63,7 +66,7 @@ export async function verifySlip(
     body: upstream
   }).catch(() => null)
   if (!s2sRes) {
-    return { ok: false, status: 502, code: 'UPSTREAM_ERROR', error: 'ไม่สามารถเชื่อมต่อระบบตรวจสลิปได้' }
+    return { ok: false, status: 502, code: 'UPSTREAM_ERROR', error: T('err_upstream') }
   }
 
   const s2sData = (await s2sRes.json().catch(() => ({}))) as any
@@ -72,20 +75,20 @@ export async function verifySlip(
       ok: false,
       status: s2sRes.status >= 400 && s2sRes.status < 600 ? s2sRes.status : 400,
       code: s2sData?.result || 'ERROR',
-      error: s2sData?.message || 'ตรวจสอบสลิปไม่สำเร็จ'
+      error: s2sData?.message || T('err_verify_failed')
     }
   }
 
   const info = s2sData.info || {}
   const amount = Number(info.amount || 0)
   if (!Number.isFinite(amount) || amount < 10) {
-    return { ok: false, status: 400, code: 'MIN_AMOUNT', error: 'จำนวนเงินโดเนทขั้นต่ำ 10 บาท' }
+    return { ok: false, status: 400, code: 'MIN_AMOUNT', error: T('err_min_amount') }
   }
 
   if (type === 'truemoney' && cfg.truewalletId) {
     const toMobile = String(info.account_to_mobile || '')
     if (!toMobile || !matchMaskedDigits(toMobile, cfg.truewalletId)) {
-      return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: 'เบอร์รับเงิน TrueMoney ไม่ตรงกับระบบ' }
+      return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: T('err_wrong_receiver_truemoney') }
     }
   } else if (type !== 'truemoney' && (cfg.bankAccount || cfg.promptpayId)) {
     const recvAcc = String(info?.receiver?.account?.value || '')
@@ -97,22 +100,22 @@ export async function verifySlip(
       ? matchMaskedDigits(recvProxy, cfg.promptpayId) || matchMaskedDigits(recvAcc, cfg.promptpayId)
       : false
     if ((!recvAcc && !recvProxy) || (!bankOk && !ppOk)) {
-      return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: 'บัญชีหรือพร้อมเพย์ผู้รับไม่ตรงกับระบบ' }
+      return { ok: false, status: 400, code: 'WRONG_RECEIVER', error: T('err_wrong_receiver_bank') }
     }
   }
 
   const refId = String(info.transRef || info.transaction_id || info.payload || '').trim()
   if (!refId) {
-    return { ok: false, status: 400, code: 'INVALID_SLIP', error: 'ไม่พบรหัสอ้างอิงสลิป' }
+    return { ok: false, status: 400, code: 'INVALID_SLIP', error: T('err_invalid_slip') }
   }
   if (s2sData.is_exist || (await isSlipUsed(db, refId))) {
-    return { ok: false, status: 400, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }
+    return { ok: false, status: 400, code: 'DUPLICATE_SLIP', error: T('err_duplicate_slip') }
   }
 
   return {
     ok: true,
     amount,
-    senderName: info?.sender?.displayName || info?.account_from_name || 'ผู้สนับสนุน',
+    senderName: info?.sender?.displayName || info?.account_from_name || T('speech_supporter'),
     transRef: refId,
     raw: s2sData
   }

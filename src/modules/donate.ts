@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { dashboardAuth } from './auth'
 import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
+import { t, type Locale } from '../i18n'
 import { addSubathonDonation, insertDonation } from './db'
 import { broadcast, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
 import { filterWordContent } from './filter'
@@ -88,6 +89,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   })
   .post('/session', async (c) => {
     cleanSessions()
+    const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
     const contentType = c.req.header('content-type') || ''
     let sid = ''
     let donor: string | undefined
@@ -129,7 +131,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
 
     if (file) {
       if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        return c.json({ ok: false, error: 'รองรับเฉพาะไฟล์รูปภาพ PNG/JPG ขนาดไม่เกิน 5MB' }, 400)
+        return c.json({ ok: false, error: T('err_file_type') }, 400)
       }
       existing.slipBuffer = await file.arrayBuffer()
       existing.slipName = (file.name || 'slip.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50) || 'slip.jpg'
@@ -155,6 +157,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   })
   .post('/', async (c) => {
     cleanSessions()
+    const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
     const cfg = getConfig(c.env)
     const form = await c.req.formData()
     const sid = sanitizeSid(form.get('sid'))
@@ -175,7 +178,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     if (turnstileSecret) {
       const token = String(form.get('cf-turnstile-response') || '')
       if (!token) {
-        return c.json({ ok: false, code: 'TURNSTILE_REQUIRED', error: 'กรุณายืนยันความปลอดภัย (Turnstile)' }, 400)
+        return c.json({ ok: false, code: 'TURNSTILE_REQUIRED', error: T('err_turnstile_required') }, 400)
       }
       const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
         method: 'POST',
@@ -190,17 +193,17 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
         ? ((await verifyRes.json().catch(() => ({ success: false }))) as { success: boolean; 'error-codes'?: string[] })
         : { success: false }
       if (!outcome.success) {
-        return c.json({ ok: false, code: 'TURNSTILE_FAILED', error: 'การตรวจสอบ Turnstile ไม่ถูกต้อง' }, 400)
+        return c.json({ ok: false, code: 'TURNSTILE_FAILED', error: T('err_turnstile_failed') }, 400)
       }
     }
 
-    const verified = await verifySlip(form, cfg, getDb(c.env))
+  const verified = await verifySlip(form, cfg, getDb(c.env), c.get('lang') as Locale | undefined)
     if (!verified.ok) {
       return c.json({ ok: false, code: verified.code, error: verified.error }, verified.status as any)
     }
 
     if (inflightRefs.has(verified.transRef)) {
-      return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
+      return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: T('err_duplicate_slip') }, 400)
     }
     inflightRefs.add(verified.transRef)
 
@@ -218,7 +221,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
         const fMsg = filterWordContent(msg, filterConfig)
         donor = fDonor.cleanText
         msg = fMsg.cleanText
-        speechDonor = fDonor.speechText || 'ผู้บริจาค'
+        speechDonor = fDonor.speechText || T('speech_supporter')
         speechMsg = fMsg.speechText
         if (fDonor.shouldMuteTts || fMsg.shouldMuteTts) {
           shouldMuteTts = true
@@ -228,8 +231,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       const ttsConfig = await resolveTtsConfig(c.env)
       const ttsActive = ttsConfig.enabled && !shouldMuteTts
       const speechText = speechMsg
-        ? `${speechDonor} โดเนท ${verified.amount} บาท ${speechMsg}`
-        : `${speechDonor} โดเนท ${verified.amount} บาท`
+        ? `${t((c.get('lang') || 'th') as Locale, 'speech_donation', { donor: speechDonor, amount: verified.amount, message: speechMsg ? ' ' + speechMsg : '' })}`
+        : `${t((c.get('lang') || 'th') as Locale, 'speech_donation', { donor: speechDonor, amount: verified.amount, message: '' })}`
       const tts = ttsActive
         ? await generateEdgeTTS(speechText, {
             voice: ttsConfig.voice,
@@ -252,7 +255,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       }
 
       if (!(await insertDonation(getDb(c.env), ev))) {
-        return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: 'สลิปนี้ถูกใช้งานไปแล้ว' }, 400)
+        return c.json({ ok: false, code: 'DUPLICATE_SLIP', error: T('err_duplicate_slip') }, 400)
       }
       if (sess) {
         sess.slipBuffer = undefined
@@ -270,12 +273,13 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     }
   })
   .post('/test', dashboardAuth, async (c) => {
+    const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any
     const rawDonor = sanitizeInput(String(body.donor || 'TEST DONOR'), 50) || 'TEST DONOR'
     const rawAmt = Number(body.amount)
     const amount = Math.min(1_000_000, Math.max(1, Number.isFinite(rawAmt) ? rawAmt : 99))
-    const rawMsg = sanitizeInput(String(body.message || 'ทดสอบระบบแจ้งเตือนโดเนท!'), 200)
+    const rawMsg = sanitizeInput(String(body.message || T('test_message')), 200)
 
     const filterConfig = await resolveFilterConfig(c.env)
     let donor = rawDonor
@@ -288,7 +292,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       const fMsg = filterWordContent(message, filterConfig)
       donor = fDonor.cleanText
       message = fMsg.cleanText
-      speechDonor = fDonor.speechText || 'ผู้บริจาค'
+      speechDonor = fDonor.speechText || T('speech_supporter')
       speechMsg = fMsg.speechText
       if (fDonor.shouldMuteTts || fMsg.shouldMuteTts) {
         shouldMuteTts = true
@@ -300,7 +304,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     const voice = typeof body.voice === 'string' && body.voice ? body.voice : ttsConfig.voice
     const rate = typeof body.rate === 'string' ? body.rate : ttsConfig.rate
     const pitch = typeof body.pitch === 'string' ? body.pitch : ttsConfig.pitch
-    const speechText = speechMsg ? `${speechDonor} โดเนท ${amount} บาท ${speechMsg}` : `${speechDonor} โดเนท ${amount} บาท`
+    const speechText = speechMsg ? `${t((c.get('lang') || 'th') as Locale, 'speech_donation', { donor: speechDonor, amount, message: speechMsg ? ' ' + speechMsg : '' })}` : `${t((c.get('lang') || 'th') as Locale, 'speech_donation', { donor: speechDonor, amount, message: '' })}`
     const tts = ttsEnabled
       ? await generateEdgeTTS(speechText, { voice, rate, pitch })
       : { sampleRate: 0 }

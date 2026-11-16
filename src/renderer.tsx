@@ -1,9 +1,11 @@
 import { jsxRenderer } from 'hono/jsx-renderer'
 import { Link, ViteClient } from 'vite-ssr-components/hono'
+import { clientI18n, type Locale } from './i18n'
 
-export const renderer = jsxRenderer(({ children }) => {
+export const renderer = jsxRenderer((_props, c) => {
+  const lang = (c.get('lang') || 'th') as Locale
   return (
-    <html lang="th">
+    <html lang={lang}>
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,8 +17,9 @@ export const renderer = jsxRenderer(({ children }) => {
         />
         <ViteClient />
         <Link href="/src/style.css" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: clientI18n(lang) }} />
       </head>
-      <body>{children}</body>
+      <body>{_props.children}</body>
     </html>
   )
 })

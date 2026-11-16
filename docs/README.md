@@ -1,5 +1,8 @@
 # Donate Tools Documentation
 
+- **Setup & Architecture** — environment variables, Cloudflare Workers secrets, and the API overview below.
+- [**Database Layer (Drizzle)**](./DATABASE.md) — D1 vs Postgres backend selection, schema, auto-init, column types.
+
 For a fast step-by-step installation and local setup guide, see [**Quick Start Guide**](./QUICKSTART.md).
 
 ## 1. Environment Variables

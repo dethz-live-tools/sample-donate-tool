@@ -129,9 +129,9 @@ export function AlertOverlayPage({
             box.classList.add('show');
 
             const isTtsActive = typeof ev.ttsEnabled === 'boolean' ? ev.ttsEnabled && ttsEnabled : ttsEnabled;
-            const cleanDonor = String(ev.donor || '').replace(/[*＊]+/g, ' ').replace(/\s+/g, ' ').trim() || 'ผู้บริจาค';
+            const cleanDonor = String(ev.donor || '').replace(/[*＊]+/g, ' ').replace(/\s+/g, ' ').trim() || __t('speech_supporter');
             const cleanMsg = String(ev.message || '').replace(/[*＊]+/g, ' ').replace(/\s+/g, ' ').trim();
-            const fullText = cleanDonor + ' โดเนท ' + ev.amount + ' บาท' + (cleanMsg ? ' ' + cleanMsg : '');
+            const fullText = __t('speech_donation', { donor: cleanDonor, amount: ev.amount, message: cleanMsg ? ' ' + cleanMsg : '' }) + (cleanMsg ? ' ' + cleanMsg : '');
 
             if (isTtsActive) {
               try {
