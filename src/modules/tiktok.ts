@@ -7,8 +7,10 @@ import { broadcastControl } from './events'
 
 const seenGiftIds = new Set<string>()
 let lastLiveCheckAt = 0
+let lastWebhookLiveAt = 0
 let lastCheckedUsername = ''
 const LIVE_CHECK_TTL_MS = 15_000
+const WEBHOOK_OVERRIDE_TTL_MS = 120_000
 
 function sanitizeText(val: unknown, maxLen = 50): string {
   return String(val || '')
@@ -108,6 +110,9 @@ export async function syncSubathonWithTikTokLive(
   }
 
   const now = Date.now()
+  if (!forceCheck && now - lastWebhookLiveAt < WEBHOOK_OVERRIDE_TTL_MS) {
+    return current
+  }
   if (!forceCheck && username === lastCheckedUsername && now - lastLiveCheckAt < LIVE_CHECK_TTL_MS) {
     return current
   }
@@ -121,7 +126,7 @@ export async function syncSubathonWithTikTokLive(
 
   const shouldSyncState =
     liveResult !== Boolean(current.tiktokIsLive) ||
-    (liveResult && !current.isRunning && current.remainingSeconds > 0) ||
+    (liveResult && (!current.isRunning || current.remainingSeconds <= 0)) ||
     (!liveResult && current.isRunning)
 
   if (!shouldSyncState) {
@@ -162,7 +167,15 @@ async function handleTikTokLiveStatusWebhook(c: Context<{ Bindings: Bindings }>)
 
   const rawAutoSync = body.tiktokAutoSync ?? body.autoSync ?? c.req.query('autoSync')
   const rawStatus = String(
-    body.status ?? body.event ?? body.state ?? c.req.query('status') ?? c.req.query('event') ?? ''
+    body.status ??
+      body.event ??
+      body.type ??
+      body.state ??
+      c.req.query('status') ??
+      c.req.query('event') ??
+      c.req.query('type') ??
+      c.req.query('state') ??
+      ''
   )
     .toLowerCase()
     .trim()
@@ -171,10 +184,19 @@ async function handleTikTokLiveStatusWebhook(c: Context<{ Bindings: Bindings }>)
   if (typeof body.live === 'boolean') nextLive = body.live
   else if (typeof body.tiktokIsLive === 'boolean') nextLive = body.tiktokIsLive
   else if (typeof body.online === 'boolean') nextLive = body.online
-  else if (['live', 'online', 'start', 'started', 'stream_start', '1', 'true'].includes(rawStatus)) {
+  else if (['live', 'online', 'start', 'started', 'stream_start', 'live_start', '1', 'true'].includes(rawStatus)) {
     nextLive = true
-  } else if (['offline', 'hold', 'pause', 'paused', 'end', 'ended', 'stream_end', '0', 'false'].includes(rawStatus)) {
+  } else if (
+    ['offline', 'hold', 'pause', 'paused', 'end', 'ended', 'stream_end', 'live_end', 'stop', 'stopped', '0', 'false'].includes(
+      rawStatus
+    )
+  ) {
     nextLive = false
+  }
+
+  if (typeof nextLive === 'boolean') {
+    lastWebhookLiveAt = Date.now()
+    lastLiveCheckAt = Date.now()
   }
 
   const current = await getSubathonState(getDb(c.env))
@@ -241,8 +263,34 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
   }
 
   // Handle stream start/end webhook events sent to the same webhook URL
-  const rawEvent = String(body.event || body.type || c.req.query('event') || '').toLowerCase().trim()
-  if (['live', 'stream_start', 'online', 'offline', 'stream_end', 'hold'].includes(rawEvent)) {
+  const rawEvent = String(
+    body.event ?? body.type ?? body.status ?? body.state ?? c.req.query('event') ?? c.req.query('type') ?? c.req.query('status') ?? ''
+  )
+    .toLowerCase()
+    .trim()
+  if (
+    typeof body.live === 'boolean' ||
+    typeof body.tiktokIsLive === 'boolean' ||
+    typeof body.online === 'boolean' ||
+    [
+      'live',
+      'online',
+      'start',
+      'started',
+      'stream_start',
+      'live_start',
+      'offline',
+      'hold',
+      'pause',
+      'paused',
+      'end',
+      'ended',
+      'stream_end',
+      'live_end',
+      'stop',
+      'stopped'
+    ].includes(rawEvent)
+  ) {
     return handleTikTokLiveStatusWebhook(c)
   }
 

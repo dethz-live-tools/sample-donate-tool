@@ -685,15 +685,27 @@ export async function applySubathonCommand(
     if (typeof cmd.tiktokIsLive === 'boolean') {
       next.tiktokIsLive = cmd.tiktokIsLive
     }
-    if (next.tiktokAutoSync) {
+    if (typeof cmd.tiktokIsLive === 'boolean' || next.tiktokAutoSync) {
       if (next.tiktokIsLive) {
-        if (!next.isRunning && next.remainingSeconds > 0) {
-          next.isRunning = true
-          next.targetEpoch = now + next.remainingSeconds * 1000
+        if (next.remainingSeconds <= 0) {
+          next.remainingSeconds = Math.max(1, next.initialSeconds || 600)
+          next.totalAddedSecs = 0
+          next.totalDonations = 0
+          next.isGracePeriod = false
+          next.graceRemainingSeconds = SUBATHON_GRACE_SECONDS
+          next.isEnded = false
         }
+        next.isRunning = true
+        next.targetEpoch = now + next.remainingSeconds * 1000
       } else {
+        // If timer still has time left when live ends, pause and preserve remainingSeconds
         next.isRunning = false
         next.targetEpoch = 0
+        if (next.remainingSeconds <= 0) {
+          next.isGracePeriod = false
+          next.graceRemainingSeconds = 0
+          next.isEnded = true
+        }
       }
     }
   } else if (sub === 'pause') {
