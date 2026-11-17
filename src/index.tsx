@@ -32,7 +32,22 @@ app.onError((err, c) => {
   return c.text('Internal Server Error', 500)
 })
 
-app.use(secureHeaders())
+app.use(
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      baseUri: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      frameSrc: ['https://challenges.cloudflare.com']
+    }
+  })
+)
 app.use('*', (c, next) => {
   // ponytail: per-request locale for i18n (query > cookie > Accept-Language > env > th)
   c.set('lang', resolveLocale(c.req.query(), c.req.header('cookie'), c.req.header('accept-language'), c.env?.DEFAULT_LANG))
@@ -56,8 +71,8 @@ app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
 app.route('/api/tiktok', tiktokRoute)
 
-app.get('/api/tts', async (c) => {
-  const text = c.req.query('text') || ''
+app.get('/api/tts', dashboardAuth, async (c) => {
+  const text = (c.req.query('text') || '').slice(0, 500)
   if (!text.trim()) return c.text('Text is required', 400)
   const ttsConfig = await resolveTtsConfig(c.env)
   const voice = c.req.query('voice') || ttsConfig.voice

@@ -214,6 +214,10 @@ export async function getDonateEnabled(db: AppDatabase, fallback = false): Promi
   return bool(row.donateEnabled, fallback)
 }
 
+function randomSecretHex(bytes = 32): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export async function setDonateEnabled(db: AppDatabase, enabled: boolean): Promise<boolean> {
   await ensureSchema(db)
   const rows = await db
@@ -224,7 +228,13 @@ export async function setDonateEnabled(db: AppDatabase, enabled: boolean): Promi
   if (rows.length === 0) {
     await db
       .insert(admins)
-      .values({ id: 1, username: 'admin', passwordHash: 'discord:pending', createdAt: Date.now(), donateEnabled: enabled })
+      .values({
+        id: 1,
+        username: 'admin',
+        passwordHash: `discord:${randomSecretHex()}`,
+        createdAt: Date.now(),
+        donateEnabled: enabled
+      })
       .onConflictDoUpdate({ target: admins.id, set: { donateEnabled: enabled } })
       .returning({ id: admins.id })
   }
@@ -258,16 +268,21 @@ export async function saveAdminDiscord(
   await ensureSchema(db)
   const existing = await getAdmin(db)
   if (existing) {
-    if (!existing.discordId) {
+    const needsSecretUpgrade =
+      existing.passwordHash === 'discord:pending' || /^discord:\d+$/.test(existing.passwordHash)
+    if (!existing.discordId || needsSecretUpgrade) {
       await db
         .update(admins)
-        .set({ discordId })
+        .set({
+          ...(!existing.discordId ? { discordId } : {}),
+          ...(needsSecretUpgrade ? { passwordHash: `discord:${randomSecretHex()}` } : {})
+        })
         .where(eq(admins.id, 1))
         .returning({ id: admins.id })
     }
     return true
   }
-  return createAdmin(db, username, `discord:${discordId}`, discordId)
+  return createAdmin(db, username, `discord:${randomSecretHex()}`, discordId)
 }
 
 export async function listDiscordWhitelist(db: AppDatabase): Promise<DiscordWhitelistEntry[]> {

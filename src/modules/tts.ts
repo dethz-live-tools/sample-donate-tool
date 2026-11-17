@@ -51,15 +51,18 @@ function escapeXML(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
+const ALLOWED_VOICE_IDS = new Set<string>(EDGE_TTS_VOICES.map((v) => v.id))
+
 function formatRate(rate?: string): string {
   if (!rate) return '+0%'
   const trimmed = rate.trim()
-  if (trimmed.endsWith('%')) {
+  if (/^[+-]?\d{1,3}%$/.test(trimmed)) {
     return trimmed.startsWith('+') || trimmed.startsWith('-') ? trimmed : `+${trimmed}`
   }
   const num = Number(trimmed)
-  if (Number.isFinite(num)) {
-    return num >= 0 ? `+${num}%` : `${num}%`
+  if (Number.isFinite(num) && num >= -100 && num <= 200) {
+    const rounded = Math.round(num)
+    return rounded >= 0 ? `+${rounded}%` : `${rounded}%`
   }
   return '+0%'
 }
@@ -67,21 +70,32 @@ function formatRate(rate?: string): string {
 function formatPitch(pitch?: string): string {
   if (!pitch) return '+0Hz'
   const trimmed = pitch.trim()
-  if (trimmed.endsWith('Hz')) {
+  if (/^[+-]?\d{1,3}Hz$/.test(trimmed)) {
     return trimmed.startsWith('+') || trimmed.startsWith('-') ? trimmed : `+${trimmed}`
   }
   const num = Number(trimmed)
-  if (Number.isFinite(num)) {
-    return num >= 0 ? `+${num}Hz` : `${num}Hz`
+  if (Number.isFinite(num) && num >= -200 && num <= 200) {
+    const rounded = Math.round(num)
+    return rounded >= 0 ? `+${rounded}Hz` : `${rounded}Hz`
   }
   return '+0Hz'
 }
 
+function formatVolume(volume?: string): string {
+  if (!volume) return '+0%'
+  const trimmed = volume.trim()
+  if (/^[+-]?\d{1,3}%$/.test(trimmed)) {
+    return trimmed.startsWith('+') || trimmed.startsWith('-') ? trimmed : `+${trimmed}`
+  }
+  return '+0%'
+}
+
 export function buildSSML(text: string, voice = 'th-TH-NiwatNeural', rate = '+0%', pitch = '+0Hz', volume = '+0%'): string {
-  const lang = voice.split('-').slice(0, 2).join('-') || 'th-TH'
+  const safeVoice = ALLOWED_VOICE_IDS.has(voice) ? voice : 'th-TH-NiwatNeural'
+  const lang = safeVoice.split('-').slice(0, 2).join('-') || 'th-TH'
   return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${lang}">
-  <voice name="${voice}">
-    <prosody pitch="${formatPitch(pitch)}" rate="${formatRate(rate)}" volume="${volume || '+0%'}">
+  <voice name="${safeVoice}">
+    <prosody pitch="${formatPitch(pitch)}" rate="${formatRate(rate)}" volume="${formatVolume(volume)}">
       ${escapeXML(text)}
     </prosody>
   </voice>

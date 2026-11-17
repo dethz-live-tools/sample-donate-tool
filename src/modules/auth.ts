@@ -88,15 +88,18 @@ async function hmacSign(secret: string, data: string): Promise<string> {
   return toHex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)))
 }
 
+const EPHEMERAL_FALLBACK_SECRET = toHex(crypto.getRandomValues(new Uint8Array(32)))
+
 function getSecret(env: Bindings | undefined, passwordHash: string, tokenVersion = 1): string {
-  return `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:${passwordHash}:v${tokenVersion}`
+  const base = env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || EPHEMERAL_FALLBACK_SECRET
+  return `${base}:${passwordHash}:v${tokenVersion}`
 }
 
 export async function getTikTokWebhookKey(env: Bindings | undefined): Promise<string> {
   const admin = await getAdmin(getDb(env))
   const baseSecret = admin
     ? getSecret(env, admin.passwordHash, admin.tokenVersion)
-    : `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || env?.VITE_SLIP2SURE_API_KEY || 'rawblock'}:default`
+    : `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || EPHEMERAL_FALLBACK_SECRET}:default`
   const sig = await hmacSign(baseSecret, 'tiktok-webhook-key')
   return sig.slice(0, 32)
 }
@@ -179,6 +182,27 @@ export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Ne
   }
   if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
   await next()
+}
+
+export async function isOwnerSession(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
+  if (!(await isValidSession(c))) return false
+  const { token } = extractToken(c)
+  const tokenDiscordId = token.split('.')[2] || ''
+  if (!tokenDiscordId) return true
+  const admin = await getAdmin(getDb(c.env))
+  const envIds = getEnvAllowedDiscordIds(c.env)
+  if (envIds.includes(tokenDiscordId)) return true
+  return Boolean(admin?.discordId && admin.discordId === tokenDiscordId)
+}
+
+export async function ownerAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
+  await dashboardAuth(c, async () => {
+    if (!(await isOwnerSession(c))) {
+      c.res = c.json({ ok: false, error: 'OWNER_REQUIRED' }, 403)
+      return
+    }
+    await next()
+  })
 }
 
 function getDiscordRedirectUri(c: Context<{ Bindings: Bindings }>): string {
@@ -300,7 +324,7 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
   }
   const currentAdmin = await getAdmin(db)
   const sessionUser = currentAdmin?.username || discordUsername
-  const passwordHash = currentAdmin?.passwordHash || `discord:${discordId}`
+  const passwordHash = currentAdmin?.passwordHash || `discord:${toHex(crypto.getRandomValues(new Uint8Array(32)))}`
   const tokenVersion = currentAdmin?.tokenVersion || 1
   const token = await createSessionToken(c.env, sessionUser, passwordHash, tokenVersion, discordId)
 
@@ -364,6 +388,12 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (existing) return c.json({ ok: false, error: 'ADMIN_ALREADY_EXISTS' }, 409)
 
     const body = (await c.req.json().catch(() => ({}))) as any
+    const setupSecret = c.env?.SESSION_SECRET || ''
+    const suppliedSecret = String(c.req.header('x-setup-token') || body.setupToken || '')
+    if (!setupSecret || suppliedSecret !== setupSecret) {
+      return c.json({ ok: false, error: setupSecret ? 'INVALID_SETUP_TOKEN' : 'SETUP_DISABLED' }, 403)
+    }
+
     const username = String(body.username || '').trim().slice(0, 50)
     const password = String(body.password || '')
     if (!username || password.length < 8 || password.length > 128) {
@@ -390,7 +420,8 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       for (const [k, v] of loginAttempts) if (now >= v.resetAt) loginAttempts.delete(k)
     }
     const rate = loginAttempts.get(ip)
-    if (rate && now < rate.resetAt && rate.count >= 3) {
+    const globalRate = loginAttempts.get('__global__')
+    if ((rate && now < rate.resetAt && rate.count >= 3) || (globalRate && now < globalRate.resetAt && globalRate.count >= 5)) {
       return c.json({ ok: false, error: 'RATE_LIMITED' }, 429)
     }
 
@@ -404,6 +435,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
 
     if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
       loginAttempts.delete(ip)
+      loginAttempts.delete('__global__')
       const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
       setSessionCookie(c, token)
       return c.json({
@@ -418,6 +450,10 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     loginAttempts.set(ip, {
       count: rate && now < rate.resetAt ? rate.count + 1 : 1,
       resetAt: rate && now < rate.resetAt ? rate.resetAt : now + 60_000
+    })
+    loginAttempts.set('__global__', {
+      count: globalRate && now < globalRate.resetAt ? globalRate.count + 1 : 1,
+      resetAt: globalRate && now < globalRate.resetAt ? globalRate.resetAt : now + 60_000
     })
     return c.json({ ok: false, error: 'INVALID_CREDENTIALS' }, 401)
   })
@@ -645,7 +681,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const items = await listDiscordWhitelist(getDb(c.env))
     return c.json({ ok: true, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
-  .post('/access', dashboardAuth, async (c) => {
+  .post('/access', ownerAuth, async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const discordId = String(body.discordId || body.discord_user_id || '').trim()
     const note = String(body.note || '').trim().slice(0, 100)
@@ -657,7 +693,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const items = await listDiscordWhitelist(db)
     return c.json({ ok: true, discordId, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
-  .delete('/access/:id', dashboardAuth, async (c) => {
+  .delete('/access/:id', ownerAuth, async (c) => {
     const id = String(c.req.param('id') || '').trim()
     const db = getDb(c.env)
     const removed = await removeDiscordWhitelist(db, id)
