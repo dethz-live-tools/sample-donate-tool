@@ -1,12 +1,14 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
+import { t, type Locale } from '../../i18n'
 
-export function LeaderboardControlPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+export function LeaderboardControlPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
   return (
     <ControlLayout
+      lang={lang}
       activeTab="leaderboard"
-      title="LEADERBOARD SETTINGS"
-      subtitle="TOP DONORS RANKING OVERLAY CONFIGURATION & LIVE CUSTOMIZER"
+      title={t(lang, 'ctrl_leaderboard_title')}
+      subtitle={t(lang, 'ctrl_leaderboard_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay/leaderboard?limit=5&title=TOP+DONORS"
       extraScript={`

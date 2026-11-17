@@ -31,9 +31,10 @@ export function SubathonControlPage({
 
   return (
     <ControlLayout
+      lang={lang}
       activeTab="subathon"
-      title="SUBATHON SETTINGS"
-      subtitle="AUTO-EXTENDING MARATHON TIMER // PERSISTED IN CLOUDFLARE D1 DATABASE"
+      title={t(lang, 'ctrl_subathon_title')}
+      subtitle={t(lang, 'ctrl_subathon_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay/subathon"
       extraScript={`

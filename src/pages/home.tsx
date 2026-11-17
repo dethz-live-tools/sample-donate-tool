@@ -1,14 +1,19 @@
 import type { AppConfig } from "../modules/config";
+import { LangSwitch } from "./LangSwitch";
+import { t, type I18nKey, type Locale } from "../i18n";
 
 export function HomePage({
   config,
   overlayOnline = false,
   mobileSid = "",
+  lang = 'th',
 }: {
   config: AppConfig;
   overlayOnline?: boolean;
   mobileSid?: string;
+  lang?: Locale;
 }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars);
   const hasBankOrPP = Boolean(config.bankAccount || config.promptpayId);
   const hasTrueMoney = Boolean(config.truewalletId);
   const hasPaymentInfo = hasBankOrPP || hasTrueMoney;
@@ -18,42 +23,43 @@ export function HomePage({
     <div class="container">
       <div class="card elevated">
         <div class="nav-links">
-          <span>RAWBLOCK // DONATE SYSTEM</span>
-          <div
-            id="overlayNavBadge"
-            class={`overlay-indicator ${overlayOnline ? "is-online" : ""}`}
-          >
-            <span class="overlay-square"></span>
-            <span id="overlayNavText">
-              OVERLAY: {overlayOnline ? "ONLINE" : "OFFLINE"}
-            </span>
+          <span>{T("home_nav_brand")}</span>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <LangSwitch lang={lang} />
+            <div
+              id="overlayNavBadge"
+              class={`overlay-indicator ${overlayOnline ? "is-online" : ""}`}
+            >
+              <span class="overlay-square"></span>
+              <span id="overlayNavText">
+                {overlayOnline ? T("overlay_online") : T("overlay_offline")}
+              </span>
+            </div>
           </div>
         </div>
-        <h1>{isMobileSession ? "MOBILE SLIP UPLOAD" : "DONATE"}</h1>
+        <h1>{isMobileSession ? T("home_title_mobile") : T("home_title")}</h1>
         <p class="subtitle">
-          {isMobileSession
-            ? "LINKED TO DESKTOP SESSION // UPLOAD SLIP IMAGE BELOW"
-            : "deth'z vibing ai generate donate website (i got no time ;w;)"}
+          {isMobileSession ? T("home_subtitle_mobile") : T("home_subtitle")}
         </p>
 
         {!isMobileSession && hasPaymentInfo && (
           <div class="inverted-block">
             {config.accountName && (
               <div>
-                ACCOUNT NAME: <strong>{config.accountName}</strong>
+                {T("home_account_name")} <strong>{config.accountName}</strong>
               </div>
             )}
             {config.bankAccount && (
               <div>
-                BANK{config.bankName ? ` [${config.bankName}]` : ""}:{" "}
+                {T("home_bank")}{config.bankName ? ` [${config.bankName}]` : ""}:{" "}
                 <strong>{config.bankAccount}</strong>
               </div>
             )}
             {config.promptpayId && (
               <div>
-                PROMPTPAY: <strong>{config.promptpayId}</strong>
+                {T("home_promptpay")} <strong>{config.promptpayId}</strong>
                 <div style="margin-top:16px;">
-                  <label>QR AMOUNT (MIN 10 THB)</label>
+                  <label>{T("home_qr_amount")}</label>
                   <input
                     type="number"
                     id="ppAmount"
@@ -72,7 +78,7 @@ export function HomePage({
             )}
             {config.truewalletId && (
               <div>
-                TRUEMONEY: <strong>{config.truewalletId}</strong>
+                {T("home_truemoney")} <strong>{config.truewalletId}</strong>
               </div>
             )}
           </div>
@@ -84,49 +90,49 @@ export function HomePage({
           {isMobileSession ? (
             <div class="inverted-block" id="mobileSummaryBox" style="margin-bottom:16px;">
               <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-                SESSION SUMMARY
+                {T("home_session_summary")}
               </label>
               <div>
-                DONOR: <strong id="sumDonor">- (SLIP NAME)</strong>
+                {T("home_sum_donor_label")} <strong id="sumDonor">{T("home_sum_donor_default")}</strong>
               </div>
               <div>
-                CHANNEL: <strong id="sumChannel">BANK / PROMPTPAY</strong>
+                {T("home_sum_channel_label")} <strong id="sumChannel">{T("home_sum_channel_bank")}</strong>
               </div>
               <div>
-                MESSAGE: <strong id="sumMessage">-</strong>
+                {T("home_sum_message_label")} <strong id="sumMessage">-</strong>
               </div>
               <div
                 id="mobileLinkedBanner"
                 style="margin-top:10px; padding-top:8px; border-top:2px solid var(--ctp-surface1); color:var(--ctp-green); font-size:13px;"
               >
-                CONNECTED TO DESKTOP // SELECT SLIP TO SYNC
+                {T("home_mobile_connected")}
               </div>
             </div>
           ) : (
             <div>
-              <label>DONOR NAME (OPTIONAL — DEFAULTS TO SLIP NAME)</label>
-              <input type="text" name="donor" id="donorInput" placeholder="SOMCHAI" style="margin-bottom:8px;" />
+              <label>{T("home_donor_label")}</label>
+              <input type="text" name="donor" id="donorInput" placeholder={T("home_donor_placeholder")} style="margin-bottom:8px;" />
               <label
                 style="display:inline-flex; align-items:center; gap:8px; margin-bottom:16px; cursor:pointer; font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);"
               >
                 <input type="checkbox" id="rememberDonor" checked style="width:auto; margin:0;" />
-                <span>REMEMBER USERNAME</span>
+                <span>{T("home_remember_donor")}</span>
               </label>
 
-              <label>PAYMENT CHANNEL</label>
+              <label>{T("home_channel_label")}</label>
               <select name="type" id="slipType">
                 {hasBankOrPP && (
-                  <option value="bank-image">BANK / PROMPTPAY SLIP (IMAGE)</option>
+                  <option value="bank-image">{T("home_channel_bank_option")}</option>
                 )}
                 {hasTrueMoney && (
-                  <option value="truemoney">TRUEMONEY SLIP (IMAGE)</option>
+                  <option value="truemoney">{T("home_channel_truemoney_option")}</option>
                 )}
               </select>
             </div>
           )}
 
           <div id="fileField">
-            <label>SLIP IMAGE (PNG / JPG)</label>
+            <label>{T("home_slip_label")}</label>
             <div class="dropzone" id="dropzone">
               <input
                 type="file"
@@ -137,14 +143,14 @@ export function HomePage({
               />
               <div id="dropzoneText">
                 {isMobileSession
-                  ? "TAP HERE TO SELECT SLIP IMAGE FROM PHONE"
-                  : "DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE"}
+                  ? T("home_dropzone_mobile")
+                  : T("home_dropzone_desktop")}
               </div>
             </div>
 
             {!isMobileSession && (
               <details class="inverted-block fold-block desktop-only" id="mobileUploadBlock" style="margin-bottom:16px;">
-                <summary>UPLOAD SLIP ON MOBILE (KEEP SAME SESSION)</summary>
+                <summary>{T("home_mobile_fold_summary")}</summary>
                 <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
                   <div
                     id="mobileSessionQr"
@@ -152,20 +158,20 @@ export function HomePage({
                   ></div>
                   <div style="flex:1; min-width:200px;">
                     <div style="font-size:13px; color:var(--ctp-text); margin-bottom:8px;">
-                      SCAN QR TO UPLOAD SLIP FROM PHONE IN THIS SAME SESSION
+                      {T("home_mobile_scan_hint")}
                     </div>
                     <div
                       id="mobileSessionStatus"
                       style="font-size:12px; color:var(--ctp-yellow); margin-bottom:10px;"
                     >
-                      SESSION ACTIVE // WAITING FOR MOBILE SLIP...
+                      {T("home_mobile_waiting")}
                     </div>
                     <button
                       type="button"
                       id="copyMobileLinkBtn"
                       style="width:auto; padding:8px 14px; font-size:12px;"
                     >
-                      COPY MOBILE UPLOAD LINK
+                      {T("home_copy_mobile_link")}
                     </button>
                   </div>
                 </div>
@@ -175,12 +181,12 @@ export function HomePage({
 
           {!isMobileSession && (
             <div>
-              <label>MESSAGE (TTS VOICE)</label>
+              <label>{T("home_message_label")}</label>
               <textarea
                 name="message"
                 id="messageInput"
                 rows={2}
-                placeholder="KEEP GOING!"
+                placeholder={T("home_message_placeholder")}
               ></textarea>
 
               {config.turnstileSiteKey && (
@@ -194,8 +200,8 @@ export function HomePage({
 
               <button type="submit" id="submitBtn" disabled={!hasPaymentInfo}>
                 {hasPaymentInfo
-                  ? "SUBMIT DONATION"
-                  : "NO RECEIVING ACCOUNT CONFIGURED"}
+                  ? T("home_submit_btn")
+                  : T("home_no_account_btn")}
               </button>
             </div>
           )}
@@ -333,7 +339,7 @@ export function HomePage({
             try {
               await navigator.clipboard.writeText(mobileUploadUrl);
               const orig = copyMobileBtn.textContent;
-              copyMobileBtn.textContent = 'COPIED!';
+              copyMobileBtn.textContent = __t('home_copied');
               setTimeout(() => { copyMobileBtn.textContent = orig; }, 2000);
             } catch {}
           });
@@ -375,20 +381,21 @@ export function HomePage({
             fd.append('image', file);
             if (isMobileLinked && mobileLinkedBanner) {
               mobileLinkedBanner.style.color = 'var(--ctp-yellow)';
-              mobileLinkedBanner.textContent = 'SYNCING SLIP TO DESKTOP SESSION...';
+              mobileLinkedBanner.textContent = __t('home_syncing_slip');
             }
             try {
               const r = await fetch('/api/donate/session', { method: 'POST', body: fd });
               const d = await r.json();
               if (d && d.ok) {
                 lastSyncedSlipAt = d.slipUpdatedAt || Date.now();
+                const name = d.slipName || file.name;
                 if (isMobileLinked && mobileLinkedBanner) {
                   mobileLinkedBanner.style.color = 'var(--ctp-green)';
-                  mobileLinkedBanner.textContent = 'SLIP SYNCED TO DESKTOP (' + (d.slipName || file.name) + ')';
+                  mobileLinkedBanner.textContent = __t('home_slip_synced', { name });
                 }
                 if (mobileStatusEl) {
                   mobileStatusEl.style.color = 'var(--ctp-green)';
-                  mobileStatusEl.textContent = 'SLIP READY: ' + (d.slipName || file.name);
+                  mobileStatusEl.textContent = __t('home_slip_ready', { name });
                 }
               }
             } catch {}
@@ -400,8 +407,8 @@ export function HomePage({
               const d = await r.json();
               if (!d || !d.ok || !d.exists) return;
 
-              if (sumDonor) sumDonor.textContent = d.donor || '- (SLIP NAME)';
-              if (sumChannel) sumChannel.textContent = d.type === 'truemoney' ? 'TRUEMONEY' : 'BANK / PROMPTPAY';
+              if (sumDonor) sumDonor.textContent = d.donor || __t('home_sum_donor_default');
+              if (sumChannel) sumChannel.textContent = d.type === 'truemoney' ? __t('home_sum_channel_truemoney') : __t('home_sum_channel_bank');
               if (sumMessage) sumMessage.textContent = d.message || '-';
 
               if (donorInput && document.activeElement !== donorInput && d.donor && !donorInput.value) {
@@ -418,10 +425,11 @@ export function HomePage({
               if (d.hasSlip && d.slipUpdatedAt > lastSyncedSlipAt) {
                 lastSyncedSlipAt = d.slipUpdatedAt;
                 fileInput.required = false;
-                dzText.textContent = 'SELECTED VIA MOBILE: ' + (d.slipName || 'slip.jpg');
+                const name = d.slipName || 'slip.jpg';
+                dzText.textContent = __t('home_selected_mobile', { name });
                 if (mobileStatusEl) {
                   mobileStatusEl.style.color = 'var(--ctp-green)';
-                  mobileStatusEl.textContent = 'SLIP RECEIVED FROM MOBILE: ' + (d.slipName || 'slip.jpg');
+                  mobileStatusEl.textContent = __t('home_received_mobile', { name });
                 }
                 if (!isMobileLinked) {
                   try {
@@ -429,7 +437,7 @@ export function HomePage({
                     if (imgRes.ok) {
                       const blob = await imgRes.blob();
                       const dt = new DataTransfer();
-                      dt.items.add(new File([blob], d.slipName || 'slip.jpg', { type: d.slipMime || blob.type || 'image/jpeg' }));
+                      dt.items.add(new File([blob], name, { type: d.slipMime || blob.type || 'image/jpeg' }));
                       fileInput.files = dt.files;
                     }
                   } catch {}
@@ -441,20 +449,20 @@ export function HomePage({
                 const status = document.getElementById('statusBox');
                 if (status) {
                   status.className = 'status ok';
-                  status.textContent = 'OK // DONATED ' + d.completedEvent.amount + ' THB FROM ' + d.completedEvent.donor;
+                  status.textContent = __t('home_donate_ok', { amount: d.completedEvent.amount, donor: d.completedEvent.donor });
                 }
                 if (isMobileLinked && mobileLinkedBanner) {
                   mobileLinkedBanner.style.color = 'var(--ctp-green)';
-                  mobileLinkedBanner.textContent = 'DONATION COMPLETED ON DESKTOP (' + d.completedEvent.amount + ' THB)';
+                  mobileLinkedBanner.textContent = __t('home_completed_desktop', { amount: d.completedEvent.amount });
                 }
                 fileInput.value = '';
                 fileInput.required = true;
                 dzText.textContent = isMobileLinked
-                  ? 'TAP HERE TO SELECT SLIP IMAGE FROM PHONE'
-                  : 'DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE';
+                  ? __t('home_dropzone_mobile')
+                  : __t('home_dropzone_desktop');
                 if (mobileStatusEl) {
                   mobileStatusEl.style.color = 'var(--ctp-green)';
-                  mobileStatusEl.textContent = 'DONATION COMPLETED (' + d.completedEvent.amount + ' THB)';
+                  mobileStatusEl.textContent = __t('home_completed_short', { amount: d.completedEvent.amount });
                 }
               }
             } catch {}
@@ -475,13 +483,13 @@ export function HomePage({
           dz.addEventListener('drop', (e) => {
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
               fileInput.files = e.dataTransfer.files;
-              dzText.textContent = 'SELECTED: ' + e.dataTransfer.files[0].name;
+              dzText.textContent = __t('home_selected_file', { name: e.dataTransfer.files[0].name });
               uploadSlipToSession(e.dataTransfer.files[0]);
             }
           });
           fileInput.addEventListener('change', () => {
             if (fileInput.files && fileInput.files.length) {
-              dzText.textContent = 'SELECTED: ' + fileInput.files[0].name;
+              dzText.textContent = __t('home_selected_file', { name: fileInput.files[0].name });
               uploadSlipToSession(fileInput.files[0]);
             }
           });
@@ -493,7 +501,7 @@ export function HomePage({
             const status = document.getElementById('statusBox');
             syncRememberedDonor();
             btn.disabled = true;
-            btn.textContent = 'VERIFYING SLIP & GENERATING TTS...';
+            btn.textContent = __t('home_verifying_btn');
             status.className = 'status';
 
             try {
@@ -509,7 +517,7 @@ export function HomePage({
               }
               lastCompletedId = data.event?.id || '';
               status.className = 'status ok';
-              status.textContent = 'OK // DONATED ' + data.event.amount + ' THB FROM ' + data.event.donor;
+              status.textContent = __t('home_donate_ok', { amount: data.event.amount, donor: data.event.donor });
               const keepChecked = Boolean(rememberDonor?.checked);
               const keepName = keepChecked ? (donorInput?.value || '') : '';
               form.reset();
@@ -518,7 +526,7 @@ export function HomePage({
               if (donorInput && keepChecked) donorInput.value = keepName;
               fileInput.value = '';
               fileInput.required = true;
-              dzText.textContent = 'DRAG & DROP SLIP IMAGE HERE OR CLICK TO BROWSE';
+              dzText.textContent = __t('home_dropzone_desktop');
               if (ppAmt) {
                 ppAmt.value = '10';
                 renderPP();
@@ -528,7 +536,7 @@ export function HomePage({
               status.textContent = err.message;
             } finally {
               btn.disabled = false;
-              btn.textContent = 'SUBMIT DONATION';
+              btn.textContent = __t('home_submit_btn');
               if (typeof turnstile !== 'undefined') {
                 try { turnstile.reset(); } catch (_) {}
               }
@@ -542,15 +550,18 @@ export function HomePage({
             if (navBadge && navText) {
               if (online) {
                 navBadge.classList.add('is-online');
-                navText.textContent = 'OVERLAY: ONLINE';
+                navText.textContent = __t('overlay_online');
               } else {
                 navBadge.classList.remove('is-online');
-                navText.textContent = 'OVERLAY: OFFLINE';
+                navText.textContent = __t('overlay_offline');
               }
             }
           }
 
           const es = new EventSource('/api/events');
+          window.__es = es;
+          window.addEventListener('pagehide', () => es.close());
+          window.addEventListener('beforeunload', () => es.close());
           es.addEventListener('overlay_status', (e) => {
             try { updateOverlayStatus(JSON.parse(e.data)); } catch {}
           });

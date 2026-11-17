@@ -1,12 +1,14 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
+import { t, type Locale } from '../../i18n'
 
-export function CountdownControlPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+export function CountdownControlPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
   return (
     <ControlLayout
+      lang={lang}
       activeTab="countdown"
-      title="COUNTDOWN SETTINGS"
-      subtitle="STANDARD STREAM COUNTDOWN TIMER CONFIGURATION & REMOTE CONTROL"
+      title={t(lang, 'ctrl_countdown_title')}
+      subtitle={t(lang, 'ctrl_countdown_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay/countdown?minutes=10&title=STARTING+SOON"
       extraScript={`

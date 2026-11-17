@@ -12,9 +12,10 @@ export function AlertControlPage({ overlayStatus, lang = 'th' }: { overlayStatus
 
   return (
     <ControlLayout
+      lang={lang}
       activeTab="alert"
-      title="ALERT & TTS SETTINGS"
-      subtitle="DONATION ALERT OVERLAY, EDGE NEURAL TTS, AND WORD FILTERING"
+      title={t(lang, 'ctrl_alert_title')}
+      subtitle={t(lang, 'ctrl_alert_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay"
       extraScript={`

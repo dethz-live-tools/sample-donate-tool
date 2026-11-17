@@ -1,14 +1,16 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
+import { t, type Locale } from '../../i18n'
 
-export function OverlayControlOverviewPage({ overlayStatus }: { overlayStatus?: OverlayStatus }) {
+export function OverlayControlOverviewPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
   const ttsEnabled = overlayStatus?.ttsEnabled ?? true
 
   return (
     <ControlLayout
+      lang={lang}
       activeTab="overview"
-      title="OVERLAY CONTROLLER"
-      subtitle="OBS BROWSER SOURCE DIRECTORY & GLOBAL COMMAND BUS"
+      title={t(lang, 'ctrl_overview_title')}
+      subtitle={t(lang, 'ctrl_overview_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay"
       extraScript={`

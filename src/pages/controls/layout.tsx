@@ -1,4 +1,6 @@
 import type { OverlayStatus } from '../../modules/events'
+import { LangSwitch } from '../LangSwitch'
+import { t, type I18nKey, type Locale } from '../../i18n'
 
 export type ControlTab = 'overview' | 'alert' | 'leaderboard' | 'countdown' | 'subathon'
 
@@ -8,6 +10,7 @@ export function ControlLayout({
   subtitle,
   overlayStatus,
   openOverlayHref = '/overlay',
+  lang = 'th',
   children,
   extraScript = ''
 }: {
@@ -16,20 +19,22 @@ export function ControlLayout({
   subtitle: string
   overlayStatus?: OverlayStatus
   openOverlayHref?: string
+  lang?: Locale
   children: any
   extraScript?: string
 }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars)
   const overlayOnline = Boolean(overlayStatus?.online)
   const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
   const ttsEnabled = overlayStatus?.ttsEnabled ?? true
   const filterEnabled = overlayStatus?.filterEnabled ?? true
 
   const tabs: Array<{ id: ControlTab; label: string; href: string }> = [
-    { id: 'overview', label: 'OVERVIEW', href: '/overlay/control' },
-    { id: 'alert', label: '1. DONATION ALERT & TTS', href: '/overlay/control/alert' },
-    { id: 'leaderboard', label: '2. LEADERBOARD', href: '/overlay/control/leaderboard' },
-    { id: 'countdown', label: '3. COUNTDOWN', href: '/overlay/control/countdown' },
-    { id: 'subathon', label: '4. SUBATHON', href: '/overlay/control/subathon' }
+    { id: 'overview', label: T('ctrl_tab_overview'), href: '/overlay/control' },
+    { id: 'alert', label: T('ctrl_tab_alert'), href: '/overlay/control/alert' },
+    { id: 'leaderboard', label: T('ctrl_tab_leaderboard'), href: '/overlay/control/leaderboard' },
+    { id: 'countdown', label: T('ctrl_tab_countdown'), href: '/overlay/control/countdown' },
+    { id: 'subathon', label: T('ctrl_tab_subathon'), href: '/overlay/control/subathon' }
   ]
 
   return (
@@ -37,23 +42,24 @@ export function ControlLayout({
       <div class="card elevated">
         <div class="nav-links">
           <div style="display:flex; gap:16px; align-items:center;">
-            <a href="/dashboard">RETURN TO DASHBOARD</a>
-            <a href="/">DONATE PAGE</a>
+            <a href="/dashboard">{T('ctrl_return_dash')}</a>
+            <a href="/">{T('ctrl_donate_page')}</a>
           </div>
           <div style="display:flex; gap:16px; align-items:center;">
+            <LangSwitch lang={lang} />
             <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
               <span class="overlay-square"></span>
               <span id="overlayNavText">
-                OVERLAY: {overlayOnline ? `ONLINE${clientCount > 1 ? ` (${clientCount})` : ''}` : 'OFFLINE'}
+                {overlayOnline ? `${T('overlay_online')}${clientCount > 1 ? ` (${clientCount})` : ''}` : T('overlay_offline')}
               </span>
             </div>
-            <a href={openOverlayHref} target="_blank">OPEN OVERLAY</a>
+            <a href={openOverlayHref} target="_blank">{T('dash_open_overlay')}</a>
             <form method="post" action="/logout" style="display:inline;">
               <button
                 type="submit"
                 style="width:auto; padding:4px 12px; font-size:12px; background:var(--ctp-red); border-color:var(--ctp-red);"
               >
-                LOGOUT
+                {T('dash_logout')}
               </button>
             </form>
           </div>
@@ -86,45 +92,45 @@ export function ControlLayout({
 
         <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
-            <label>CONNECTION STATE</label>
+            <label>{T('ctrl_conn_state')}</label>
             <div
               style="font-family:var(--font-head); font-size:32px;"
               id="controlStatusText"
               class={overlayOnline ? 'status-online' : 'status-offline'}
             >
-              {overlayOnline ? 'ONLINE' : 'OFFLINE'}
+              {overlayOnline ? T('status_online') : T('status_offline')}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>ACTIVE CLIENTS</label>
+            <label>{T('ctrl_active_clients')}</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="controlCountText">
               {clientCount}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>HEARTBEAT AGE</label>
+            <label>{T('ctrl_heartbeat_age')}</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="heartbeatAgeText">
               {overlayOnline ? '0s' : '-'}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>TTS VOICE</label>
+            <label>{T('ctrl_tts_voice')}</label>
             <div
               style="font-family:var(--font-head); font-size:32px;"
               id="ttsStatusText"
               class={ttsEnabled ? 'status-online' : 'status-offline'}
             >
-              {ttsEnabled ? 'ON' : 'OFF'}
+              {ttsEnabled ? T('status_on') : T('status_off')}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>WORD FILTER</label>
+            <label>{T('ctrl_word_filter')}</label>
             <div
               style="font-family:var(--font-head); font-size:32px;"
               id="filterStatusText"
               class={filterEnabled ? 'status-online' : 'status-offline'}
             >
-              {filterEnabled ? 'ON' : 'OFF'}
+              {filterEnabled ? T('status_on') : T('status_off')}
             </div>
           </div>
         </div>
@@ -132,14 +138,14 @@ export function ControlLayout({
         {children}
 
         <details class="card fold-block" style="margin-bottom:0;">
-          <summary>REAL-TIME BUS LOG</summary>
+          <summary>{T('ctrl_bus_log')}</summary>
           <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:8px;">
             <button
               type="button"
               id="clearLogBtn"
               style="width:auto; padding:2px 10px; font-size:11px; background:var(--ctp-surface1); border-color:var(--ctp-surface2);"
             >
-              CLEAR LOG
+              {T('ctrl_clear_log')}
             </button>
           </div>
           <div id="busLog" class="console-log"></div>
@@ -207,7 +213,7 @@ export function ControlLayout({
             }
 
             if (statusText) {
-              statusText.textContent = online ? 'ONLINE' : 'OFFLINE';
+              statusText.textContent = online ? __t('status_online') : __t('status_offline');
               statusText.className = online ? 'status-online' : 'status-offline';
             }
             if (countText) {
@@ -217,7 +223,7 @@ export function ControlLayout({
               if (typeof data?.ttsEnabled === 'boolean') {
                 const ttsOn = data.ttsEnabled;
                 if (ttsStatusText) {
-                  ttsStatusText.textContent = ttsOn ? 'ON' : 'OFF';
+                  ttsStatusText.textContent = ttsOn ? __t('status_on') : __t('status_off');
                   ttsStatusText.className = ttsOn ? 'status-online' : 'status-offline';
                 }
                 if (cmdTtsBtn) {
@@ -236,12 +242,12 @@ export function ControlLayout({
                 if (typeof window.onFilterStateSync === 'function') window.onFilterStateSync(fOn);
                 const fStatus = document.getElementById('filterStatusText');
                 if (fStatus) {
-                  fStatus.textContent = fOn ? 'ON' : 'OFF';
+                  fStatus.textContent = fOn ? __t('status_on') : __t('status_off');
                   fStatus.className = fOn ? 'status-online' : 'status-offline';
                 }
                 const fToggle = document.getElementById('toggleFilterBtn');
                 if (fToggle) {
-                  fToggle.textContent = 'FILTER: ' + (fOn ? 'ENABLED' : 'DISABLED');
+                  fToggle.textContent = fOn ? __t('dash_filter_enabled') : __t('dash_filter_disabled');
                 }
               }
               const actSel = document.getElementById('filterActionSelect');
@@ -252,10 +258,10 @@ export function ControlLayout({
             if (navBadge && navText) {
               if (online) {
                 navBadge.classList.add('is-online');
-                navText.textContent = 'OVERLAY: ONLINE' + (count > 1 ? ' (' + count + ')' : '');
+                navText.textContent = __t('overlay_online') + (count > 1 ? ' (' + count + ')' : '');
               } else {
                 navBadge.classList.remove('is-online');
-                navText.textContent = 'OVERLAY: OFFLINE';
+                navText.textContent = __t('overlay_offline');
               }
             }
           }
@@ -298,6 +304,9 @@ export function ControlLayout({
 
           log('Connecting to SSE bus /api/events?client=controller...', 'info');
           const es = new EventSource('/api/events?client=controller');
+          window.__es = es;
+          window.addEventListener('pagehide', () => es.close());
+          window.addEventListener('beforeunload', () => es.close());
           es.onopen = () => {
             log('Connected to real-time event bus', 'success');
           };

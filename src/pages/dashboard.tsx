@@ -1,5 +1,6 @@
 import type { DonateEvent, OverlayStatus } from '../modules/events'
-import { t, type Locale } from '../i18n'
+import { t, type I18nKey, type Locale } from '../i18n'
+import { LangSwitch } from './LangSwitch'
 
 export function DashboardPage({
   items,
@@ -10,6 +11,7 @@ export function DashboardPage({
   overlayStatus?: OverlayStatus
   lang?: Locale
 }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars)
   const totalAmount = items.reduce((sum, h) => sum + h.amount, 0)
   const overlayOnline = Boolean(overlayStatus?.online)
   const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
@@ -18,77 +20,78 @@ export function DashboardPage({
     <div class="container wide">
       <div class="card elevated">
         <div class="nav-links">
-          <a href="/">RETURN TO DONATE</a>
+          <a href="/">{T('dash_return_donate')}</a>
           <div style="display:flex; gap:16px; align-items:center;">
             <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
               <span class="overlay-square"></span>
               <span id="overlayNavText">
-                OVERLAY: {overlayOnline ? `ONLINE${clientCount > 1 ? ` (${clientCount})` : ''}` : 'OFFLINE'}
+                {overlayOnline ? `${T('overlay_online')}${clientCount > 1 ? ` (${clientCount})` : ''}` : T('overlay_offline')}
               </span>
             </div>
-            <a href="/overlay/control">OVERLAY CONTROLS</a>
-            <a href="/overlay" target="_blank">OPEN OVERLAY</a>
+            <LangSwitch lang={lang} />
+            <a href="/overlay/control">{T('dash_overlay_controls')}</a>
+            <a href="/overlay" target="_blank">{T('dash_open_overlay')}</a>
             <button
               type="button"
               id="testDonateBtn"
               style="width:auto; padding:4px 12px; font-size:12px;"
             >
-              TEST DONATE ALERT
+              {T('dash_test_donate_btn')}
             </button>
             <form method="post" action="/logout" style="display:inline;">
               <button
                 type="submit"
                 style="width:auto; padding:4px 12px; font-size:12px; background:var(--ctp-red); border-color:var(--ctp-red);"
               >
-                LOGOUT
+                {T('dash_logout')}
               </button>
             </form>
           </div>
         </div>
-        <h1>TRANSACTIONS</h1>
-        <p class="subtitle">CLOUDFLARE D1 LEDGER + REAL-TIME STREAM</p>
+        <h1>{T('dash_title')}</h1>
+        <p class="subtitle">{T('dash_subtitle')}</p>
 
         <div id="testStatus" class="status" style="margin-bottom: 16px;"></div>
 
         <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
-            <label>TOTAL VOLUME</label>
+            <label>{T('dash_total_volume')}</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="totalAmount">
               {totalAmount.toLocaleString()} THB
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>COUNT</label>
+            <label>{T('dash_count')}</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="totalCount">
               {items.length}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>OVERLAY STATUS</label>
+            <label>{T('dash_overlay_status')}</label>
             <div
               style="font-family:var(--font-head); font-size:32px;"
               id="overlayStatusText"
               class={overlayOnline ? 'status-online' : 'status-offline'}
             >
-              {overlayOnline ? 'ONLINE' : 'OFFLINE'}
+              {overlayOnline ? T('status_online') : T('status_offline')}
             </div>
             <div
               id="overlayDetailText"
               style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0); margin-top:4px;"
             >
               {overlayOnline
-                ? `${clientCount} CLIENT${clientCount > 1 ? 'S' : ''} CONNECTED`
-                : 'NO OVERLAY CONNECTED'}
+                ? T('dash_clients_connected', { count: clientCount })
+                : T('dash_no_overlay')}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>TTS (EDGE NEURAL)</label>
+            <label>{T('dash_tts_label')}</label>
             <div
               style="font-family:var(--font-head); font-size:32px;"
               id="dashTtsStatus"
               class={overlayStatus?.ttsEnabled !== false ? 'status-online' : 'status-offline'}
             >
-              {overlayStatus?.ttsEnabled !== false ? 'ONLINE' : 'MUTED'}
+              {overlayStatus?.ttsEnabled !== false ? T('status_online') : T('status_muted')}
             </div>
             <div
               id="dashTtsVoice"
@@ -100,46 +103,46 @@ export function DashboardPage({
         </div>
 
         <details class="inverted-block fold-block" style="margin-bottom: 24px;">
-          <summary>OVERLAY SETTINGS &amp; CONTROLLERS</summary>
+          <summary>{T('dash_overlay_settings_summary')}</summary>
           <div style="display:flex; flex-wrap:wrap; gap:8px;">
             <a
               href="/overlay/control"
               style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-surface2); background:var(--ctp-mantle); color:var(--ctp-text);"
             >
-              OVERVIEW HUB
+              {T('dash_tab_overview')}
             </a>
             <a
               href="/overlay/control/alert"
               style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
-              1. DONATION ALERT &amp; TTS
+              {T('dash_tab_alert')}
             </a>
             <a
               href="/overlay/control/leaderboard"
               style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
-              2. LEADERBOARD
+              {T('dash_tab_leaderboard')}
             </a>
             <a
               href="/overlay/control/countdown"
               style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
-              3. COUNTDOWN TIMER
+              {T('dash_tab_countdown')}
             </a>
             <a
               href="/overlay/control/subathon"
               style="text-decoration:none; padding:8px 14px; font-family:var(--font-head); font-size:12px; border:2px solid var(--ctp-accent); background:var(--ctp-mantle); color:var(--ctp-accent);"
             >
-              4. SUBATHON MARATHON
+              {T('dash_tab_subathon')}
             </a>
           </div>
         </details>
 
         <details class="card fold-block" style="margin-bottom: 24px;">
-          <summary>EDGE TTS VOICE OPTIONS</summary>
+          <summary>{T('dash_tts_options_summary')}</summary>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <p class="subtitle" style="margin:0; font-size:11px; border:none; padding:0;">
-              MICROSOFT EDGE NEURAL SYNTHESIS // FREE &amp; FAST // LOADED LOCALLY
+              {T('dash_tts_options_subtitle')}
             </p>
             <div style="display:flex; gap:10px; align-items:center;">
               <button
@@ -147,7 +150,7 @@ export function DashboardPage({
                 id="dashToggleTtsBtn"
                 style="width:auto; padding:6px 14px; font-size:12px;"
               >
-                TOGGLE TTS: {overlayStatus?.ttsEnabled !== false ? 'MUTE' : 'UNMUTE'}
+                {overlayStatus?.ttsEnabled !== false ? T('dash_toggle_tts_mute') : T('dash_toggle_tts_unmute')}
               </button>
             </div>
           </div>
@@ -155,7 +158,7 @@ export function DashboardPage({
           <form id="dashTtsForm" style="margin-bottom:0;">
             <div class="row" style="margin-bottom:12px;">
               <div>
-                <label>VOICE</label>
+                <label>{T('dash_voice_label')}</label>
                 <select id="dashVoiceSelect" style="margin-bottom:0;">
                   <option value="th-TH-NiwatNeural" selected={overlayStatus?.ttsVoice === 'th-TH-NiwatNeural' || !overlayStatus?.ttsVoice}>
                     Thai - Niwat (Male)
@@ -181,37 +184,37 @@ export function DashboardPage({
                 </select>
               </div>
               <div>
-                <label>SPEED / RATE</label>
+                <label>{T('dash_speed_label')}</label>
                 <select id="dashRateSelect" style="margin-bottom:0;">
-                  <option value="-20%" selected={overlayStatus?.ttsRate === '-20%'}>Slow (-20%)</option>
-                  <option value="-10%" selected={overlayStatus?.ttsRate === '-10%'}>Slightly Slow (-10%)</option>
-                  <option value="+0%" selected={overlayStatus?.ttsRate === '+0%' || !overlayStatus?.ttsRate}>Normal (0%)</option>
-                  <option value="+10%" selected={overlayStatus?.ttsRate === '+10%'}>Slightly Fast (+10%)</option>
-                  <option value="+20%" selected={overlayStatus?.ttsRate === '+20%'}>Fast (+20%)</option>
-                  <option value="+30%" selected={overlayStatus?.ttsRate === '+30%'}>Very Fast (+30%)</option>
+                  <option value="-20%" selected={overlayStatus?.ttsRate === '-20%'}>{T('dash_rate_m20')}</option>
+                  <option value="-10%" selected={overlayStatus?.ttsRate === '-10%'}>{T('dash_rate_m10')}</option>
+                  <option value="+0%" selected={overlayStatus?.ttsRate === '+0%' || !overlayStatus?.ttsRate}>{T('dash_rate_0')}</option>
+                  <option value="+10%" selected={overlayStatus?.ttsRate === '+10%'}>{T('dash_rate_p10')}</option>
+                  <option value="+20%" selected={overlayStatus?.ttsRate === '+20%'}>{T('dash_rate_p20')}</option>
+                  <option value="+30%" selected={overlayStatus?.ttsRate === '+30%'}>{T('dash_rate_p30')}</option>
                 </select>
               </div>
               <div>
-                <label>PITCH</label>
+                <label>{T('dash_pitch_label')}</label>
                 <select id="dashPitchSelect" style="margin-bottom:0;">
-                  <option value="-10Hz" selected={overlayStatus?.ttsPitch === '-10Hz'}>Low (-10Hz)</option>
-                  <option value="-5Hz" selected={overlayStatus?.ttsPitch === '-5Hz'}>Slightly Low (-5Hz)</option>
-                  <option value="+0Hz" selected={overlayStatus?.ttsPitch === '+0Hz' || !overlayStatus?.ttsPitch}>Normal (0Hz)</option>
-                  <option value="+5Hz" selected={overlayStatus?.ttsPitch === '+5Hz'}>Slightly High (+5Hz)</option>
-                  <option value="+10Hz" selected={overlayStatus?.ttsPitch === '+10Hz'}>High (+10Hz)</option>
+                  <option value="-10Hz" selected={overlayStatus?.ttsPitch === '-10Hz'}>{T('dash_pitch_m10')}</option>
+                  <option value="-5Hz" selected={overlayStatus?.ttsPitch === '-5Hz'}>{T('dash_pitch_m5')}</option>
+                  <option value="+0Hz" selected={overlayStatus?.ttsPitch === '+0Hz' || !overlayStatus?.ttsPitch}>{T('dash_pitch_0')}</option>
+                  <option value="+5Hz" selected={overlayStatus?.ttsPitch === '+5Hz'}>{T('dash_pitch_p5')}</option>
+                  <option value="+10Hz" selected={overlayStatus?.ttsPitch === '+10Hz'}>{T('dash_pitch_p10')}</option>
                 </select>
               </div>
             </div>
             <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
               <button type="submit" id="dashSaveTtsBtn" style="width:auto; padding:8px 16px; font-size:13px;">
-                SAVE SETTINGS
+                {T('dash_save_settings')}
               </button>
               <button
                 type="button"
                 id="dashPreviewTtsBtn"
                 style="width:auto; padding:8px 16px; font-size:13px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
               >
-                TEST AUDIO LOCALLY
+                {T('dash_test_audio')}
               </button>
               <span id="dashTtsMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
@@ -219,10 +222,10 @@ export function DashboardPage({
         </details>
 
         <details class="card fold-block" style="margin-bottom: 24px;">
-          <summary>WORD FILTER &amp; PROFANITY CENSOR</summary>
+          <summary>{T('dash_filter_summary')}</summary>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <p class="subtitle" style="margin:0; font-size:11px; border:none; padding:0;">
-              CENSOR OFFENSIVE WORDS WITH *** OR SILENCE TTS // THAI &amp; ENGLISH
+              {T('dash_filter_subtitle')}
             </p>
             <div style="display:flex; gap:10px; align-items:center;">
               <button
@@ -230,7 +233,7 @@ export function DashboardPage({
                 id="dashToggleFilterBtn"
                 style="width:auto; padding:6px 14px; font-size:12px;"
               >
-                FILTER: {overlayStatus?.filterEnabled !== false ? 'ENABLED' : 'DISABLED'}
+                {overlayStatus?.filterEnabled !== false ? T('dash_filter_enabled') : T('dash_filter_disabled')}
               </button>
             </div>
           </div>
@@ -238,29 +241,29 @@ export function DashboardPage({
           <form id="dashFilterForm" style="margin-bottom:0;">
             <div class="row" style="margin-bottom:12px;">
               <div>
-                <label>ACTION ON PROFANITY</label>
+                <label>{T('dash_filter_action_label')}</label>
                 <select id="dashFilterAction" style="margin-bottom:0;">
                   <option value="censor" selected={overlayStatus?.filterAction !== 'mute'}>
-                    Censor with *** (TTS speaks censored text)
+                    {T('dash_filter_action_censor')}
                   </option>
                   <option value="mute" selected={overlayStatus?.filterAction === 'mute'}>
-                    Mute TTS (Censor text &amp; silence audio completely)
+                    {T('dash_filter_action_mute')}
                   </option>
                 </select>
               </div>
               <div>
-                <label>CUSTOM WORDS (COMMA OR NEWLINE SEPARATED)</label>
+                <label>{T('dash_filter_words_label')}</label>
                 <input
                   type="text"
                   id="dashFilterWords"
-                  placeholder={t(lang, 'placeholder_badwords')}
+                  placeholder={T('placeholder_badwords')}
                   style="margin-bottom:0;"
                 />
               </div>
             </div>
             <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
               <button type="submit" id="dashSaveFilterBtn" style="width:auto; padding:8px 16px; font-size:13px;">
-                SAVE FILTER SETTINGS
+                {T('dash_save_filter')}
               </button>
               <span id="dashFilterMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
             </div>
@@ -271,19 +274,19 @@ export function DashboardPage({
           <table>
             <thead>
               <tr>
-                <th>TIME</th>
-                <th>DONOR</th>
-                <th>AMOUNT</th>
-                <th>CHANNEL</th>
-                <th>SLIP REF</th>
-                <th>MESSAGE</th>
+                <th>{T('dash_th_time')}</th>
+                <th>{T('dash_th_donor')}</th>
+                <th>{T('dash_th_amount')}</th>
+                <th>{T('dash_th_channel')}</th>
+                <th>{T('dash_th_ref')}</th>
+                <th>{T('dash_th_message')}</th>
               </tr>
             </thead>
             <tbody id="txBody">
               {items.length === 0 ? (
                 <tr id="emptyRow">
                   <td colSpan={6} style="text-align:center; font-family:var(--font-mono);">
-                    NO TRANSACTIONS RECORDED
+                    {T('dash_empty_tx')}
                   </td>
                 </tr>
               ) : (
@@ -365,7 +368,7 @@ export function DashboardPage({
 
           testBtn.addEventListener('click', async () => {
             testBtn.disabled = true;
-            testBtn.textContent = 'SENDING...';
+            testBtn.textContent = __t('dash_sending');
             testStatus.className = 'status';
             try {
               const res = await fetch('/api/donate/test', {
@@ -376,13 +379,13 @@ export function DashboardPage({
               const data = await res.json();
               if (!res.ok || !data.ok) throw new Error(data.error || 'TEST FAILED');
               testStatus.className = 'status ok';
-              testStatus.textContent = 'OK // TEST ALERT SENT TO OVERLAY';
+              testStatus.textContent = __t('dash_test_sent');
             } catch (err) {
               testStatus.className = 'status err';
               testStatus.textContent = 'ERROR // ' + err.message;
             } finally {
               testBtn.disabled = false;
-              testBtn.textContent = 'TEST DONATE ALERT';
+              testBtn.textContent = __t('dash_test_donate_btn');
             }
           });
 
@@ -398,21 +401,21 @@ export function DashboardPage({
             const detailText = document.getElementById('overlayDetailText');
 
             if (statText) {
-              statText.textContent = online ? 'ONLINE' : 'OFFLINE';
+              statText.textContent = online ? __t('status_online') : __t('status_offline');
               statText.className = online ? 'status-online' : 'status-offline';
             }
             if (detailText) {
               detailText.textContent = online
-                ? (count + ' CLIENT' + (count > 1 ? 'S' : '') + ' CONNECTED')
-                : 'NO OVERLAY CONNECTED';
+                ? __t('dash_clients_connected', { count })
+                : __t('dash_no_overlay');
             }
             if (navBadge && navText) {
               if (online) {
                 navBadge.classList.add('is-online');
-                navText.textContent = 'OVERLAY: ONLINE' + (count > 1 ? ' (' + count + ')' : '');
+                navText.textContent = __t('overlay_online') + (count > 1 ? ' (' + count + ')' : '');
               } else {
                 navBadge.classList.remove('is-online');
-                navText.textContent = 'OVERLAY: OFFLINE';
+                navText.textContent = __t('overlay_offline');
               }
             }
 
@@ -427,11 +430,11 @@ export function DashboardPage({
               if (typeof data.ttsEnabled === 'boolean') {
                 const on = data.ttsEnabled;
                 if (ttsStatusEl) {
-                  ttsStatusEl.textContent = on ? 'ONLINE' : 'MUTED';
+                  ttsStatusEl.textContent = on ? __t('status_online') : __t('status_muted');
                   ttsStatusEl.className = on ? 'status-online' : 'status-offline';
                 }
                 if (toggleBtn) {
-                  toggleBtn.textContent = 'TOGGLE TTS: ' + (on ? 'MUTE' : 'UNMUTE');
+                  toggleBtn.textContent = on ? __t('dash_toggle_tts_mute') : __t('dash_toggle_tts_unmute');
                 }
               }
               if (data.ttsVoice && ttsVoiceEl) ttsVoiceEl.textContent = data.ttsVoice;
@@ -469,7 +472,7 @@ export function DashboardPage({
             const msgEl = document.getElementById('dashTtsMsg');
             const saveBtn = document.getElementById('dashSaveTtsBtn');
             if (saveBtn) saveBtn.disabled = true;
-            if (msgEl) msgEl.textContent = 'SAVING...';
+            if (msgEl) msgEl.textContent = __t('dash_saving');
 
             try {
               const res = await fetch('/api/manage/tts', {
@@ -480,7 +483,7 @@ export function DashboardPage({
               const d = await res.json().catch(() => ({}));
               if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
               if (msgEl) {
-                msgEl.textContent = 'SAVED';
+                msgEl.textContent = __t('dash_saved');
                 setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
               }
               if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
@@ -507,7 +510,7 @@ export function DashboardPage({
 
             if (previewBtn) {
               previewBtn.disabled = true;
-              previewBtn.textContent = 'LOADING...';
+              previewBtn.textContent = __t('dash_loading');
             }
             try {
               const sampleText = __t('tts_sample');
@@ -520,23 +523,23 @@ export function DashboardPage({
               dashAudio.onended = () => {
                 if (previewBtn) {
                   previewBtn.disabled = false;
-                  previewBtn.textContent = 'TEST AUDIO LOCALLY';
+                  previewBtn.textContent = __t('dash_test_audio');
                 }
               };
               dashAudio.onerror = () => {
-                if (msgEl) msgEl.textContent = 'PREVIEW FAILED';
+                if (msgEl) msgEl.textContent = __t('dash_preview_failed');
                 if (previewBtn) {
                   previewBtn.disabled = false;
-                  previewBtn.textContent = 'TEST AUDIO LOCALLY';
+                  previewBtn.textContent = __t('dash_test_audio');
                 }
               };
               await dashAudio.play();
-              if (previewBtn) previewBtn.textContent = 'PLAYING...';
+              if (previewBtn) previewBtn.textContent = __t('dash_playing');
             } catch (err) {
               if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
               if (previewBtn) {
                 previewBtn.disabled = false;
-                previewBtn.textContent = 'TEST AUDIO LOCALLY';
+                previewBtn.textContent = __t('dash_test_audio');
               }
             }
           });
@@ -552,7 +555,7 @@ export function DashboardPage({
                 filterEnabled = Boolean(d.enabled);
                 const toggleBtn = document.getElementById('dashToggleFilterBtn');
                 if (toggleBtn) {
-                  toggleBtn.textContent = 'FILTER: ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+                  toggleBtn.textContent = filterEnabled ? __t('dash_filter_enabled') : __t('dash_filter_disabled');
                 }
                 const actEl = document.getElementById('dashFilterAction');
                 if (actEl && d.action) actEl.value = d.action;
@@ -577,9 +580,9 @@ export function DashboardPage({
               const d = await res.json().catch(() => ({}));
               if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
               filterEnabled = Boolean(d.enabled);
-              if (btn) btn.textContent = 'FILTER: ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+              if (btn) btn.textContent = filterEnabled ? __t('dash_filter_enabled') : __t('dash_filter_disabled');
               if (msgEl) {
-                msgEl.textContent = 'FILTER ' + (filterEnabled ? 'ENABLED' : 'DISABLED');
+                msgEl.textContent = filterEnabled ? __t('dash_filter_enabled') : __t('dash_filter_disabled');
                 setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
               }
             } catch (err) {
@@ -596,7 +599,7 @@ export function DashboardPage({
             const msgEl = document.getElementById('dashFilterMsg');
             const saveBtn = document.getElementById('dashSaveFilterBtn');
             if (saveBtn) saveBtn.disabled = true;
-            if (msgEl) msgEl.textContent = 'SAVING...';
+            if (msgEl) msgEl.textContent = __t('dash_saving');
             try {
               const res = await fetch('/api/manage/filter', {
                 method: 'PUT',
@@ -606,7 +609,7 @@ export function DashboardPage({
               const d = await res.json().catch(() => ({}));
               if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
               if (msgEl) {
-                msgEl.textContent = 'SAVED';
+                msgEl.textContent = __t('dash_saved');
                 setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
               }
             } catch (err) {
@@ -617,6 +620,9 @@ export function DashboardPage({
           });
 
           const es = new EventSource('/api/events?client=dashboard');
+          window.__es = es;
+          window.addEventListener('pagehide', () => es.close());
+          window.addEventListener('beforeunload', () => es.close());
           es.addEventListener('donate', (e) => addRow(JSON.parse(e.data)));
           es.addEventListener('overlay_status', (e) => {
             try {
