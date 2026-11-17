@@ -1,9 +1,9 @@
 import postgres from 'postgres'
 import { drizzle as d1Drizzle } from 'drizzle-orm/d1'
 import { drizzle as proxyDrizzle } from 'drizzle-orm/pg-proxy'
-import { admins, donations, subathonState } from './schema'
+import { admins, discordWhitelist, donations, subathonState } from './schema'
 
-const schema = { admins, donations, subathonState }
+const schema = { admins, donations, subathonState, discordWhitelist }
 
 // ponytail: minimal controller contract both backends satisfy; db.ts codes only against this so the D1/sqlite
 // and pg/pg-proxy query builders never leak into business code.

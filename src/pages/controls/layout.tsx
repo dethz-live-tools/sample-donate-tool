@@ -1,5 +1,5 @@
 import type { OverlayStatus } from '../../modules/events'
-import { LangSwitch } from '../LangSwitch'
+import { AdminNav } from '../LangSwitch'
 import { t, type I18nKey, type Locale } from '../../i18n'
 
 export type ControlTab = 'overview' | 'alert' | 'leaderboard' | 'countdown' | 'subathon'
@@ -40,30 +40,7 @@ export function ControlLayout({
   return (
     <div class="container wide">
       <div class="card elevated">
-        <div class="nav-links">
-          <div style="display:flex; gap:16px; align-items:center;">
-            <a href="/dashboard">{T('ctrl_return_dash')}</a>
-            <a href="/">{T('ctrl_donate_page')}</a>
-          </div>
-          <div style="display:flex; gap:16px; align-items:center;">
-            <LangSwitch lang={lang} />
-            <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
-              <span class="overlay-square"></span>
-              <span id="overlayNavText">
-                {overlayOnline ? `${T('overlay_online')}${clientCount > 1 ? ` (${clientCount})` : ''}` : T('overlay_offline')}
-              </span>
-            </div>
-            <a href={openOverlayHref} target="_blank">{T('dash_open_overlay')}</a>
-            <form method="post" action="/logout" style="display:inline;">
-              <button
-                type="submit"
-                style="width:auto; padding:4px 12px; font-size:12px; background:var(--ctp-red); border-color:var(--ctp-red);"
-              >
-                {T('dash_logout')}
-              </button>
-            </form>
-          </div>
-        </div>
+        <AdminNav active="controls" lang={lang} overlayStatus={overlayStatus} openOverlayHref={openOverlayHref} />
 
         <div
           style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid var(--ctp-surface1);"

@@ -34,7 +34,8 @@ export const admins = pgTable('admins', {
   filterAction: text('filter_action').notNull().default('censor'),
   tokenVersion: integer('token_version', { mode: 'number' }).notNull().default(1),
   apiEnabled: boolean('api_enabled').notNull().default(true),
-  discordId: text('discord_id').notNull().default('')
+  discordId: text('discord_id').notNull().default(''),
+  donateEnabled: boolean('donate_enabled').notNull().default(false)
 }, (t) => [check('admins_id_is_1', sql`${t.id} = 1`)])
 
 export const subathonState = pgTable('subathon_state', {
@@ -56,3 +57,9 @@ export const subathonState = pgTable('subathon_state', {
   tiktokIsLive: boolean('tiktok_is_live').notNull().default(false),
   updatedAt: int64('updated_at').notNull()
 }, (t) => [check('subathon_state_id_is_1', sql`${t.id} = 1`)])
+
+export const discordWhitelist = pgTable('discord_whitelist', {
+  discordId: text('discord_id').primaryKey(),
+  note: text('note').notNull().default(''),
+  createdAt: int64('created_at').notNull()
+})

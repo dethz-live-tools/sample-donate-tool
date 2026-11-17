@@ -1,13 +1,13 @@
 import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
-import { authRoute, dashboardAuth, getTikTokWebhookKey, manageRoute } from './modules/auth'
+import { authRoute, dashboardAuth, getEnvAllowedDiscordIds, getTikTokWebhookKey, manageRoute } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { resolveLocale, t, type Locale } from './i18n'
 import { getDb } from './db/client'
-import { getAdmin, getLeaderboard, getSubathonState, listDonations } from './modules/db'
+import { getAdmin, getLeaderboard, getSubathonState, listDiscordWhitelist, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveDonateEnabled, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
 import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
 import { tiktokRoute } from './modules/tiktok'
 import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
@@ -18,6 +18,7 @@ import {
   OverlayControlPage,
   SubathonControlPage
 } from './pages/controls'
+import { AccessPage } from './pages/access'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
@@ -92,18 +93,37 @@ app.put('/tts', dashboardAuth, async (c) => {
   return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
 })
 
-app.get('/', (c) =>
-  c.render(<HomePage config={getConfig(c.env)} overlayOnline={isOverlayOnline()} mobileSid={c.req.query('sid') || ''} lang={c.get('lang') as Locale} />)
-)
+app.get('/', async (c) => {
+  const donateEnabled = await resolveDonateEnabled(c.env)
+  return c.render(
+    <HomePage
+      config={getConfig(c.env)}
+      overlayOnline={isOverlayOnline()}
+      donateEnabled={donateEnabled}
+      mobileSid={c.req.query('sid') || ''}
+      lang={c.get('lang') as Locale}
+    />
+  )
+})
 app.get('/setup', (c) => c.redirect('/login'))
 app.get('/login', async (c) => {
   const configured = Boolean(c.env?.DISCORD_CLIENT_ID || c.env?.VITE_DISCORD_CLIENT_ID)
   return c.render(<LoginPage error={c.req.query('error') || undefined} configured={configured} />)
 })
 app.get('/dashboard', dashboardAuth, async (c) => {
-  const [items] = await Promise.all([listDonations(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  const [items] = await Promise.all([
+    listDonations(getDb(c.env)),
+    resolveTtsConfig(c.env),
+    resolveFilterConfig(c.env),
+    resolveDonateEnabled(c.env)
+  ])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
+app.get('/dashboard/access', dashboardAuth, async (c) => {
+  const [items] = await Promise.all([listDiscordWhitelist(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+  return c.render(<AccessPage envIds={getEnvAllowedDiscordIds(c.env)} items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
+})
+app.get('/access', dashboardAuth, (c) => c.redirect('/dashboard/access'))
 app.get('/overlay/control', dashboardAuth, async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)

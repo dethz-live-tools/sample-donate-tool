@@ -5,11 +5,13 @@ import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
 import {
   applySubathonCommand,
+  getDonateEnabled,
   getFilterConfig,
   getLeaderboard,
   getSubathonState,
   getTtsConfig,
   listDonations,
+  setDonateEnabled,
   setFilterConfig,
   setTtsConfig,
   type FilterSettings,
@@ -34,6 +36,7 @@ export type DonateEvent = {
 export type OverlayStatus = {
   online: boolean
   count: number
+  donateEnabled?: boolean
   ttsEnabled: boolean
   ttsVoice?: string
   ttsRate?: string
@@ -57,10 +60,28 @@ const statusListeners = new Set<(status: OverlayStatus) => void>()
 const controlListeners = new Set<(cmd: OverlayCommand) => void>()
 const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
+let runtimeDonateEnabled: boolean | null = null
 let runtimeTtsConfig: TtsSettings | null = null
 let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
 const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg'])
+
+export async function resolveDonateEnabled(env?: Bindings): Promise<boolean> {
+  try {
+    const val = await getDonateEnabled(getDb(env), runtimeDonateEnabled ?? false)
+    runtimeDonateEnabled = val
+    return val
+  } catch {
+    return runtimeDonateEnabled ?? false
+  }
+}
+
+export async function updateDonateEnabled(env: Bindings | undefined, enabled: boolean): Promise<boolean> {
+  const val = await setDonateEnabled(getDb(env), enabled)
+  runtimeDonateEnabled = val
+  broadcastOverlayStatus()
+  return val
+}
 
 export async function resolveTtsConfig(env?: Bindings): Promise<TtsSettings> {
   const cfg = getConfig(env)
@@ -116,6 +137,7 @@ export function getOverlayStatus(): OverlayStatus {
   return {
     online: isOverlayOnline(),
     count: overlayConnections.size,
+    donateEnabled: runtimeDonateEnabled ?? false,
     ttsEnabled: runtimeTtsConfig?.enabled ?? true,
     ttsVoice: runtimeTtsConfig?.voice ?? 'th-TH-NiwatNeural',
     ttsRate: runtimeTtsConfig?.rate ?? '+0%',
@@ -165,7 +187,7 @@ function sanitizeEvent(ev: DonateEvent, isAdmin: boolean): DonateEvent {
 }
 
 async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: string) {
-  await resolveTtsEnabled(c.env)
+  await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
   const isAdmin = await isValidSession(c)
   const client = forcedClient || c.req.query('client') || (c.req.path.endsWith('/overlay') ? 'overlay' : 'default')
   const isOverlay = client === 'overlay'
@@ -294,7 +316,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
 
 export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/poll', async (c) => {
-    await resolveTtsEnabled(c.env)
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
     const isAdmin = await isValidSession(c)
     if (c.req.query('client') === 'overlay') {
       touchOverlayHeartbeat()
@@ -311,7 +333,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/status', async (c) => {
-    await resolveTtsEnabled(c.env)
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
     return c.json({ ok: true, ...getOverlayStatus() })
   })
   .get('/leaderboard', async (c) => {

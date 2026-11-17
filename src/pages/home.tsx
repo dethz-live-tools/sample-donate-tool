@@ -5,11 +5,13 @@ import { t, type I18nKey, type Locale } from "../i18n";
 export function HomePage({
   config,
   overlayOnline = false,
+  donateEnabled = false,
   mobileSid = "",
   lang = 'th',
 }: {
   config: AppConfig;
   overlayOnline?: boolean;
+  donateEnabled?: boolean;
   mobileSid?: string;
   lang?: Locale;
 }) {
@@ -22,10 +24,9 @@ export function HomePage({
   return (
     <div class="container">
       <div class="card elevated">
-        <div class="nav-links">
-          <span>{T("home_nav_brand")}</span>
-          <div style="display:flex; gap:12px; align-items:center;">
-            <LangSwitch lang={lang} />
+        <nav class="nav-links">
+          <span style="font-weight:700; color:var(--ctp-text);">{T("home_nav_brand")}</span>
+          <div class="nav-group">
             <div
               id="overlayNavBadge"
               class={`overlay-indicator ${overlayOnline ? "is-online" : ""}`}
@@ -35,15 +36,28 @@ export function HomePage({
                 {overlayOnline ? T("overlay_online") : T("overlay_offline")}
               </span>
             </div>
+            <LangSwitch lang={lang} />
           </div>
-        </div>
+        </nav>
         <h1>{isMobileSession ? T("home_title_mobile") : T("home_title")}</h1>
         <p class="subtitle">
           {isMobileSession ? T("home_subtitle_mobile") : T("home_subtitle")}
         </p>
 
+        <div
+          id="donateClosedBanner"
+          class="status err"
+          style={`margin-bottom:20px; display:${donateEnabled ? "none" : "block"};`}
+        >
+          {T("home_donate_closed_banner")}
+        </div>
+
         {!isMobileSession && hasPaymentInfo && (
-          <div class="inverted-block">
+          <div
+            class="inverted-block"
+            id="paymentInfoBlock"
+            style={donateEnabled ? "" : "display:none;"}
+          >
             {config.accountName && (
               <div>
                 {T("home_account_name")} <strong>{config.accountName}</strong>
@@ -66,6 +80,7 @@ export function HomePage({
                     min={10}
                     step="any"
                     value="10"
+                    disabled={!donateEnabled}
                     style="margin-bottom:12px;"
                   />
                   <div
@@ -85,126 +100,141 @@ export function HomePage({
         )}
 
         <form id="donateForm">
-          <input type="hidden" name="sid" id="sessionSidInput" value={mobileSid} />
+          <fieldset
+            id="donateFieldset"
+            disabled={!donateEnabled}
+            style="border:none; padding:0; margin:0; min-inline-size:0;"
+          >
+            <input type="hidden" name="sid" id="sessionSidInput" value={mobileSid} />
 
-          {isMobileSession ? (
-            <div class="inverted-block" id="mobileSummaryBox" style="margin-bottom:16px;">
-              <label style="color:var(--ctp-lavender); margin-bottom:8px;">
-                {T("home_session_summary")}
-              </label>
+            {isMobileSession ? (
+              <div class="inverted-block" id="mobileSummaryBox" style="margin-bottom:16px;">
+                <label style="color:var(--ctp-lavender); margin-bottom:8px;">
+                  {T("home_session_summary")}
+                </label>
+                <div>
+                  {T("home_sum_donor_label")} <strong id="sumDonor">{T("home_sum_donor_default")}</strong>
+                </div>
+                <div>
+                  {T("home_sum_channel_label")} <strong id="sumChannel">{T("home_sum_channel_bank")}</strong>
+                </div>
+                <div>
+                  {T("home_sum_message_label")} <strong id="sumMessage">-</strong>
+                </div>
+                <div
+                  id="mobileLinkedBanner"
+                  style="margin-top:10px; padding-top:8px; border-top:2px solid var(--ctp-surface1); color:var(--ctp-green); font-size:13px;"
+                >
+                  {T("home_mobile_connected")}
+                </div>
+              </div>
+            ) : (
               <div>
-                {T("home_sum_donor_label")} <strong id="sumDonor">{T("home_sum_donor_default")}</strong>
-              </div>
-              <div>
-                {T("home_sum_channel_label")} <strong id="sumChannel">{T("home_sum_channel_bank")}</strong>
-              </div>
-              <div>
-                {T("home_sum_message_label")} <strong id="sumMessage">-</strong>
-              </div>
-              <div
-                id="mobileLinkedBanner"
-                style="margin-top:10px; padding-top:8px; border-top:2px solid var(--ctp-surface1); color:var(--ctp-green); font-size:13px;"
-              >
-                {T("home_mobile_connected")}
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label>{T("home_donor_label")}</label>
-              <input type="text" name="donor" id="donorInput" placeholder={T("home_donor_placeholder")} style="margin-bottom:8px;" />
-              <label
-                style="display:inline-flex; align-items:center; gap:8px; margin-bottom:16px; cursor:pointer; font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);"
-              >
-                <input type="checkbox" id="rememberDonor" checked style="width:auto; margin:0;" />
-                <span>{T("home_remember_donor")}</span>
-              </label>
+                <label>{T("home_donor_label")}</label>
+                <input type="text" name="donor" id="donorInput" placeholder={T("home_donor_placeholder")} style="margin-bottom:8px;" />
+                <label
+                  style="display:inline-flex; align-items:center; gap:8px; margin-bottom:16px; cursor:pointer; font-family:var(--font-mono); font-size:12px; color:var(--ctp-subtext0);"
+                >
+                  <input type="checkbox" id="rememberDonor" checked style="width:auto; margin:0;" />
+                  <span>{T("home_remember_donor")}</span>
+                </label>
 
-              <label>{T("home_channel_label")}</label>
-              <select name="type" id="slipType">
-                {hasBankOrPP && (
-                  <option value="bank-image">{T("home_channel_bank_option")}</option>
-                )}
-                {hasTrueMoney && (
-                  <option value="truemoney">{T("home_channel_truemoney_option")}</option>
-                )}
-              </select>
-            </div>
-          )}
-
-          <div id="fileField">
-            <label>{T("home_slip_label")}</label>
-            <div class="dropzone" id="dropzone">
-              <input
-                type="file"
-                name="image"
-                id="slipFile"
-                accept="image/png,image/jpeg,image/webp"
-                required
-              />
-              <div id="dropzoneText">
-                {isMobileSession
-                  ? T("home_dropzone_mobile")
-                  : T("home_dropzone_desktop")}
+                <label>{T("home_channel_label")}</label>
+                <select name="type" id="slipType">
+                  {hasBankOrPP && (
+                    <option value="bank-image">{T("home_channel_bank_option")}</option>
+                  )}
+                  {hasTrueMoney && (
+                    <option value="truemoney">{T("home_channel_truemoney_option")}</option>
+                  )}
+                </select>
               </div>
+            )}
+
+            <div id="fileField">
+              <label>{T("home_slip_label")}</label>
+              <div class={`dropzone ${donateEnabled ? "" : "is-disabled"}`} id="dropzone">
+                <input
+                  type="file"
+                  name="image"
+                  id="slipFile"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={!donateEnabled}
+                  required
+                />
+                <div id="dropzoneText">
+                  {!donateEnabled
+                    ? T("home_donate_closed_banner")
+                    : isMobileSession
+                      ? T("home_dropzone_mobile")
+                      : T("home_dropzone_desktop")}
+                </div>
+              </div>
+
+              {!isMobileSession && (
+                <details
+                  class="inverted-block fold-block desktop-only"
+                  id="mobileUploadBlock"
+                  style={`margin-bottom:16px; display:${donateEnabled ? "block" : "none"};`}
+                >
+                  <summary>{T("home_mobile_fold_summary")}</summary>
+                  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                    <div
+                      id="mobileSessionQr"
+                      style="background:#FFFFFF; padding:10px; border:3px solid var(--ctp-lavender); display:inline-block; flex-shrink:0;"
+                    ></div>
+                    <div style="flex:1; min-width:200px;">
+                      <div style="font-size:13px; color:var(--ctp-text); margin-bottom:8px;">
+                        {T("home_mobile_scan_hint")}
+                      </div>
+                      <div
+                        id="mobileSessionStatus"
+                        style="font-size:12px; color:var(--ctp-yellow); margin-bottom:10px;"
+                      >
+                        {T("home_mobile_waiting")}
+                      </div>
+                      <button
+                        type="button"
+                        id="copyMobileLinkBtn"
+                        style="width:auto; padding:8px 14px; font-size:12px;"
+                      >
+                        {T("home_copy_mobile_link")}
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              )}
             </div>
 
             {!isMobileSession && (
-              <details class="inverted-block fold-block desktop-only" id="mobileUploadBlock" style="margin-bottom:16px;">
-                <summary>{T("home_mobile_fold_summary")}</summary>
-                <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+              <div>
+                <label>{T("home_message_label")}</label>
+                <textarea
+                  name="message"
+                  id="messageInput"
+                  rows={2}
+                  placeholder={T("home_message_placeholder")}
+                ></textarea>
+
+                {config.turnstileSiteKey && (
                   <div
-                    id="mobileSessionQr"
-                    style="background:#FFFFFF; padding:10px; border:3px solid var(--ctp-lavender); display:inline-block; flex-shrink:0;"
+                    class="cf-turnstile"
+                    data-sitekey={config.turnstileSiteKey}
+                    data-theme="dark"
+                    style="margin-bottom:16px;"
                   ></div>
-                  <div style="flex:1; min-width:200px;">
-                    <div style="font-size:13px; color:var(--ctp-text); margin-bottom:8px;">
-                      {T("home_mobile_scan_hint")}
-                    </div>
-                    <div
-                      id="mobileSessionStatus"
-                      style="font-size:12px; color:var(--ctp-yellow); margin-bottom:10px;"
-                    >
-                      {T("home_mobile_waiting")}
-                    </div>
-                    <button
-                      type="button"
-                      id="copyMobileLinkBtn"
-                      style="width:auto; padding:8px 14px; font-size:12px;"
-                    >
-                      {T("home_copy_mobile_link")}
-                    </button>
-                  </div>
-                </div>
-              </details>
+                )}
+
+                <button type="submit" id="submitBtn" data-has-payment={hasPaymentInfo ? "1" : "0"} disabled={!hasPaymentInfo || !donateEnabled}>
+                  {!donateEnabled
+                    ? T("home_donate_closed_btn")
+                    : hasPaymentInfo
+                      ? T("home_submit_btn")
+                      : T("home_no_account_btn")}
+                </button>
+              </div>
             )}
-          </div>
-
-          {!isMobileSession && (
-            <div>
-              <label>{T("home_message_label")}</label>
-              <textarea
-                name="message"
-                id="messageInput"
-                rows={2}
-                placeholder={T("home_message_placeholder")}
-              ></textarea>
-
-              {config.turnstileSiteKey && (
-                <div
-                  class="cf-turnstile"
-                  data-sitekey={config.turnstileSiteKey}
-                  data-theme="dark"
-                  style="margin-bottom:16px;"
-                ></div>
-              )}
-
-              <button type="submit" id="submitBtn" disabled={!hasPaymentInfo}>
-                {hasPaymentInfo
-                  ? T("home_submit_btn")
-                  : T("home_no_account_btn")}
-              </button>
-            </div>
-          )}
+          </fieldset>
           <div id="statusBox" class="status"></div>
         </form>
       </div>
@@ -371,8 +401,22 @@ export function HomePage({
           slipType?.addEventListener('change', pushSessionMeta);
           msgInput?.addEventListener('input', pushSessionMeta);
 
+          function showClosedAlert() {
+            const msg = __t('err_donate_closed');
+            const status = document.getElementById('statusBox');
+            if (status) {
+              status.className = 'status err';
+              status.textContent = msg;
+            }
+            alert(msg);
+          }
+
           async function uploadSlipToSession(file) {
             if (!file) return;
+            if (!donateOpen) {
+              showClosedAlert();
+              return;
+            }
             const fd = new FormData();
             fd.append('sid', sid);
             if (donorInput) fd.append('donor', donorInput.value || '');
@@ -386,6 +430,20 @@ export function HomePage({
             try {
               const r = await fetch('/api/donate/session', { method: 'POST', body: fd });
               const d = await r.json();
+              if (!r.ok || !d?.ok) {
+                const errMsg = d?.error || __t('err_donate_closed');
+                const status = document.getElementById('statusBox');
+                if (status) {
+                  status.className = 'status err';
+                  status.textContent = errMsg;
+                }
+                if (isMobileLinked && mobileLinkedBanner) {
+                  mobileLinkedBanner.style.color = 'var(--ctp-red)';
+                  mobileLinkedBanner.textContent = errMsg;
+                }
+                alert(errMsg);
+                return;
+              }
               if (d && d.ok) {
                 lastSyncedSlipAt = d.slipUpdatedAt || Date.now();
                 const name = d.slipName || file.name;
@@ -474,13 +532,24 @@ export function HomePage({
 
           ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => {
             e.preventDefault();
+            if (!donateOpen) return;
             dz.classList.add('dragover');
           }));
           ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, (e) => {
             e.preventDefault();
             dz.classList.remove('dragover');
           }));
+          dz.addEventListener('click', (e) => {
+            if (!donateOpen) {
+              e.preventDefault();
+              showClosedAlert();
+            }
+          });
           dz.addEventListener('drop', (e) => {
+            if (!donateOpen) {
+              showClosedAlert();
+              return;
+            }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
               fileInput.files = e.dataTransfer.files;
               dzText.textContent = __t('home_selected_file', { name: e.dataTransfer.files[0].name });
@@ -488,6 +557,11 @@ export function HomePage({
             }
           });
           fileInput.addEventListener('change', () => {
+            if (!donateOpen) {
+              fileInput.value = '';
+              showClosedAlert();
+              return;
+            }
             if (fileInput.files && fileInput.files.length) {
               dzText.textContent = __t('home_selected_file', { name: fileInput.files[0].name });
               uploadSlipToSession(fileInput.files[0]);
@@ -496,6 +570,10 @@ export function HomePage({
 
           document.getElementById('donateForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!donateOpen) {
+              showClosedAlert();
+              return;
+            }
             const form = e.target;
             const btn = document.getElementById('submitBtn');
             const status = document.getElementById('statusBox');
@@ -535,13 +613,46 @@ export function HomePage({
               status.className = 'status err';
               status.textContent = err.message;
             } finally {
-              btn.disabled = false;
-              btn.textContent = __t('home_submit_btn');
+              const hasPay = btn?.dataset.hasPayment === '1';
+              btn.disabled = !hasPay || !donateOpen;
+              btn.textContent = !donateOpen ? __t('home_donate_closed_btn') : hasPay ? __t('home_submit_btn') : __t('home_no_account_btn');
               if (typeof turnstile !== 'undefined') {
                 try { turnstile.reset(); } catch (_) {}
               }
             }
           });
+
+          let donateOpen = ${donateEnabled ? 'true' : 'false'};
+          function applyDonateState(open) {
+            donateOpen = open;
+            const banner = document.getElementById('donateClosedBanner');
+            if (banner) banner.style.display = open ? 'none' : 'block';
+            const payBlock = document.getElementById('paymentInfoBlock');
+            if (payBlock) payBlock.style.display = open ? '' : 'none';
+            if (mobileUploadBlock && !isMobileLinked) {
+              mobileUploadBlock.style.display = open ? 'block' : 'none';
+            }
+            const fieldset = document.getElementById('donateFieldset');
+            if (fieldset) fieldset.disabled = !open;
+            if (ppAmt) ppAmt.disabled = !open;
+            if (fileInput) fileInput.disabled = !open;
+            if (dz) {
+              dz.classList.toggle('is-disabled', !open);
+            }
+            if (dzText) {
+              if (!open) {
+                dzText.textContent = __t('home_donate_closed_banner');
+              } else if (!fileInput?.files?.length) {
+                dzText.textContent = isMobileLinked ? __t('home_dropzone_mobile') : __t('home_dropzone_desktop');
+              }
+            }
+            const btn = document.getElementById('submitBtn');
+            if (btn) {
+              const hasPay = btn.dataset.hasPayment === '1';
+              btn.disabled = !hasPay || !open;
+              btn.textContent = !open ? __t('home_donate_closed_btn') : hasPay ? __t('home_submit_btn') : __t('home_no_account_btn');
+            }
+          }
 
           function updateOverlayStatus(data) {
             const online = typeof data === 'boolean' ? data : Boolean(data?.online);
@@ -555,6 +666,9 @@ export function HomePage({
                 navBadge.classList.remove('is-online');
                 navText.textContent = __t('overlay_offline');
               }
+            }
+            if (typeof data === 'object' && typeof data?.donateEnabled === 'boolean') {
+              applyDonateState(data.donateEnabled);
             }
           }
 
@@ -570,7 +684,7 @@ export function HomePage({
           });
           es.onerror = () => {
             fetch('/api/events/status').then(r => r.json()).then(d => {
-              if (typeof d.online === 'boolean') updateOverlayStatus(d.online);
+              if (d) updateOverlayStatus(d);
             }).catch(() => {});
           };
 
@@ -578,7 +692,7 @@ export function HomePage({
             try {
               const r = await fetch('/api/events/status');
               const d = await r.json();
-              if (typeof d.online === 'boolean') updateOverlayStatus(d.online);
+              if (d) updateOverlayStatus(d);
             } catch {}
           }, 5000);
         `,

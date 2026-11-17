@@ -4,7 +4,7 @@ import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
 import { t, type Locale } from '../i18n'
 import { addSubathonDonation, insertDonation } from './db'
-import { broadcast, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
+import { broadcast, resolveDonateEnabled, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
 import { filterWordContent } from './filter'
 import { verifySlip } from './slip2sure'
 import { generateEdgeTTS } from './tts'
@@ -130,6 +130,9 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     if (message !== undefined) existing.message = message
 
     if (file) {
+      if (!(await resolveDonateEnabled(c.env))) {
+        return c.json({ ok: false, code: 'DONATE_CLOSED', error: T('err_donate_closed') }, 403)
+      }
       if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
         return c.json({ ok: false, error: T('err_file_type') }, 400)
       }
@@ -158,6 +161,9 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/', async (c) => {
     cleanSessions()
     const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
+    if (!(await resolveDonateEnabled(c.env))) {
+      return c.json({ ok: false, code: 'DONATE_CLOSED', error: T('err_donate_closed') }, 403)
+    }
     const cfg = getConfig(c.env)
     const form = await c.req.formData()
     const sid = sanitizeSid(form.get('sid'))

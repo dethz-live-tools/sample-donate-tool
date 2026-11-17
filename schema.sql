@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS admins (
   filter_words TEXT DEFAULT '',
   filter_action TEXT DEFAULT 'censor',
   token_version INTEGER DEFAULT 1,
-  api_enabled INTEGER DEFAULT 1
+  api_enabled INTEGER DEFAULT 1,
+  donate_enabled INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS subathon_state (
@@ -41,4 +42,10 @@ CREATE TABLE IF NOT EXISTS subathon_state (
   total_added_secs INTEGER DEFAULT 0,
   total_donations REAL DEFAULT 0,
   updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS discord_whitelist (
+  discord_id TEXT PRIMARY KEY,
+  note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
 );

@@ -1,6 +1,6 @@
 import type { DonateEvent, OverlayStatus } from '../modules/events'
 import { t, type I18nKey, type Locale } from '../i18n'
-import { LangSwitch } from './LangSwitch'
+import { AdminNav } from './LangSwitch'
 
 export function DashboardPage({
   items,
@@ -15,40 +15,31 @@ export function DashboardPage({
   const totalAmount = items.reduce((sum, h) => sum + h.amount, 0)
   const overlayOnline = Boolean(overlayStatus?.online)
   const clientCount = overlayStatus?.count ?? (overlayOnline ? 1 : 0)
+  const donateEnabled = overlayStatus?.donateEnabled ?? false
 
   return (
     <div class="container wide">
       <div class="card elevated">
-        <div class="nav-links">
-          <a href="/">{T('dash_return_donate')}</a>
-          <div style="display:flex; gap:16px; align-items:center;">
-            <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
-              <span class="overlay-square"></span>
-              <span id="overlayNavText">
-                {overlayOnline ? `${T('overlay_online')}${clientCount > 1 ? ` (${clientCount})` : ''}` : T('overlay_offline')}
-              </span>
-            </div>
-            <LangSwitch lang={lang} />
-            <a href="/overlay/control">{T('dash_overlay_controls')}</a>
-            <a href="/overlay" target="_blank">{T('dash_open_overlay')}</a>
+        <AdminNav active="dashboard" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
+        <div class="page-header-row">
+          <h1>{T('dash_title')}</h1>
+          <div class="nav-group">
+            <button
+              type="button"
+              id="dashToggleDonateBtn"
+              style={`width:auto; padding:8px 16px; font-size:13px; background:${donateEnabled ? 'var(--ctp-red)' : 'var(--ctp-green)'}; border-color:${donateEnabled ? 'var(--ctp-red)' : 'var(--ctp-green)'};`}
+            >
+              {donateEnabled ? T('dash_toggle_donate_close') : T('dash_toggle_donate_open')}
+            </button>
             <button
               type="button"
               id="testDonateBtn"
-              style="width:auto; padding:4px 12px; font-size:12px;"
+              style="width:auto; padding:8px 16px; font-size:13px;"
             >
               {T('dash_test_donate_btn')}
             </button>
-            <form method="post" action="/logout" style="display:inline;">
-              <button
-                type="submit"
-                style="width:auto; padding:4px 12px; font-size:12px; background:var(--ctp-red); border-color:var(--ctp-red);"
-              >
-                {T('dash_logout')}
-              </button>
-            </form>
           </div>
         </div>
-        <h1>{T('dash_title')}</h1>
         <p class="subtitle">{T('dash_subtitle')}</p>
 
         <div id="testStatus" class="status" style="margin-bottom: 16px;"></div>
@@ -64,6 +55,16 @@ export function DashboardPage({
             <label>{T('dash_count')}</label>
             <div style="font-family:var(--font-head); font-size:32px;" id="totalCount">
               {items.length}
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0;">
+            <label>{T('dash_donate_receiving')}</label>
+            <div
+              style="font-family:var(--font-head); font-size:32px;"
+              id="dashDonateStatus"
+              class={donateEnabled ? 'status-online' : 'status-offline'}
+            >
+              {donateEnabled ? T('status_open') : T('status_closed')}
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
@@ -419,6 +420,8 @@ export function DashboardPage({
               }
             }
 
+            const donateStatusEl = document.getElementById('dashDonateStatus');
+            const toggleDonateBtn = document.getElementById('dashToggleDonateBtn');
             const ttsStatusEl = document.getElementById('dashTtsStatus');
             const ttsVoiceEl = document.getElementById('dashTtsVoice');
             const toggleBtn = document.getElementById('dashToggleTtsBtn');
@@ -427,6 +430,18 @@ export function DashboardPage({
             const pSel = document.getElementById('dashPitchSelect');
 
             if (typeof data === 'object') {
+              if (typeof data.donateEnabled === 'boolean') {
+                const dOn = data.donateEnabled;
+                if (donateStatusEl) {
+                  donateStatusEl.textContent = dOn ? __t('status_open') : __t('status_closed');
+                  donateStatusEl.className = dOn ? 'status-online' : 'status-offline';
+                }
+                if (toggleDonateBtn) {
+                  toggleDonateBtn.textContent = dOn ? __t('dash_toggle_donate_close') : __t('dash_toggle_donate_open');
+                  toggleDonateBtn.style.background = dOn ? 'var(--ctp-red)' : 'var(--ctp-green)';
+                  toggleDonateBtn.style.borderColor = dOn ? 'var(--ctp-red)' : 'var(--ctp-green)';
+                }
+              }
               if (typeof data.ttsEnabled === 'boolean') {
                 const on = data.ttsEnabled;
                 if (ttsStatusEl) {
@@ -443,6 +458,25 @@ export function DashboardPage({
               if (pSel && data.ttsPitch && document.activeElement !== pSel) pSel.value = data.ttsPitch;
             }
           }
+
+          // Toggle Donate receiving button
+          document.getElementById('dashToggleDonateBtn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('dashToggleDonateBtn');
+            if (btn) btn.disabled = true;
+            try {
+              const res = await fetch('/api/manage/donate', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+              });
+              const d = await res.json().catch(() => ({}));
+              if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
+            } catch (err) {
+              console.error(err);
+            } finally {
+              if (btn) btn.disabled = false;
+            }
+          });
 
           // Toggle TTS button
           document.getElementById('dashToggleTtsBtn')?.addEventListener('click', async () => {

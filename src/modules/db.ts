@@ -1,5 +1,5 @@
 import { and, desc, eq, gt, ne, sql } from 'drizzle-orm'
-import { admins, donations, subathonState } from '../db/schema'
+import { admins, discordWhitelist, donations, subathonState } from '../db/schema'
 import { getDb, type AppDatabase } from '../db/client'
 import type { DonateEvent } from './events'
 
@@ -11,6 +11,12 @@ export type AdminRecord = {
   tokenVersion: number
   apiEnabled: boolean
   discordId?: string
+}
+
+export type DiscordWhitelistEntry = {
+  discordId: string
+  note: string
+  createdAt: number
 }
 
 // ponytail: drizzle re-keys full-table selects to camelCase property names; decode defensively since D1/sqlite
@@ -55,9 +61,11 @@ function ensureSchema(db: AppDatabase): Promise<void> {
         filter_action text not null default 'censor',
         token_version integer not null default 1,
         api_enabled boolean not null default true,
-        discord_id text not null default ''
+        discord_id text not null default '',
+        donate_enabled boolean not null default false
       )`
     )
+    await db.execute(sql`alter table admins add column donate_enabled boolean not null default false`).catch(() => {})
     await db.execute(
       sql`create table if not exists subathon_state (
         id integer primary key,
@@ -77,6 +85,13 @@ function ensureSchema(db: AppDatabase): Promise<void> {
         tiktok_auto_sync boolean not null default true,
         tiktok_is_live boolean not null default false,
         updated_at bigint not null
+      )`
+    )
+    await db.execute(
+      sql`create table if not exists discord_whitelist (
+        discord_id text primary key,
+        note text not null default '',
+        created_at bigint not null
       )`
     )
   })()
@@ -192,6 +207,30 @@ export async function setApiEnabled(db: AppDatabase, enabled: boolean): Promise<
   return enabled
 }
 
+export async function getDonateEnabled(db: AppDatabase, fallback = false): Promise<boolean> {
+  await ensureSchema(db)
+  const [row] = await db.select().from(admins).where(eq(admins.id, 1)).limit(1)
+  if (!row) return fallback
+  return bool(row.donateEnabled, fallback)
+}
+
+export async function setDonateEnabled(db: AppDatabase, enabled: boolean): Promise<boolean> {
+  await ensureSchema(db)
+  const rows = await db
+    .update(admins)
+    .set({ donateEnabled: enabled })
+    .where(eq(admins.id, 1))
+    .returning({ id: admins.id })
+  if (rows.length === 0) {
+    await db
+      .insert(admins)
+      .values({ id: 1, username: 'admin', passwordHash: 'discord:pending', createdAt: Date.now(), donateEnabled: enabled })
+      .onConflictDoUpdate({ target: admins.id, set: { donateEnabled: enabled } })
+      .returning({ id: admins.id })
+  }
+  return enabled
+}
+
 export async function createAdmin(
   db: AppDatabase,
   username: string,
@@ -202,7 +241,7 @@ export async function createAdmin(
   try {
     const rows = await db
       .insert(admins)
-      .values({ id: 1, username, passwordHash, createdAt: Date.now(), discordId })
+      .values({ id: 1, username, passwordHash, createdAt: Date.now(), discordId, donateEnabled: false })
       .onConflictDoNothing()
       .returning({ id: admins.id })
     return rows.length > 0
@@ -219,14 +258,65 @@ export async function saveAdminDiscord(
   await ensureSchema(db)
   const existing = await getAdmin(db)
   if (existing) {
-    await db
-      .update(admins)
-      .set({ discordId, username })
-      .where(eq(admins.id, 1))
-      .returning({ id: admins.id })
+    if (!existing.discordId) {
+      await db
+        .update(admins)
+        .set({ discordId })
+        .where(eq(admins.id, 1))
+        .returning({ id: admins.id })
+    }
     return true
   }
   return createAdmin(db, username, `discord:${discordId}`, discordId)
+}
+
+export async function listDiscordWhitelist(db: AppDatabase): Promise<DiscordWhitelistEntry[]> {
+  await ensureSchema(db)
+  const rows = await db.select().from(discordWhitelist).orderBy(desc(discordWhitelist.createdAt))
+  return rows.map((r) => ({
+    discordId: str(r.discordId),
+    note: str(r.note),
+    createdAt: num(r.createdAt)
+  }))
+}
+
+export async function isDiscordWhitelisted(db: AppDatabase, discordId: string): Promise<boolean> {
+  const id = String(discordId || '').trim()
+  if (!id) return false
+  await ensureSchema(db)
+  const rows = await db
+    .select({ discordId: discordWhitelist.discordId })
+    .from(discordWhitelist)
+    .where(eq(discordWhitelist.discordId, id))
+    .limit(1)
+  return rows.length > 0
+}
+
+export async function addDiscordWhitelist(db: AppDatabase, discordId: string, note = ''): Promise<boolean> {
+  const id = String(discordId || '').trim()
+  const cleanNote = String(note || '').trim().slice(0, 100)
+  if (!/^\d{15,22}$/.test(id)) return false
+  await ensureSchema(db)
+  await db
+    .insert(discordWhitelist)
+    .values({ discordId: id, note: cleanNote, createdAt: Date.now() })
+    .onConflictDoUpdate({
+      target: discordWhitelist.discordId,
+      set: { note: cleanNote }
+    })
+    .returning({ discordId: discordWhitelist.discordId })
+  return true
+}
+
+export async function removeDiscordWhitelist(db: AppDatabase, discordId: string): Promise<boolean> {
+  const id = String(discordId || '').trim()
+  if (!id) return false
+  await ensureSchema(db)
+  const rows = await db
+    .delete(discordWhitelist)
+    .where(eq(discordWhitelist.discordId, id))
+    .returning({ discordId: discordWhitelist.discordId })
+  return rows.length > 0
 }
 
 export async function updateAdmin(db: AppDatabase, username: string, passwordHash: string): Promise<boolean> {
