@@ -39,10 +39,17 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
     - Subathon Marathon (`/overlay/subathon?hours=2&sec_per_thb=6`)
   - Dedicated SSE stream (`/api/events/overlay`), heartbeat tracking, and automatic polling fallback (`/api/events/poll`)
   - Live Overlay Controller (`/overlay/control`) to monitor active connections, dispatch remote commands (`reload`, `clear`, `disconnect`, `tts`, `countdown`), and view live event logs
-- **Admin Dashboard, Management API & Cloudflare D1 Persistence**:
-  - First-run admin setup (`/setup`) and rate-limited login (`/login`, 3 tries/min) using Web Crypto `PBKDF2` + `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`)
-  - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), credential rotation, TTS toggle, donation ledger management, and overlay control
-  - Donation history table and simulated test alerts (`/dashboard`)
+- **TikTok Live & Gift Integration (`/api/tiktok/webhook`, `/api/tiktok/live`)**:
+  - Automatic subathon timer extension on TikTok gifts (TikFinity / custom JSON webhook) with HMAC key validation
+  - TikTok live stream status sync (auto-start/reset when live, pause on offline with 2-minute webhook override TTL and 3-minute grace period)
+- **Discord OAuth2, Access Whitelist & Donation Gate**:
+  - Discord OAuth2 sign-in (`/auth/discord`) gated by `DISCORD_ALLOWED_USER_IDS` and dynamic DB whitelist (`/dashboard/access`, primary owner RBAC via `ownerAuth`)
+  - Live donation gate (`donate_enabled`) toggled from `/dashboard` or `PUT /api/manage/donate` to open/close donations in real time
+  - Thai / English i18n UI switcher (`LangSwitch`, `?lang=th|en`)
+- **Admin Dashboard, Management API & Dual Database (D1 / Postgres)**:
+  - Rate-limited auth (`/login`, global + per-IP lockout) using Web Crypto `PBKDF2` / `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`) and `SESSION_SECRET`-guarded `/api/manage/setup`
+  - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), TTS & filter settings, access whitelist, donation gate, ledger management, and overlay control
+  - Donation history table and simulated test alerts (`/dashboard`) persisted via Drizzle ORM on Cloudflare D1 or PostgreSQL (`POSTGRES_URL`)
 
 ## Quick Start
 
@@ -80,28 +87,28 @@ bun run deploy
 
 ## Project Structure
 
-- `src/index.tsx` — App entry, security headers, CSRF middleware, and route wiring
-- `src/renderer.tsx` — HTML layout shell and asset tags
+- `src/index.tsx` — App entry, `Content-Security-Policy` & security headers, CSRF middleware, and route wiring
+- `src/renderer.tsx` — HTML layout shell, client i18n bootstrap, and asset tags
+- `src/i18n.ts` & `src/locales/` — Thai (`th.json`) and English (`en.json`) localization tables
 - `src/style.css` — Global raw-block UI and overlay styles
+- `src/db/schema.ts` & `src/db/client.ts` — Drizzle schema (`donations`, `admins`, `subathon_state`, `discord_whitelist`) and D1/Postgres factory
 - `src/modules/config.ts` — Environment and receiver account config loader
-- `src/modules/db.ts` — Cloudflare D1 auto-schema initialization and queries (`donations`, `admins`)
-- `src/modules/auth.ts` — Admin setup, login, rate limiting, and `PBKDF2` / `HMAC-SHA256` session middleware
+- `src/modules/db.ts` — Portable Drizzle queries and `ensureSchema()` auto-initialization
+- `src/modules/auth.ts` — Discord OAuth2, `ownerAuth` RBAC, rate limiting, and `PBKDF2` / `HMAC-SHA256` session middleware
 - `src/modules/slip2sure.ts` — Slip2Sure API verification, receiver mask check, and duplicate guard
 - `src/modules/filter.ts` — Word filtering engine, bad words dictionary (obbaeiei/bad-words-thai), and whitelist masking
-- `src/modules/tts.ts` — Microsoft Edge Neural TTS audio generator, voice synthesizers, and cluster failover
+- `src/modules/tts.ts` — Microsoft Edge Neural TTS audio generator, SSML validation, and cluster failover
+- `src/modules/tiktok.ts` — TikTok gift & live-status webhooks, scraper sync, and override TTL
 - `src/modules/events.ts` — SSE stream (`/api/events`, `/api/events/overlay`), overlay status, polling, and command bus
-- `src/modules/donate.ts` — Donation submission (`POST /api/donate`) and test alert (`POST /api/donate/test`)
-- `src/pages/home.tsx` — Public donor page (`GET /`) with PromptPay QR, slip upload, and live overlay status
-- `src/pages/setup.tsx` — Initial admin account creation (`GET /setup`)
-- `src/pages/login.tsx` — Admin sign-in page (`GET /login`)
-- `src/pages/dashboard.tsx` — Streamer dashboard (`GET /dashboard`) with revenue stats, test alert form, and history
-- `src/pages/control.tsx` — Remote overlay controller and live SSE terminal (`GET /overlay/control`)
-- `src/pages/overlays/alert.tsx` — OBS Browser Source alert overlay (`GET /overlay`, `GET /overlay/alert`)
-- `src/pages/overlays/leaderboard.tsx` — OBS Browser Source leaderboard overlay (`GET /overlay/leaderboard`)
-- `src/pages/overlays/countdown.tsx` — OBS Browser Source countdown timer (`GET /overlay/countdown`)
-- `src/pages/overlays/subathon.tsx` — OBS Browser Source subathon marathon overlay (`GET /overlay/subathon`, `GET /overlay/submatron`)
-- `src/pages/overlays/index.ts` — Barrel export for all overlay components
-- `schema.sql` — D1 SQL schema reference for `donations` and `admins`
+- `src/modules/donate.ts` — Donation submission (`POST /api/donate`), mobile slip sessions, and test alerts (`POST /api/donate/test`)
+- `src/pages/home.tsx` — Public donor page (`GET /`) with PromptPay QR, slip upload, closed-gate UI, and live overlay status
+- `src/pages/login.tsx` — Discord OAuth2 sign-in page (`GET /login`)
+- `src/pages/dashboard.tsx` — Streamer dashboard (`GET /dashboard`) with revenue stats, donation gate toggle, test alert form, and history
+- `src/pages/access.tsx` — Discord access whitelist manager (`GET /dashboard/access`)
+- `src/pages/LangSwitch.tsx` — Shared `AdminNav` navigation bar and Thai/English locale switcher
+- `src/pages/controls/` — Remote overlay controllers (`/overlay/control`, `/alert`, `/leaderboard`, `/countdown`, `/subathon`)
+- `src/pages/overlays/` — OBS Browser Source overlays (`/overlay`, `/alert`, `/leaderboard`, `/countdown`, `/subathon`)
+- `schema.sql` — SQL schema reference for `donations`, `admins`, `subathon_state`, and `discord_whitelist`
 
 ## Documentation
 

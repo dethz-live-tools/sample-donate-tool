@@ -11,9 +11,16 @@ Copy `.env.example` to `.env` for local development:
 
 | Variable | Required | Description |
 | :--- | :---: | :--- |
-| `SLIP2SURE_API_KEY` / `VITE_SLIP2SURE_API_KEY` | Yes | Application API Key from [Slip2Sure Dashboard](https://app.slip2sure.com) ("แอพของฉัน" -> Key icon). Ensure your server/Worker IP is whitelisted if IP restriction is enabled. |
-| `TTS_ENABLED` / `VITE_TTS_ENABLED` | Optional | Default TTS voice toggle (`true` or `false`, default `true`). Can also be toggled live via `/overlay/control` or `PUT /api/manage/tts` (persisted in D1). |
-| `SESSION_SECRET` | Optional | Secret key used for HMAC-SHA256 signing of the `dash_token` admin session cookie. Falls back to `SLIP2SURE_API_KEY` if omitted. |
+| `SLIP2SURE_API_KEY` | Yes | Application API Key from [Slip2Sure Dashboard](https://app.slip2sure.com) ("แอพของฉัน" -> Key icon). Ensure your server/Worker IP is whitelisted if IP restriction is enabled. |
+| `SESSION_SECRET` | Recommended | Secret key used for HMAC-SHA256 signing of `dash_token` / TikTok webhook keys and `POST /api/manage/setup` authorization. Falls back to `SLIP2SURE_API_KEY` or an ephemeral CSPRNG secret if omitted. |
+| `DISCORD_CLIENT_ID` | Yes (OAuth) | Discord OAuth2 application client ID for admin login. |
+| `DISCORD_CLIENT_SECRET` | Yes (OAuth) | Discord OAuth2 application client secret. |
+| `DISCORD_ALLOWED_USER_IDS` | Recommended | Comma/space-separated Discord user IDs granted primary owner access. If empty and DB whitelist is empty, first Discord user claims admin. |
+| `DISCORD_REDIRECT_URI` | Optional | Custom OAuth2 callback URL (defaults to `https://<host>/auth/discord/callback`). |
+| `POSTGRES_URL` | Optional | PostgreSQL connection string (`postgresql://...`). If unset, Cloudflare D1 binding (`DB`) is used. |
+| `DONATE_ENABLED` | Optional | Default donation reception state (`true` or `false`). Can be toggled live on `/dashboard` or `PUT /api/manage/donate`. |
+| `DEFAULT_LANG` | Optional | Default UI locale (`th` or `en`, defaults to `th`). |
+| `TTS_ENABLED` / `VITE_TTS_ENABLED` | Optional | Default TTS voice toggle (`true` or `false`, default `true`). Can also be toggled live via `/overlay/control` or `PUT /api/manage/tts` (persisted in DB). |
 | `BANK_NAME` / `VITE_BANK_NAME` | Optional | Bank name/code displayed on the donation page (e.g., `KBANK`, `SCB`). |
 | `BANK_ACCOUNT` / `VITE_BANK_ACCOUNT` | Optional | Receiving bank account number (displayed on UI and verified against slip receiver). |
 | `ACCOUNT_NAME` / `VITE_ACCOUNT_NAME` | Optional | Account holder display name shown to donors. |
@@ -45,11 +52,11 @@ bunx wrangler d1 execute donate-tools-db --file=./schema.sql
 See full request/response schemas and SSE event payloads in [API.md](./API.md).
 
 ### Web Pages
-- `GET /`: Public donation form with PromptPay QR, bank/TrueMoney slip upload, Turnstile widget, and live overlay status indicator.
-- `GET /setup`: Initial administrator account creation (redirects to `/login` once an admin exists in D1).
-- `GET /login`: Administrator login page (rate-limited to 3 attempts per minute per IP).
-- `GET /dashboard`: Streamer dashboard with total revenue, donation count, test alert sender, TTS and filter toggles, and transaction log (Admin only).
-- `GET /overlay/control` (alias `GET /control`): Live overlay controller with connection counter, TTS settings, bad words filter config, remote command bus (`reload`, `clear`, `disconnect`, `tts`, `countdown`), heartbeat ping, and real-time event terminal (Admin only).
+- `GET /`: Public donation form with PromptPay QR, bank/TrueMoney slip upload, Turnstile widget, closed-gate state when `donateEnabled` is false, and live overlay status indicator.
+- `GET /login`: Discord OAuth2 sign-in page (`GET /auth/discord` -> `/auth/discord/callback`).
+- `GET /dashboard`: Streamer dashboard with total revenue, donation count, donation gate toggle (open/close), test alert sender, TTS and filter toggles, and transaction log (Admin only).
+- `GET /dashboard/access` (alias `GET /access`): Discord access whitelist manager showing environment IDs and DB-managed operator IDs (Admin only; mutations restricted to primary owner).
+- `GET /overlay/control` (alias `GET /control`): Live overlay controller with dedicated sub-pages (`/alert`, `/leaderboard`, `/countdown`, `/subathon`), connection counter, TTS settings, bad words filter config, remote command bus, heartbeat ping, and real-time event terminal (Admin only).
 - `GET /overlay` (alias `GET /overlay/alert`): Transparent OBS Browser Source alert overlay (Width: 800, Height: 400).
 - `GET /overlay/leaderboard`: Transparent OBS Browser Source top donors leaderboard overlay (Width: 450, Height: 500, `?limit=5&title=TOP+DONORS`).
 - `GET /overlay/countdown`: Transparent OBS Browser Source countdown timer overlay (Width: 450, Height: 250, `?minutes=10&title=STARTING+SOON`).
@@ -64,8 +71,13 @@ See full request/response schemas and SSE event payloads in [API.md](./API.md).
 - `GET /api/events/poll`: Fallback polling for recent donations and overlay status (`?since=<ms>&client=overlay`).
 - `GET /api/events/heartbeat` & `POST /api/events/heartbeat`: Touch/renew overlay heartbeat and broadcast status (Admin only).
 - `POST /api/events/control`: Dispatch remote command (`reload`, `clear`, `disconnect`, `tts`, `countdown`) to connected overlays (Admin only).
-- `POST /setup`, `POST /login`, `POST /logout`: Admin authentication form handlers.
-- `POST /api/manage/setup`, `POST /api/manage/login`, `POST /api/manage/logout`: Headless JSON authentication (issues `Bearer` token and `dash_token` cookie).
+- `GET /api/tts`: Synthesize Microsoft Edge Neural TTS audio preview (`voice` validated against `EDGE_TTS_VOICES`, `text` capped at 500 chars; Admin only).
+- `GET /api/tiktok/webhook` & `POST /api/tiktok/webhook`: Receive TikTok gift events and stream status updates (`key` / `x-webhook-key` HMAC-authenticated).
+- `GET /api/tiktok/live` & `POST /api/tiktok/live`: Sync TikTok live status and auto-start/pause subathon timer with 2-minute webhook override TTL.
+- `GET /auth/discord` & `GET /auth/discord/callback`: Discord OAuth2 authorization with `state` cookie verification and env/DB whitelist validation.
+- `POST /api/manage/setup`, `POST /api/manage/login`, `POST /api/manage/logout`: Headless JSON authentication (`setup` requires `x-setup-token` matching `SESSION_SECRET`; `login` rate-limited globally and per-IP).
+- `GET /api/manage/access`, `POST /api/manage/access`, `DELETE /api/manage/access/:id`: List Discord whitelist entries (Admin only) and add/remove DB whitelist IDs (Primary owner only).
+- `GET /api/manage/donate`, `PUT /api/manage/donate`: Query or toggle donation reception state (`donateEnabled`), broadcasting `donate_toggle` via SSE.
 - `GET /api/manage/auth/status`, `POST /api/manage/auth/refresh`, `POST /api/manage/auth/revoke`, `PUT /api/manage/auth/config`: Inspect auth state, refresh tokens, revoke all active tokens (`token_version`), toggle Bearer API access (`apiEnabled`), and clear login rate-limit lockouts.
 - `GET /api/manage/me`, `PUT /api/manage/credentials`: Inspect admin profile/stats and rotate admin username/password.
 - `GET /api/manage/tts`, `PUT /api/manage/tts`: Query or update TTS settings (`enabled`, `voice`, `rate`, `pitch`), persisted in D1.
@@ -133,21 +145,22 @@ All upstream requests use header `x-api-key: <SLIP2SURE_API_KEY>`.
 
 See [API Reference](./API.md) for full endpoint specifications.
 
-- **Authentication & Password Hashing**:
-  - Passwords hashed using Web Crypto PBKDF2 (`100,000` iterations, `SHA-256`, 16-byte cryptographically secure random salt).
-  - Strict password bound (`8` to `128` chars) prevents computational DoS / CPU exhaustion on crypto hashing.
-  - Tokens signed with HMAC-SHA256 bound to password hash and `token_version` (`${username}:${exp}:v${tokenVersion}`).
-  - Instant revocation: calling `POST /api/manage/auth/revoke` increments `token_version` in D1, invalidating all issued tokens across all devices simultaneously.
-  - Brute-force protection: rate-limited to 3 failed attempts per 60 seconds per IP (`cf-connecting-ip`) on both web form `/login` and JSON `/api/manage/login`.
+- **Authentication, RBAC & Cryptographic Secrets**:
+  - Primary authentication via Discord OAuth2 (`state` CSRF cookie verified on callback) gated by `DISCORD_ALLOWED_USER_IDS` and `discord_whitelist`.
+  - Role separation (`ownerAuth`): only the primary owner (matching `DISCORD_ALLOWED_USER_IDS` or `admins.discord_id`) can mutate `/api/manage/access` whitelist entries.
+  - Discord-created admins receive a 256-bit CSPRNG secret seed in `passwordHash`, and `getSecret()` falls back to a per-isolate CSPRNG `EPHEMERAL_FALLBACK_SECRET` (never a static hardcoded string or `VITE_` variable).
+  - Passwords hashed using Web Crypto PBKDF2 (`100,000` iterations, `SHA-256`, 16-byte cryptographically secure random salt), bounded to `8`–`128` chars.
+  - Tokens signed with HMAC-SHA256 bound to secret seed and `token_version`; `POST /api/manage/auth/revoke` invalidates all active tokens simultaneously.
+  - Brute-force protection: rate-limited to 3 failed attempts per 60 seconds per IP (`cf-connecting-ip`) plus a 5-failure/60s global lockout on `/api/manage/login`. `POST /api/manage/setup` requires `SESSION_SECRET` (`x-setup-token`).
 - **CSRF & Header Protection**:
-  - All state-changing web requests protected by Hono's `csrf()` (verifies `Origin`). Headless API requests with `Authorization: Bearer <token>` bypass browser CSRF.
-  - `secureHeaders()` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and strict transport security.
+  - All state-changing web requests protected by Hono's `csrf()` (verifies `Origin`). Headless API requests with `Authorization: Bearer <token>` and HMAC-authenticated `/api/tiktok/*` webhooks bypass browser CSRF.
+  - `secureHeaders()` sets `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and strict transport security.
 - **Input Sanitization & Injection Defense**:
   - Text inputs (`donor`, `message`) sanitized by stripping C0/C1 control codes and Unicode directionality/bidi overrides (`\u202A`–`\u202E`, zero-width spaces).
   - Profanity filtering with 270+ Thai/English words (obbaeiei/bad-words-thai) and safe-words whitelist protection (`สวัสดี`, `อีเมล`, `หีบสมบัติ`).
   - Asterisk characters (`***`) stripped from TTS spoken audio to prevent pronouncing "ดอกจัน".
   - Slip upload filenames sanitized to alphanumeric and safe characters (`[a-zA-Z0-9._-]`, max 50 chars) before upstream proxying.
-  - Microsoft Edge Neural TTS with SSML XML escaping, zero-dependency WebSocket streaming, and automatic voice failover.
-  - Event bus commands validated against a strict action allowlist (`reload`, `clear`, `disconnect`, `tts`, `countdown`, `heartbeat`).
+  - `GET /api/tts` requires `dashboardAuth` and validates `voice` against `EDGE_TTS_VOICES`, `rate`/`pitch`/`volume` via strict regex/range checks, and XML-escapes text.
+  - Event bus commands validated against a strict action allowlist (`reload`, `clear`, `disconnect`, `tts`, `countdown`, `leaderboard`, `subathon`, `heartbeat`).
 - **Duplicate Slip Prevention**:
   - Triple-layer guard: Slip2Sure upstream `is_exist` flag + in-memory `inflightRefs` lock Set + D1 `trans_ref` unique constraint (`INSERT OR IGNORE`).

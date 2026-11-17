@@ -8,7 +8,7 @@ changes.
 
 | Path | Purpose |
 | :--- | :--- |
-| `src/db/schema.ts` | Drizzle table definitions: `donations`, `admins`, `subathon_state` (pg-core dialect) |
+| `src/db/schema.ts` | Drizzle table definitions: `donations`, `admins`, `subathon_state`, `discord_whitelist` (pg-core dialect) |
 | `src/db/client.ts` | `AppDatabase` controller contract + `getDb(env)` factory (D1 or Postgres) |
 | `src/modules/db.ts` | All data-access functions (`getAdmin`, `listDonations`, `saveSubathonState`, …); callers never touch Drizzle directly |
 
