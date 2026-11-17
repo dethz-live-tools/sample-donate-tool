@@ -39,8 +39,7 @@ export function ControlLayout({
 
   return (
     <div class="container wide">
-      <div class="card elevated">
-        <AdminNav active="controls" lang={lang} overlayStatus={overlayStatus} openOverlayHref={openOverlayHref} />
+      <AdminNav active="controls" lang={lang} overlayStatus={overlayStatus} openOverlayHref={openOverlayHref} />
 
         <div
           style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid var(--ctp-surface1);"
@@ -127,7 +126,6 @@ export function ControlLayout({
           </div>
           <div id="busLog" class="console-log"></div>
         </details>
-      </div>
 
       <script
         dangerouslySetInnerHTML={{

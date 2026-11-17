@@ -19,11 +19,10 @@ export function DashboardPage({
 
   return (
     <div class="container wide">
-      <div class="card elevated">
-        <AdminNav active="dashboard" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
+      <AdminNav active="dashboard" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
         <div class="page-header-row">
           <h1>{T('dash_title')}</h1>
-          <div class="nav-group">
+          <div class="nav-group" style={{ width: '100%', justifyContent: 'end !important' }}>
             <button
               type="button"
               id="dashToggleDonateBtn"
@@ -313,7 +312,6 @@ export function DashboardPage({
             </tbody>
           </table>
         </div>
-      </div>
 
       <script
         dangerouslySetInnerHTML={{
@@ -383,7 +381,7 @@ export function DashboardPage({
               testStatus.textContent = __t('dash_test_sent');
             } catch (err) {
               testStatus.className = 'status err';
-              testStatus.textContent = 'ERROR // ' + err.message;
+              testStatus.textContent = 'Error: ' + err.message;
             } finally {
               testBtn.disabled = false;
               testBtn.textContent = __t('dash_test_donate_btn');

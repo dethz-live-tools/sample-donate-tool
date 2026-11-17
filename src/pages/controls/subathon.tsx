@@ -343,7 +343,7 @@ export function SubathonControlPage({
             else await refreshSubState();
             const steps = Math.floor(amount / Math.max(0.01, subRateCoins));
             if (data.subathonState?.isEnded) {
-              showStatus('IGNORED BY SUBMATRON // SUBATHON ENDED (3M GRACE EXPIRED — RESET OR START TIMER)', true);
+              showStatus('Ignored by Submatron: subathon ended (3m grace expired, reset or start timer)', true);
               log('Submatron ignored test donate (3m grace period expired)', 'warn');
             } else if (steps <= 0) {
               showStatus('IGNORED BY SUBMATRON // ' + amount + ' COINS IS BELOW MIN RATE (' + subRateCoins + ' COINS)', true);
@@ -461,8 +461,8 @@ export function SubathonControlPage({
             if (!data.added) {
               showStatus(
                 data.reason === 'SUBATHON_ENDED'
-                  ? 'TIKTOK GIFT IGNORED // SUBATHON ENDED (3M GRACE EXPIRED — RESET OR START TIMER)'
-                  : 'TIKTOK GIFT IGNORED // ' + coins + ' COINS IS BELOW MIN STEP (' + subRateCoins + ' COINS)',
+                  ? 'TikTok gift ignored: subathon ended (3m grace expired, reset or start timer)'
+                  : 'TikTok gift ignored: ' + coins + ' coins is below min step (' + subRateCoins + ' coins)',
                 true
               );
             } else {
@@ -498,7 +498,7 @@ export function SubathonControlPage({
     >
       <div>
         <details class="inverted-block fold-block">
-          <summary>SUBATHON MARATHON OBS BROWSER SOURCE (450 x 250) — PERSISTED IN D1 DB</summary>
+          <summary>Subathon marathon OBS Browser Source (450 x 250), persisted in D1 DB</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -860,7 +860,7 @@ export function SubathonControlPage({
 
           <div style="border-top:2px solid var(--ctp-surface1); padding-top:16px;">
             <label style="margin-bottom:8px; color:var(--ctp-yellow);">
-              TEST TIKTOK GIFT CHECKER (ADDS TIME TO SUBMATRON ONLY — NO TTS ALERT)
+              Test TikTok gift checker (adds time to Submatron only, no TTS alert)
             </label>
             <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
               <button

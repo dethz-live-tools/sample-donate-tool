@@ -18,8 +18,7 @@ export function AccessPage({
 
   return (
     <div class="container wide">
-      <div class="card elevated">
-        <AdminNav active="access" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
+      <AdminNav active="access" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
 
         <h1>{T('access_title')}</h1>
         <p class="subtitle">{T('access_subtitle')}</p>
@@ -121,7 +120,6 @@ export function AccessPage({
             </tbody>
           </table>
         </div>
-      </div>
 
       <script
         dangerouslySetInnerHTML={{
@@ -213,7 +211,7 @@ export function AccessPage({
               if (noteInput) noteInput.value = '';
               showMsg(__t('access_added_ok', { id: discordId }));
             } catch (err) {
-              showMsg('ERROR // ' + err.message, true);
+              showMsg('Error: ' + err.message, true);
             } finally {
               if (addBtn) {
                 addBtn.disabled = false;
@@ -237,7 +235,7 @@ export function AccessPage({
               renderRows(d.items, d.envIds);
               showMsg(__t('access_removed_ok', { id }));
             } catch (err) {
-              showMsg('ERROR // ' + err.message, true);
+              showMsg('Error: ' + err.message, true);
               btn.disabled = false;
             }
           });

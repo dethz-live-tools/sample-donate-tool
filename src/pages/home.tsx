@@ -23,8 +23,7 @@ export function HomePage({
 
   return (
     <div class="container">
-      <div class="card elevated">
-        <nav class="nav-links">
+      <nav class="nav-links">
           <span style="font-weight:700; color:var(--ctp-text);">{T("home_nav_brand")}</span>
           <div class="nav-group">
             <div
@@ -86,7 +85,7 @@ export function HomePage({
                   <div
                     id="ppQrBox"
                     data-id={config.promptpayId}
-                    style="background:#FFFFFF; padding:12px; border:3px solid var(--ctp-lavender); display:inline-block;"
+                    style="background:#FFFFFF; padding:12px; display:inline-block;"
                   ></div>
                 </div>
               </div>
@@ -109,9 +108,9 @@ export function HomePage({
 
             {isMobileSession ? (
               <div class="inverted-block" id="mobileSummaryBox" style="margin-bottom:16px;">
-                <label style="color:var(--ctp-lavender); margin-bottom:8px;">
+                <div style="font-family:var(--font-head); font-size:14px; color:var(--ctp-lavender); margin-bottom:8px;">
                   {T("home_session_summary")}
-                </label>
+                </div>
                 <div>
                   {T("home_sum_donor_label")} <strong id="sumDonor">{T("home_sum_donor_default")}</strong>
                 </div>
@@ -181,7 +180,7 @@ export function HomePage({
                   <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
                     <div
                       id="mobileSessionQr"
-                      style="background:#FFFFFF; padding:10px; border:3px solid var(--ctp-lavender); display:inline-block; flex-shrink:0;"
+                      style="background:#FFFFFF; padding:10px; display:inline-block; flex-shrink:0;"
                     ></div>
                     <div style="flex:1; min-width:200px;">
                       <div style="font-size:13px; color:var(--ctp-text); margin-bottom:8px;">
@@ -237,7 +236,6 @@ export function HomePage({
           </fieldset>
           <div id="statusBox" class="status"></div>
         </form>
-      </div>
 
       {config.turnstileSiteKey && (
         <script

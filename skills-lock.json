@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "skills": {
+    "deslop-ui": {
+      "source": "kmaida/deslop-skills",
+      "commit": "d57f4a63a4ed618583c74b4f82423c4ceb6374bb",
+      "sourceType": "github",
+      "skillPath": "deslop-ui/SKILL.md",
+      "computedHash": "72ac62cf78aea5b2b79d325834f8394b8766a0da1df04f2bc4bcedc17c6240d9"
+    },
+    "deslop-writing": {
+      "source": "kmaida/deslop-skills",
+      "commit": "d57f4a63a4ed618583c74b4f82423c4ceb6374bb",
+      "sourceType": "github",
+      "skillPath": "deslop-writing/SKILL.md",
+      "computedHash": "925611087eeb0a8be0cbffec936d81180417e791a407daef78fd5bdeada84947"
+    }
+  }
+}

@@ -9,7 +9,7 @@ export const renderer = jsxRenderer((_props, c) => {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>DONATE TOOLS — RAWBLOCK</title>
+        <title>Donate Tools</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;600;700&display=swap"
