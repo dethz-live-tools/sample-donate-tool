@@ -1,13 +1,18 @@
+import { t, type Locale } from '../i18n'
+import { LangSwitch } from './LangSwitch'
+
 export function LoginPage({
   error,
-  configured = true
+  configured = true,
+  lang = 'th'
 }: {
   error?: string | boolean
   configured?: boolean
+  lang?: Locale
 }) {
   let errorMsg = ''
   if (error === 'unauthorized') {
-    errorMsg = 'Access denied: your Discord account is not authorized.'
+    errorMsg = t(lang, 'swal_unauthorized_text')
   } else if (error === 'not_configured') {
     errorMsg = 'Configuration error: Discord OAuth is not configured in environment.'
   } else if (error === 'state_mismatch') {
@@ -16,6 +21,8 @@ export function LoginPage({
     errorMsg = 'Discord login was cancelled.'
   } else if (error === 'token_failed' || error === 'user_failed') {
     errorMsg = 'Discord error: failed to verify Discord account.'
+  } else if (error === 'session_expired') {
+    errorMsg = 'Session expired due to inactivity. Please sign in again.'
   } else if (error) {
     errorMsg = 'Authentication failed. Please try again.'
   }
@@ -24,7 +31,10 @@ export function LoginPage({
     <div class="container">
       <div class="nav-links">
         <span>Authentication</span>
-        <a href="/">← Return to donate</a>
+        <div class="nav-group">
+          <a href="/">&larr; {t(lang, 'dash_return_donate')}</a>
+          <LangSwitch lang={lang} />
+        </div>
       </div>
       <h1>Dashboard login</h1>
       <p class="subtitle">Restricted access via Discord OAuth2</p>
@@ -59,6 +69,27 @@ export function LoginPage({
         <div style="margin-top: 24px; border-top: 2px solid var(--ctp-surface1); padding-top: 14px; font-family: var(--font-mono); font-size: 12px; color: var(--ctp-subtext0);">
           Secured via Discord OAuth2. Only authorized Discord users are granted access.
         </div>
+
+      {errorMsg && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            window.addEventListener('DOMContentLoaded', () => {
+              if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                  icon: 'error',
+                  title: __t('swal_unauthorized_title'),
+                  text: ${JSON.stringify(errorMsg).replace(/</g, '\\u003c')},
+                  background: 'var(--ctp-mantle)',
+                  color: 'var(--ctp-text)',
+                  confirmButtonColor: 'var(--ctp-red)'
+                });
+              }
+            });
+          `
+          }}
+        />
+      )}
     </div>
   )
 }

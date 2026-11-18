@@ -25,11 +25,13 @@ export function ConfigPage({
   const donateEnabled = overlayStatus?.donateEnabled ?? false
   const flavor = overlayStatus?.themeFlavor || 'macchiato'
   const accent = overlayStatus?.themeAccent || 'sapphire'
+  const siteTitle = overlayStatus?.siteTitle || ''
+  const headerTitle = overlayStatus?.headerTitle || ''
+  const headerSubtitle = overlayStatus?.headerSubtitle || ''
 
   return (
     <div class="container wide">
-      <div class="card elevated">
-        <AdminNav active="config" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
+      <AdminNav active="config" lang={lang} overlayStatus={overlayStatus} openOverlayHref="/overlay" />
         <div class="page-header-row">
           <h1>{T('cfg_title')}</h1>
           <button
@@ -41,6 +43,58 @@ export function ConfigPage({
           </button>
         </div>
         <p class="subtitle">{T('cfg_subtitle')}</p>
+
+        <div class="card" style="margin-bottom: 24px;">
+          <label style="font-size:18px; color:var(--ctp-accent); margin-bottom:4px;">
+            {T('cfg_header_title')}
+          </label>
+          <p class="subtitle" style="margin:0 0 12px 0; font-size:11px; border:none; padding:0;">
+            {T('cfg_header_subtitle')}
+          </p>
+          <form id="cfgHeaderForm" style="margin-bottom:0;">
+            <div class="row" style="margin-bottom:12px;">
+              <div>
+                <label>{T('cfg_site_title_label')}</label>
+                <input
+                  type="text"
+                  id="cfgSiteTitle"
+                  value={siteTitle}
+                  placeholder={T('cfg_site_title_placeholder')}
+                  maxLength={80}
+                  style="margin-bottom:0;"
+                />
+              </div>
+              <div>
+                <label>{T('cfg_header_h1_label')}</label>
+                <input
+                  type="text"
+                  id="cfgHeaderTitle"
+                  value={headerTitle}
+                  placeholder={T('cfg_header_h1_placeholder')}
+                  maxLength={80}
+                  style="margin-bottom:0;"
+                />
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <label>{T('cfg_header_sub_label')}</label>
+              <input
+                type="text"
+                id="cfgHeaderSubtitle"
+                value={headerSubtitle}
+                placeholder={T('cfg_header_sub_placeholder')}
+                maxLength={200}
+                style="margin-bottom:0;"
+              />
+            </div>
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+              <button type="submit" id="cfgSaveHeaderBtn" style="width:auto; padding:8px 16px; font-size:13px;">
+                {T('dash_save_settings')}
+              </button>
+              <span id="cfgHeaderMsg" style="font-family:var(--font-mono); font-size:12px; color:var(--ctp-green);"></span>
+            </div>
+          </form>
+        </div>
 
         <div class="card" style="margin-bottom: 24px;">
           <label style="font-size:18px; color:var(--ctp-accent); margin-bottom:4px;">
@@ -227,7 +281,6 @@ export function ConfigPage({
             <a href="/overlay/control/subathon" class="nav-pill nav-external">{T('dash_tab_subathon')}</a>
           </div>
         </div>
-      </div>
 
       <script
         dangerouslySetInnerHTML={{
@@ -260,6 +313,19 @@ export function ConfigPage({
               if (window.__applyTheme && (data.themeFlavor || data.themeAccent)) {
                 window.__applyTheme(data.themeFlavor, data.themeAccent);
               }
+              if (typeof data.siteTitle === 'string') {
+                document.title = data.siteTitle.trim() || 'Donate Tools';
+                const stEl = document.getElementById('cfgSiteTitle');
+                if (stEl && document.activeElement !== stEl) stEl.value = data.siteTitle;
+              }
+              if (typeof data.headerTitle === 'string') {
+                const htEl = document.getElementById('cfgHeaderTitle');
+                if (htEl && document.activeElement !== htEl) htEl.value = data.headerTitle;
+              }
+              if (typeof data.headerSubtitle === 'string') {
+                const hsEl = document.getElementById('cfgHeaderSubtitle');
+                if (hsEl && document.activeElement !== hsEl) hsEl.value = data.headerSubtitle;
+              }
               if (typeof data.donateEnabled === 'boolean') {
                 const dOn = data.donateEnabled;
                 if (toggleDonateBtn) {
@@ -279,6 +345,37 @@ export function ConfigPage({
               if (pSel && data.ttsPitch && document.activeElement !== pSel) pSel.value = data.ttsPitch;
             }
           }
+
+          document.getElementById('cfgHeaderForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const siteTitle = document.getElementById('cfgSiteTitle')?.value || '';
+            const headerTitle = document.getElementById('cfgHeaderTitle')?.value || '';
+            const headerSubtitle = document.getElementById('cfgHeaderSubtitle')?.value || '';
+            const msgEl = document.getElementById('cfgHeaderMsg');
+            const saveBtn = document.getElementById('cfgSaveHeaderBtn');
+            if (saveBtn) saveBtn.disabled = true;
+            if (msgEl) msgEl.textContent = __t('dash_saving');
+
+            try {
+              const res = await fetch('/api/manage/header', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ siteTitle, headerTitle, headerSubtitle })
+              });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok || !d.ok) throw new Error(d.error || ('HTTP ' + res.status));
+              document.title = (d.siteTitle || '').trim() || 'Donate Tools';
+              if (msgEl) {
+                msgEl.textContent = __t('dash_saved');
+                setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+              }
+              if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
+            } catch (err) {
+              if (msgEl) msgEl.textContent = 'Error: ' + err.message;
+            } finally {
+              if (saveBtn) saveBtn.disabled = false;
+            }
+          });
 
           document.getElementById('dashToggleDonateBtn')?.addEventListener('click', async () => {
             const btn = document.getElementById('dashToggleDonateBtn');
@@ -340,7 +437,7 @@ export function ConfigPage({
               }
               if (d.overlayStatus) updateOverlayStatus(d.overlayStatus);
             } catch (err) {
-              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+              if (msgEl) msgEl.textContent = 'Error: ' + err.message;
             } finally {
               if (saveBtn) saveBtn.disabled = false;
             }
@@ -387,7 +484,7 @@ export function ConfigPage({
               await dashAudio.play();
               if (previewBtn) previewBtn.textContent = __t('dash_playing');
             } catch (err) {
-              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+              if (msgEl) msgEl.textContent = 'Error: ' + err.message;
               if (previewBtn) {
                 previewBtn.disabled = false;
                 previewBtn.textContent = __t('dash_test_audio');
@@ -436,7 +533,7 @@ export function ConfigPage({
                 setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
               }
             } catch (err) {
-              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+              if (msgEl) msgEl.textContent = 'Error: ' + err.message;
             } finally {
               if (btn) btn.disabled = false;
             }
@@ -463,7 +560,7 @@ export function ConfigPage({
                 setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
               }
             } catch (err) {
-              if (msgEl) msgEl.textContent = 'ERR: ' + err.message;
+              if (msgEl) msgEl.textContent = 'Error: ' + err.message;
             } finally {
               if (saveBtn) saveBtn.disabled = false;
             }

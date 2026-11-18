@@ -1,4 +1,5 @@
 import type { AppConfig } from "../modules/config";
+import type { HeaderSettings } from "../modules/db";
 import { LangSwitch } from "./LangSwitch";
 import { t, type I18nKey, type Locale } from "../i18n";
 
@@ -6,12 +7,14 @@ export function HomePage({
   config,
   overlayOnline = false,
   donateEnabled = false,
+  header,
   mobileSid = "",
   lang = 'th',
 }: {
   config: AppConfig;
   overlayOnline?: boolean;
   donateEnabled?: boolean;
+  header?: HeaderSettings;
   mobileSid?: string;
   lang?: Locale;
 }) {
@@ -20,11 +23,14 @@ export function HomePage({
   const hasTrueMoney = Boolean(config.truewalletId);
   const hasPaymentInfo = hasBankOrPP || hasTrueMoney;
   const isMobileSession = Boolean(mobileSid);
+  const navBrandText = header?.siteTitle?.trim() || T("home_nav_brand");
+  const mainTitleText = isMobileSession ? T("home_title_mobile") : (header?.headerTitle?.trim() || T("home_title"));
+  const subTitleText = isMobileSession ? T("home_subtitle_mobile") : (header?.headerSubtitle?.trim() || T("home_subtitle"));
 
   return (
     <div class="container">
       <nav class="nav-links">
-          <span style="font-weight:700; color:var(--ctp-text);">{T("home_nav_brand")}</span>
+          <span id="homeNavBrand" style="font-weight:700; color:var(--ctp-text);">{navBrandText}</span>
           <div class="nav-group">
             <div
               id="overlayNavBadge"
@@ -38,9 +44,9 @@ export function HomePage({
             <LangSwitch lang={lang} />
           </div>
         </nav>
-        <h1>{isMobileSession ? T("home_title_mobile") : T("home_title")}</h1>
-        <p class="subtitle">
-          {isMobileSession ? T("home_subtitle_mobile") : T("home_subtitle")}
+        <h1 id="homeHeaderTitle">{mainTitleText}</h1>
+        <p class="subtitle" id="homeHeaderSubtitle">
+          {subTitleText}
         </p>
 
         <div
@@ -66,11 +72,17 @@ export function HomePage({
               <div>
                 {T("home_bank")}{config.bankName ? ` [${config.bankName}]` : ""}:{" "}
                 <strong>{config.bankAccount}</strong>
+                <button type="button" class="copy-inline-btn" data-copy={config.bankAccount}>
+                  {T("ctrl_copy")}
+                </button>
               </div>
             )}
             {config.promptpayId && (
               <div>
                 {T("home_promptpay")} <strong>{config.promptpayId}</strong>
+                <button type="button" class="copy-inline-btn" data-copy={config.promptpayId}>
+                  {T("ctrl_copy")}
+                </button>
                 <div style="margin-top:16px;">
                   <label>{T("home_qr_amount")}</label>
                   <input
@@ -93,6 +105,9 @@ export function HomePage({
             {config.truewalletId && (
               <div>
                 {T("home_truemoney")} <strong>{config.truewalletId}</strong>
+                <button type="button" class="copy-inline-btn" data-copy={config.truewalletId}>
+                  {T("ctrl_copy")}
+                </button>
               </div>
             )}
           </div>
@@ -168,6 +183,24 @@ export function HomePage({
                       ? T("home_dropzone_mobile")
                       : T("home_dropzone_desktop")}
                 </div>
+              </div>
+
+              <div
+                id="slipPreviewBox"
+                style="display:none; margin-bottom:16px; padding:12px; background:var(--ctp-crust); border:2px solid var(--ctp-surface2); align-items:center; justify-content:space-between; gap:12px;"
+              >
+                <img
+                  id="slipPreviewImg"
+                  alt="Slip preview"
+                  style="max-height:96px; max-width:160px; object-fit:contain; border:1px solid var(--ctp-surface1);"
+                />
+                <button
+                  type="button"
+                  id="clearSlipBtn"
+                  style="width:auto; padding:6px 12px; font-size:12px; background:var(--ctp-surface1); color:var(--ctp-text); border-color:var(--ctp-surface2);"
+                >
+                  {T("home_clear_slip")}
+                </button>
               </div>
 
               {!isMobileSession && (
@@ -344,10 +377,12 @@ export function HomePage({
           if (!sid) {
             try { sid = sessionStorage.getItem('donate_sid') || ''; } catch {}
           }
-          if (!sid || sid.length < 8) {
+          if (!sid || sid.length < 16) {
             sid = (typeof crypto !== 'undefined' && crypto.randomUUID)
               ? crypto.randomUUID()
-              : ('sess_' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+              : (typeof crypto !== 'undefined' && crypto.getRandomValues)
+                ? ('sess_' + Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''))
+                : ('sess_' + Math.random().toString(36).slice(2).padEnd(12, '0') + Date.now().toString(36));
           }
           try { sessionStorage.setItem('donate_sid', sid); } catch {}
           if (sidInput) sidInput.value = sid;
@@ -372,6 +407,51 @@ export function HomePage({
             } catch {}
           });
 
+          document.querySelectorAll('.copy-inline-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const val = btn.getAttribute('data-copy') || '';
+              if (!val) return;
+              try {
+                await navigator.clipboard.writeText(val);
+                const orig = btn.textContent;
+                btn.textContent = __t('home_copied');
+                setTimeout(() => { btn.textContent = orig; }, 1500);
+              } catch {}
+            });
+          });
+
+          const slipPreviewBox = document.getElementById('slipPreviewBox');
+          const slipPreviewImg = document.getElementById('slipPreviewImg');
+          const clearSlipBtn = document.getElementById('clearSlipBtn');
+          let currentPreviewUrl = '';
+
+          function setSlipPreview(fileOrBlob) {
+            if (currentPreviewUrl) {
+              try { URL.revokeObjectURL(currentPreviewUrl); } catch {}
+              currentPreviewUrl = '';
+            }
+            if (!fileOrBlob || !slipPreviewBox || !slipPreviewImg) {
+              if (slipPreviewBox) slipPreviewBox.style.display = 'none';
+              if (slipPreviewImg) slipPreviewImg.removeAttribute('src');
+              return;
+            }
+            currentPreviewUrl = URL.createObjectURL(fileOrBlob);
+            slipPreviewImg.src = currentPreviewUrl;
+            slipPreviewBox.style.display = 'flex';
+          }
+
+          clearSlipBtn?.addEventListener('click', () => {
+            if (fileInput) {
+              fileInput.value = '';
+              fileInput.required = true;
+            }
+            setSlipPreview(null);
+            if (dzText) {
+              dzText.textContent = isMobileLinked ? __t('home_dropzone_mobile') : __t('home_dropzone_desktop');
+            }
+          });
+
+          let donateOpen = ${donateEnabled ? 'true' : 'false'};
           let lastSyncedSlipAt = 0;
           let lastCompletedId = '';
           let metaTimer = null;
@@ -380,7 +460,7 @@ export function HomePage({
           const sumMessage = document.getElementById('sumMessage');
 
           function pushSessionMeta() {
-            if (isMobileLinked) return;
+            if (isMobileLinked || !donateOpen) return;
             if (metaTimer) clearTimeout(metaTimer);
             metaTimer = setTimeout(() => {
               fetch('/api/donate/session', {
@@ -399,14 +479,35 @@ export function HomePage({
           slipType?.addEventListener('change', pushSessionMeta);
           msgInput?.addEventListener('input', pushSessionMeta);
 
-          function showClosedAlert() {
-            const msg = __t('err_donate_closed');
+          function showStatusError(msg) {
             const status = document.getElementById('statusBox');
             if (status) {
               status.className = 'status err';
               status.textContent = msg;
+              try { status.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch {}
             }
-            alert(msg);
+          }
+
+          function showClosedAlert() {
+            showStatusError(__t('err_donate_closed'));
+          }
+
+          function validateAndHandleSlip(file) {
+            if (!file) return;
+            if (!donateOpen) {
+              showClosedAlert();
+              return;
+            }
+            const okTypes = ['image/png', 'image/jpeg', 'image/webp'];
+            if (!okTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+              if (fileInput) fileInput.value = '';
+              setSlipPreview(null);
+              showStatusError(__t('err_file_type'));
+              return;
+            }
+            setSlipPreview(file);
+            if (dzText) dzText.textContent = __t('home_selected_file', { name: file.name });
+            uploadSlipToSession(file);
           }
 
           async function uploadSlipToSession(file) {
@@ -430,16 +531,11 @@ export function HomePage({
               const d = await r.json();
               if (!r.ok || !d?.ok) {
                 const errMsg = d?.error || __t('err_donate_closed');
-                const status = document.getElementById('statusBox');
-                if (status) {
-                  status.className = 'status err';
-                  status.textContent = errMsg;
-                }
+                showStatusError(errMsg);
                 if (isMobileLinked && mobileLinkedBanner) {
                   mobileLinkedBanner.style.color = 'var(--ctp-red)';
                   mobileLinkedBanner.textContent = errMsg;
                 }
-                alert(errMsg);
                 return;
               }
               if (d && d.ok) {
@@ -495,6 +591,7 @@ export function HomePage({
                       const dt = new DataTransfer();
                       dt.items.add(new File([blob], name, { type: d.slipMime || blob.type || 'image/jpeg' }));
                       fileInput.files = dt.files;
+                      setSlipPreview(blob);
                     }
                   } catch {}
                 }
@@ -513,6 +610,7 @@ export function HomePage({
                 }
                 fileInput.value = '';
                 fileInput.required = true;
+                setSlipPreview(null);
                 dzText.textContent = isMobileLinked
                   ? __t('home_dropzone_mobile')
                   : __t('home_dropzone_desktop');
@@ -550,8 +648,7 @@ export function HomePage({
             }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
               fileInput.files = e.dataTransfer.files;
-              dzText.textContent = __t('home_selected_file', { name: e.dataTransfer.files[0].name });
-              uploadSlipToSession(e.dataTransfer.files[0]);
+              validateAndHandleSlip(e.dataTransfer.files[0]);
             }
           });
           fileInput.addEventListener('change', () => {
@@ -561,8 +658,7 @@ export function HomePage({
               return;
             }
             if (fileInput.files && fileInput.files.length) {
-              dzText.textContent = __t('home_selected_file', { name: fileInput.files[0].name });
-              uploadSlipToSession(fileInput.files[0]);
+              validateAndHandleSlip(fileInput.files[0]);
             }
           });
 
@@ -602,6 +698,7 @@ export function HomePage({
               if (donorInput && keepChecked) donorInput.value = keepName;
               fileInput.value = '';
               fileInput.required = true;
+              setSlipPreview(null);
               dzText.textContent = __t('home_dropzone_desktop');
               if (ppAmt) {
                 ppAmt.value = '10';
@@ -620,7 +717,6 @@ export function HomePage({
             }
           });
 
-          let donateOpen = ${donateEnabled ? 'true' : 'false'};
           function applyDonateState(open) {
             donateOpen = open;
             const banner = document.getElementById('donateClosedBanner');
@@ -670,6 +766,22 @@ export function HomePage({
             }
             if (typeof data === 'object' && window.__applyTheme && (data?.themeFlavor || data?.themeAccent)) {
               window.__applyTheme(data.themeFlavor, data.themeAccent);
+            }
+            if (typeof data === 'object' && !isMobileLinked) {
+              if (typeof data?.siteTitle === 'string') {
+                const st = data.siteTitle.trim();
+                document.title = st || 'Donate Tools';
+                const brandEl = document.getElementById('homeNavBrand');
+                if (brandEl) brandEl.textContent = st || __t('home_nav_brand');
+              }
+              if (typeof data?.headerTitle === 'string') {
+                const h1El = document.getElementById('homeHeaderTitle');
+                if (h1El) h1El.textContent = data.headerTitle.trim() || __t('home_title');
+              }
+              if (typeof data?.headerSubtitle === 'string') {
+                const subEl = document.getElementById('homeHeaderSubtitle');
+                if (subEl) subEl.textContent = data.headerSubtitle.trim() || __t('home_subtitle');
+              }
             }
           }
 

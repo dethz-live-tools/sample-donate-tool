@@ -26,15 +26,13 @@ export function isLocale(v: unknown): v is Locale {
   return v === 'th' || v === 'en'
 }
 
-// precedence: ?lang= > lang cookie > Accept-Language > DEFAULT_LANG env > th
+// precedence: lang cookie (synced from localStorage) > Accept-Language > DEFAULT_LANG env > th
 export function resolveLocale(
-  query: Record<string, string> | undefined,
+  _query: Record<string, string> | undefined,
   cookie: string | undefined,
   acceptLanguage: string | undefined,
   defaultLang: string | undefined
 ): Locale {
-  const q = query?.lang
-  if (isLocale(q)) return q
   if (cookie) {
     const matches = cookie
       .split(';')
@@ -53,9 +51,9 @@ export function resolveLocale(
   return 'th'
 }
 
-// server-side: one-shot template for inline scripts + localStorage <-> query/cookie sync
+// server-side: one-shot template for inline scripts + localStorage <-> cookie sync (no ?lang= in URL bar)
 export function clientI18n(locale: Locale): string {
   const table = messages[locale] ?? messages.th
-  const json = JSON.stringify(table)
-  return `window.__LANG='${locale}';window.__T=${json};window.__t=function(k,v){var s=window.__T[k]||k;if(v)for(var x in v)s=s.replaceAll('{'+x+'}',String(v[x]));return s};window.__setLang=function(l){try{if(window.__es)window.__es.close()}catch(e){}try{localStorage.setItem('lang',l)}catch(e){}var p=location.pathname;document.cookie='lang=;max-age=0';document.cookie='lang=;path='+p+';max-age=0';document.cookie='lang=;path=/dashboard;max-age=0';document.cookie='lang=;path=/overlay/control;max-age=0';document.cookie='lang='+l+';path=/;max-age=31536000;SameSite=Lax';var u=new URL(location.href);u.searchParams.set('lang',l);location.replace(u.toString())};try{var q=new URLSearchParams(location.search).get('lang'),s=localStorage.getItem('lang'),l=(q==='th'||q==='en')?q:(s==='th'||s==='en')?s:'${locale}';localStorage.setItem('lang',l);document.cookie='lang='+l+';path=/;max-age=31536000;SameSite=Lax';if(l!=='${locale}')window.__setLang(l)}catch(e){}`
+  const json = JSON.stringify(table).replace(/</g, '\\u003c')
+  return `window.__LANG='${locale}';window.__T=${json};window.__t=function(k,v){var s=window.__T[k]||k;if(v)for(var x in v)s=s.replaceAll('{'+x+'}',String(v[x]));return s};window.__setLang=function(l){try{if(window.__es)window.__es.close()}catch(e){}try{localStorage.setItem('lang',l)}catch(e){}var p=location.pathname;document.cookie='lang=;max-age=0';document.cookie='lang=;path='+p+';max-age=0';document.cookie='lang=;path=/dashboard;max-age=0';document.cookie='lang=;path=/overlay/control;max-age=0';document.cookie='lang='+l+';path=/;max-age=31536000;SameSite=Lax';var u=new URL(location.href);u.searchParams.delete('lang');location.replace(u.pathname+u.search+u.hash)};try{var u=new URL(location.href);if(u.searchParams.has('lang')){u.searchParams.delete('lang');history.replaceState(null,'',u.pathname+u.search+u.hash)}var s=localStorage.getItem('lang'),l=(s==='th'||s==='en')?s:'${locale}';localStorage.setItem('lang',l);document.cookie='lang='+l+';path=/;max-age=31536000;SameSite=Lax';if(l!=='${locale}')window.__setLang(l)}catch(e){}`
 }

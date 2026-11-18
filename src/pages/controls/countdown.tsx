@@ -1,14 +1,15 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
-import { t, type Locale } from '../../i18n'
+import { t, type I18nKey, type Locale } from '../../i18n'
 
 export function CountdownControlPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars)
   return (
     <ControlLayout
       lang={lang}
       activeTab="countdown"
-      title={t(lang, 'ctrl_countdown_title')}
-      subtitle={t(lang, 'ctrl_countdown_subtitle')}
+      title={T('ctrl_countdown_title')}
+      subtitle={T('ctrl_countdown_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay/countdown?minutes=10&title=STARTING+SOON"
       extraScript={`
@@ -86,8 +87,8 @@ export function CountdownControlPage({ overlayStatus, lang = 'th' }: { overlaySt
       `}
     >
       <div>
-        <details class="inverted-block fold-block">
-          <summary>COUNTDOWN TIMER OBS BROWSER SOURCE (450 x 250)</summary>
+        <details class="inverted-block fold-block" open>
+          <summary>{T('ctrl_ov_cd_title')}</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -101,7 +102,7 @@ export function CountdownControlPage({ overlayStatus, lang = 'th' }: { overlaySt
               id="copyCdUrlBtn"
               style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
             >
-              COPY URL
+              {T('ctrl_copy_url')}
             </button>
             <a
               id="previewCdLink"
@@ -109,101 +110,101 @@ export function CountdownControlPage({ overlayStatus, lang = 'th' }: { overlaySt
               target="_blank"
               style="white-space:nowrap; font-size:12px;"
             >
-              OPEN PREVIEW
+              {T('ctrl_open_preview')}
             </a>
           </div>
           <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
             <input type="checkbox" id="cdTransparentToggle" style="width:auto; margin:0;" />
-            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+            <span>{T('ctrl_transparent_bg')}</span>
           </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
-            Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>.
+            {T('ctrl_ov_cd_desc')}
           </div>
         </details>
 
-        <details class="card fold-block" style="margin-bottom:24px;">
-          <summary>COUNTDOWN REMOTE CONTROLS</summary>
+        <details class="card fold-block" style="margin-bottom:24px;" open>
+          <summary>{T('ctrl_cd_controls')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            QUICK PRESETS, PAUSE / RESUME, AND TIME ADJUSTMENTS
+            {T('ctrl_cd_controls_sub')}
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
             <button type="button" id="cdQuick5Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 5M
+              5m
             </button>
             <button type="button" id="cdQuick10Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 10M
+              10m
             </button>
             <button type="button" id="cdQuick30Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 30M
+              30m
             </button>
             <button type="button" id="cdQuick1hBtn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 1H
+              1h
             </button>
             <button
               type="button"
               id="cdPauseBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-yellow); border-color:var(--ctp-yellow); color:var(--ctp-crust);"
             >
-              PAUSE
+              {T('ctrl_pause')}
             </button>
             <button
               type="button"
               id="cdResumeBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust);"
             >
-              RESUME
+              {T('ctrl_resume')}
             </button>
             <button
               type="button"
               id="cdResetBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-peach); border-color:var(--ctp-peach); color:var(--ctp-crust);"
             >
-              RESET
+              {T('ctrl_reset')}
             </button>
             <button type="button" id="cdPlus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +1 MIN
+              +1m
             </button>
             <button type="button" id="cdPlus5Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +5 MIN
+              +5m
             </button>
             <button type="button" id="cdPlus10Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +10 MIN
+              +10m
             </button>
             <button type="button" id="cdMinus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              -1 MIN
+              -1m
             </button>
             <button
               type="button"
               id="cmdReloadBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
             >
-              FORCE RELOAD
+              {T('ctrl_force_reload')}
             </button>
           </div>
 
           <form id="cdCustomForm">
             <div class="row">
               <div>
-                <label>HEADER TITLE</label>
+                <label>{T('ctrl_cd_header_label')}</label>
                 <input type="text" id="cdCustomTitle" value="STARTING SOON" required />
               </div>
               <div>
-                <label>END MESSAGE</label>
+                <label>{T('ctrl_cd_end_label')}</label>
                 <input type="text" id="cdCustomEnd" value="TIME UP" required />
               </div>
             </div>
             <div class="row">
               <div>
-                <label>MINUTES</label>
+                <label>{T('ctrl_cd_mins_label')}</label>
                 <input type="number" id="cdCustomMinutes" value="10" min="0" max="1440" required />
               </div>
               <div>
-                <label>SECONDS</label>
+                <label>{T('ctrl_cd_secs_label')}</label>
                 <input type="number" id="cdCustomSeconds" value="0" min="0" max="59" required />
               </div>
             </div>
             <button type="submit" style="width:auto; padding:12px 24px; font-size:14px;">
-              APPLY COUNTDOWN &amp; UPDATE URL
+              {T('ctrl_cd_apply_btn')}
             </button>
           </form>
         </details>

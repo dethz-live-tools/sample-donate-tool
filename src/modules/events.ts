@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { dashboardAuth, isValidSession } from './auth'
+import { dashboardAuth, extractToken, isValidSession, requirePermission } from './auth'
 import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
 import {
@@ -9,6 +9,7 @@ import {
   CATPPUCCIN_FLAVORS,
   getDonateEnabled,
   getFilterConfig,
+  getHeaderConfig,
   getLeaderboard,
   getSubathonState,
   getThemeConfig,
@@ -16,11 +17,13 @@ import {
   listDonations,
   setDonateEnabled,
   setFilterConfig,
+  setHeaderConfig,
   setThemeConfig,
   setTtsConfig,
   type CatppuccinAccent,
   type CatppuccinFlavor,
   type FilterSettings,
+  type HeaderSettings,
   type SubathonState,
   type ThemeSettings,
   type TtsSettings
@@ -46,6 +49,9 @@ export type OverlayStatus = {
   donateEnabled?: boolean
   themeFlavor?: CatppuccinFlavor
   themeAccent?: CatppuccinAccent
+  siteTitle?: string
+  headerTitle?: string
+  headerSubtitle?: string
   ttsEnabled: boolean
   ttsVoice?: string
   ttsRate?: string
@@ -71,10 +77,30 @@ const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
 let runtimeDonateEnabled: boolean | null = null
 let runtimeThemeConfig: ThemeSettings | null = null
+let runtimeHeaderConfig: HeaderSettings | null = null
 let runtimeTtsConfig: TtsSettings | null = null
 let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
+const MAX_SSE_CLIENTS = 100
 const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg', 'theme'])
+
+export async function resolveHeaderConfig(env?: Bindings): Promise<HeaderSettings> {
+  const def: HeaderSettings = runtimeHeaderConfig ?? { siteTitle: '', headerTitle: '', headerSubtitle: '' }
+  try {
+    const val = await getHeaderConfig(getDb(env))
+    runtimeHeaderConfig = val
+    return val
+  } catch {
+    return def
+  }
+}
+
+export async function updateHeaderConfig(env: Bindings | undefined, update: Partial<HeaderSettings>): Promise<HeaderSettings> {
+  const val = await setHeaderConfig(getDb(env), update)
+  runtimeHeaderConfig = val
+  broadcastOverlayStatus()
+  return val
+}
 
 export async function resolveThemeConfig(env?: Bindings): Promise<ThemeSettings> {
   const def: ThemeSettings = runtimeThemeConfig ?? { flavor: 'macchiato', accent: 'sapphire' }
@@ -174,6 +200,9 @@ export function getOverlayStatus(): OverlayStatus {
     donateEnabled: runtimeDonateEnabled ?? false,
     themeFlavor: runtimeThemeConfig?.flavor ?? 'macchiato',
     themeAccent: runtimeThemeConfig?.accent ?? 'sapphire',
+    siteTitle: runtimeHeaderConfig?.siteTitle ?? '',
+    headerTitle: runtimeHeaderConfig?.headerTitle ?? '',
+    headerSubtitle: runtimeHeaderConfig?.headerSubtitle ?? '',
     ttsEnabled: runtimeTtsConfig?.enabled ?? true,
     ttsVoice: runtimeTtsConfig?.voice ?? 'th-TH-NiwatNeural',
     ttsRate: runtimeTtsConfig?.rate ?? '+0%',
@@ -223,7 +252,10 @@ function sanitizeEvent(ev: DonateEvent, isAdmin: boolean): DonateEvent {
 }
 
 async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: string) {
-  await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
+  if (listeners.size >= MAX_SSE_CLIENTS) {
+    return c.json({ ok: false, error: 'TOO_MANY_STREAMS' }, 503)
+  }
+  await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env), resolveHeaderConfig(c.env)])
   const isAdmin = await isValidSession(c)
   const client = forcedClient || c.req.query('client') || (c.req.path.endsWith('/overlay') ? 'overlay' : 'default')
   const isOverlay = client === 'overlay'
@@ -352,7 +384,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
 
 export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/poll', async (c) => {
-    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env), resolveHeaderConfig(c.env)])
     const isAdmin = await isValidSession(c)
     if (c.req.query('client') === 'overlay') {
       touchOverlayHeartbeat()
@@ -369,7 +401,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/status', async (c) => {
-    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env), resolveHeaderConfig(c.env)])
     return c.json({ ok: true, ...getOverlayStatus() })
   })
   .get('/leaderboard', async (c) => {
@@ -382,17 +414,20 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     const state = await syncSubathonWithTikTokLive(getDb(c.env))
     return c.json({ ok: true, state })
   })
-  .get('/heartbeat', dashboardAuth, (c) => {
+  .get('/heartbeat', requirePermission('controls'), (c) => {
+    if (!extractToken(c).isBearer) {
+      return c.json({ ok: false, error: 'USE_POST_FOR_HEARTBEAT' }, 405)
+    }
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
     return c.json({ ok: true, ...getOverlayStatus() })
   })
-  .post('/heartbeat', dashboardAuth, (c) => {
+  .post('/heartbeat', requirePermission('controls'), (c) => {
     touchOverlayHeartbeat()
     broadcastOverlayStatus()
     return c.json({ ok: true, ...getOverlayStatus() })
   })
-  .post('/control', dashboardAuth, async (c) => {
+  .post('/control', requirePermission('controls', 'config'), async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
     const action = String(body.action || '').trim()
     if (!action) {

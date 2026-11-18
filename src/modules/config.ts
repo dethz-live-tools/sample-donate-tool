@@ -40,6 +40,10 @@ export type Bindings = {
   DISCORD_REDIRECT_URI?: string
   DISCORD_ALLOWED_USER_IDS?: string
   DISCORD_ADMIN_USER_ID?: string
+  DISCORD_OWNER_ID?: string
+  DISCORD_ID?: string
+  SESSION_TIMEOUT?: string
+  REFRESH_TOKEN_TIMEOUT?: string
 }
 
 export function getConfig(env?: Bindings): AppConfig {

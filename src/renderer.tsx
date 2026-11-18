@@ -8,12 +8,13 @@ export const renderer = jsxRenderer((_props, c) => {
   const lang = (c.get('lang') || 'th') as Locale
   const flavor = (c.get('themeFlavor') || 'macchiato') as string
   const accent = (c.get('themeAccent') || 'sapphire') as string
+  const siteTitle = (c.get('siteTitle') || '').trim() || 'Donate Tools'
   return (
     <html lang={lang} data-flavor={flavor} data-accent={accent}>
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Donate Tools</title>
+        <title>{siteTitle}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Sans+Thai:wght@400;600;700&family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;600;700&display=swap"
@@ -21,6 +22,7 @@ export const renderer = jsxRenderer((_props, c) => {
         />
         <ViteClient />
         <Link href="/src/style.css" rel="stylesheet" />
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script dangerouslySetInnerHTML={{ __html: clientI18n(lang) + themeRuntimeScript }} />
       </head>
       <body>{_props.children}</body>

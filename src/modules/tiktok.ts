@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { dashboardAuth, getTikTokWebhookKey, isValidSession } from './auth'
+import { dashboardAuth, extractToken, getTikTokWebhookKey, isValidSession } from './auth'
 import type { Bindings } from './config'
 import { getDb } from '../db/client'
 import { addSubathonDonation, applySubathonCommand, getSubathonState, type AppDatabase, type SubathonState } from './db'
@@ -29,7 +29,12 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 async function isAuthorizedWebhook(c: Context<{ Bindings: Bindings }>, body: Record<string, any>): Promise<boolean> {
-  if (await isValidSession(c)) return true
+  // Block cookie CSRF on GET webhooks and cross-site POSTs; allow Bearer or same-origin POST sessions
+  const { isBearer } = extractToken(c)
+  const isSafeOriginPost =
+    c.req.method === 'POST' &&
+    (c.req.header('sec-fetch-site') === 'same-origin' || c.req.header('origin') === new URL(c.req.url).origin)
+  if ((isBearer || isSafeOriginPost) && (await isValidSession(c))) return true
   const expectedKey = await getTikTokWebhookKey(c.env)
   const authHeader = c.req.header('authorization') || ''
   const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
@@ -50,7 +55,7 @@ export async function checkTikTokUserLive(rawUsername: string): Promise<boolean 
   const username = String(rawUsername || '')
     .replace(/^@+/, '')
     .trim()
-  if (!username) return null
+  if (!username || !/^[a-zA-Z0-9._]{1,64}$/.test(username)) return null
 
   const headers = {
     'User-Agent':
@@ -62,7 +67,7 @@ export async function checkTikTokUserLive(rawUsername: string): Promise<boolean 
 
   try {
     const apiUrl = `https://www.tiktok.com/api-live/user/room/?aid=1988&sourceType=54&uniqueId=${encodeURIComponent(username)}`
-    const res = await fetch(apiUrl, { headers })
+    const res = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(5000) })
     if (res.ok) {
       const json = (await res.json().catch(() => null)) as any
       const roomStatus = json?.data?.liveRoom?.status ?? json?.data?.user?.status
@@ -78,7 +83,8 @@ export async function checkTikTokUserLive(rawUsername: string): Promise<boolean 
       headers: {
         ...headers,
         Accept: 'text/html,application/xhtml+xml'
-      }
+      },
+      signal: AbortSignal.timeout(5000)
     })
     if (res.ok) {
       const html = await res.text()
@@ -342,20 +348,23 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
       50
     ) || 'TIKTOK GIFT'
 
-  const repeatCount = Math.max(
-    1,
-    Math.round(
-      Number(
-        body.repeatCount ??
-          body.repeat_count ??
-          body.repeat ??
-          body.count ??
-          body.combo ??
-          c.req.query('repeat') ??
-          c.req.query('repeatCount') ??
-          c.req.query('count') ??
-          1
-      ) || 1
+  const repeatCount = Math.min(
+    10_000,
+    Math.max(
+      1,
+      Math.round(
+        Number(
+          body.repeatCount ??
+            body.repeat_count ??
+            body.repeat ??
+            body.count ??
+            body.combo ??
+            c.req.query('repeat') ??
+            c.req.query('repeatCount') ??
+            c.req.query('count') ??
+            1
+        ) || 1
+      )
     )
   )
 
@@ -381,12 +390,12 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
       ? Number(rawDiamonds) * repeatCount
       : Number(rawTotalCoins)
 
-  if (!Number.isFinite(coins) || coins <= 0) {
+  if (!Number.isFinite(coins) || coins <= 0 || coins > 10_000_000) {
     return c.json(
       {
         ok: false,
         error: 'INVALID_COINS',
-        message: 'Provide positive coins or diamondCount parameter'
+        message: 'Provide positive coins (<= 10000000) or diamondCount parameter'
       },
       400
     )

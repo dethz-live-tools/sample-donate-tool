@@ -149,7 +149,7 @@ export function ControlLayout({
                 try {
                   await navigator.clipboard.writeText(inputEl.value);
                   const orig = btnEl.textContent;
-                  btnEl.textContent = 'COPIED!';
+                  btnEl.textContent = __t('home_copied');
                   setTimeout(() => { btnEl.textContent = orig; }, 2000);
                 } catch {
                   inputEl.select();
@@ -205,7 +205,7 @@ export function ControlLayout({
                   ttsStatusText.className = ttsOn ? 'status-online' : 'status-offline';
                 }
                 if (cmdTtsBtn) {
-                  cmdTtsBtn.textContent = 'TTS VOICE: ' + (ttsOn ? 'ON (CLICK TO MUTE)' : 'OFF (CLICK TO ENABLE)');
+                  cmdTtsBtn.textContent = ttsOn ? __t('ctrl_tts_on_btn') : __t('ctrl_tts_off_btn');
                 }
               }
               const vSel = document.getElementById('ttsVoiceSelect');
@@ -255,7 +255,7 @@ export function ControlLayout({
           }, 1000);
 
           async function sendCommand(action, extra = {}) {
-            showStatus('DISPATCHING: ' + action.toUpperCase() + '...');
+            showStatus(__t('dash_sending'));
             log('Sending command: ' + action + (extra.cmd ? ' (' + extra.cmd + ')' : ''), 'warn');
             try {
               const res = await fetch('/api/events/control', {
@@ -265,11 +265,11 @@ export function ControlLayout({
               });
               const data = await res.json();
               if (!res.ok || !data.ok) throw new Error(data.error || 'COMMAND_FAILED');
-              showStatus('OK // ' + action.toUpperCase() + ' EXECUTED');
+              showStatus(__t('dash_saved') + ' (' + action + ')');
               log('Command executed successfully: ' + action, 'success');
               if (data.status) updateState(data.status);
             } catch (err) {
-              showStatus('ERROR // ' + err.message, true);
+              showStatus('Error: ' + err.message, true);
               log('Command error (' + action + '): ' + err.message, 'err');
             }
           }

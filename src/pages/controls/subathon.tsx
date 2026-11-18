@@ -1,7 +1,7 @@
 import type { SubathonState } from '../../modules/db'
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
-import { t, type Locale } from '../../i18n'
+import { t, type I18nKey, type Locale } from '../../i18n'
 
 export function SubathonControlPage({
   overlayStatus,
@@ -14,6 +14,7 @@ export function SubathonControlPage({
   subathonState?: SubathonState
   tiktokWebhookKey?: string
 }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars)
   const initTitle = subathonState?.title || 'SUBATHON'
   const initEndMsg = subathonState?.endMsg || 'TIME UP'
   const initMins = Math.max(1, Math.round((subathonState?.initialSeconds ?? 600) / 60))
@@ -497,8 +498,8 @@ export function SubathonControlPage({
       `}
     >
       <div>
-        <details class="inverted-block fold-block">
-          <summary>Subathon marathon OBS Browser Source (450 x 250), persisted in D1 DB</summary>
+        <details class="inverted-block fold-block" open>
+          <summary>{T('ctrl_ov_sub_title')}</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -512,7 +513,7 @@ export function SubathonControlPage({
               id="copySubUrlBtn"
               style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
             >
-              COPY URL
+              {T('ctrl_copy_url')}
             </button>
             <a
               id="previewSubLink"
@@ -520,27 +521,27 @@ export function SubathonControlPage({
               target="_blank"
               style="white-space:nowrap; font-size:12px;"
             >
-              OPEN PREVIEW
+              {T('ctrl_open_preview')}
             </a>
           </div>
           <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
             <input type="checkbox" id="subTransparentToggle" style="width:auto; margin:0;" />
-            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+            <span>{T('ctrl_transparent_bg')}</span>
           </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
-            Recommended OBS settings: Width <strong>450</strong>, Height <strong>250</strong>. Timer state, coin rate, added seconds, and donation totals are automatically saved in Cloudflare D1 across refreshes.
+            {T('ctrl_ov_sub_desc')}
           </div>
         </details>
 
         <div class="card-grid" style="margin-bottom: 24px;">
           <div class="card" style="margin-bottom:0;">
-            <label>PERSISTED DB CLOCK</label>
+            <label>{T('ctrl_sub_clock')}</label>
             <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-accent);" id="subDbClock">
               --:--:--
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>TIMER STATE</label>
+            <label>{T('ctrl_sub_state')}</label>
             <div
               style="font-family:var(--font-head); font-size:28px;"
               id="subDbState"
@@ -550,25 +551,25 @@ export function SubathonControlPage({
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>ACTIVE COIN RATE</label>
+            <label>{T('ctrl_sub_rate')}</label>
             <div style="font-family:var(--font-head); font-size:24px; color:var(--ctp-yellow);" id="subDbRate">
               {initRateCoins} COINS ➔ +{initRateSeconds}S
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>TOTAL ADDED TIME</label>
+            <label>{T('ctrl_sub_added')}</label>
             <div style="font-family:var(--font-head); font-size:28px; color:var(--ctp-green);" id="subDbAdded">
               +0s
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>SUBATHON VOLUME</label>
+            <label>{T('ctrl_sub_volume')}</label>
             <div style="font-family:var(--font-head); font-size:28px;" id="subDbThb">
               {initTotalThb.toLocaleString()} COINS
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <label>TIKTOK LIVE STATUS</label>
+            <label>{T('ctrl_sub_tiktok_status')}</label>
             <div
               style="font-family:var(--font-head); font-size:28px;"
               id="subDbTiktokLive"
@@ -579,15 +580,15 @@ export function SubathonControlPage({
           </div>
         </div>
 
-        <details class="card fold-block" style="margin-bottom:24px;">
-          <summary>COIN TO TIME CONVERSION (X COINS ➔ +Y SECONDS)</summary>
+        <details class="card fold-block" style="margin-bottom:24px;" open>
+          <summary>{T('ctrl_sub_conversion')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            SET HOW MANY COINS (THB) ADD HOW MANY SECONDS
+            {T('ctrl_sub_conversion_sub')}
           </p>
 
           <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:14px;">
             <div style="flex:1; min-width:140px;">
-              <label>EVERY X COINS (THB)</label>
+              <label>{T('ctrl_sub_every_coins')}</label>
               <input
                 type="number"
                 id="subRateCoins"
@@ -600,10 +601,10 @@ export function SubathonControlPage({
               />
             </div>
             <div style="font-family:var(--font-head); font-size:20px; color:var(--ctp-yellow); padding-bottom:10px;">
-              ➔ ADDS
+              &rarr;
             </div>
             <div style="flex:1; min-width:140px;">
-              <label>+ Y SECONDS</label>
+              <label>{T('ctrl_sub_adds_secs')}</label>
               <input
                 type="number"
                 id="subRateSeconds"
@@ -615,7 +616,7 @@ export function SubathonControlPage({
               />
             </div>
             <div style="flex:1; min-width:140px;">
-              <label>MAX TIMER CAP (HOURS)</label>
+              <label>{T('ctrl_sub_max_cap')}</label>
               <input
                 type="number"
                 id="subMaxHours"
@@ -631,7 +632,7 @@ export function SubathonControlPage({
               id="subSaveRateBtn"
               style="width:auto; padding:12px 20px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust); white-space:nowrap;"
             >
-              UPDATE COIN RATE (KEEP CLOCK)
+              {T('ctrl_sub_update_rate_btn')}
             </button>
           </div>
 
@@ -643,87 +644,87 @@ export function SubathonControlPage({
           </div>
         </details>
 
-        <details class="card fold-block" style="margin-bottom:24px;">
-          <summary>SUBATHON TIMER &amp; REMOTE CONTROLS</summary>
+        <details class="card fold-block" style="margin-bottom:24px;" open>
+          <summary>{T('ctrl_sub_timer_controls')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            ALL CHANGES ARE IMMEDIATELY SAVED TO D1 DATABASE &amp; BROADCAST TO OBS
+            {T('ctrl_sub_timer_sub')}
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
             <button type="button" id="subQuick10Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 10M
+              10m
             </button>
             <button type="button" id="subQuick30Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 30M
+              30m
             </button>
             <button type="button" id="subQuick1hBtn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 1H
+              1h
             </button>
             <button type="button" id="subQuick2hBtn" style="width:auto; padding:10px 16px; font-size:13px;">
-              START 2H
+              2h
             </button>
             <button
               type="button"
               id="subPauseBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-yellow); border-color:var(--ctp-yellow); color:var(--ctp-crust);"
             >
-              PAUSE
+              {T('ctrl_pause')}
             </button>
             <button
               type="button"
               id="subResumeBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-green); border-color:var(--ctp-green); color:var(--ctp-crust);"
             >
-              RESUME
+              {T('ctrl_resume')}
             </button>
             <button
               type="button"
               id="subResetBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-peach); border-color:var(--ctp-peach); color:var(--ctp-crust);"
             >
-              RESET
+              {T('ctrl_reset')}
             </button>
             <button type="button" id="subPlus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +1 MIN
+              +1m
             </button>
             <button type="button" id="subPlus5Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +5 MIN
+              +5m
             </button>
             <button type="button" id="subPlus10Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              +10 MIN
+              +10m
             </button>
             <button type="button" id="subMinus1Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              -1 MIN
+              -1m
             </button>
             <button
               type="button"
               id="cmdReloadBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
             >
-              FORCE RELOAD
+              {T('ctrl_force_reload')}
             </button>
           </div>
 
           <form id="subCustomForm">
             <div class="row">
               <div>
-                <label>INITIAL MINUTES (RESET / NEW START)</label>
+                <label>{T('ctrl_sub_init_mins')}</label>
                 <input type="number" id="subCustomMinutes" value={String(initMins)} min="1" max="14400" required />
               </div>
               <div>
-                <label>END MESSAGE</label>
+                <label>{T('ctrl_cd_end_label')}</label>
                 <input type="text" id="subCustomEnd" value={initEndMsg} required />
               </div>
             </div>
             <button type="submit" style="width:auto; padding:12px 24px; font-size:14px;">
-              SAVE &amp; RESTART SUBATHON TIMER IN D1
+              {T('ctrl_sub_save_restart_btn')}
             </button>
           </form>
         </details>
 
-        <details class="card fold-block" style="margin-bottom:24px; border-color:var(--ctp-sapphire);">
-          <summary style="color:var(--ctp-sapphire);">TIKTOK LIVE STATUS &amp; GIFT INTEGRATION (SUBMATRON)</summary>
+        <details class="card fold-block" style="margin-bottom:24px; border-color:var(--ctp-sapphire);" open>
+          <summary style="color:var(--ctp-sapphire);">{T('ctrl_sub_tiktok_section')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            AUTO START &amp; HOLD SUBMATRON WITH TIKTOK LIVE STATUS // RECEIVE GIFTS VIA WEBHOOK (% COIN RATE)
+            {T('ctrl_sub_tiktok_sub')}
           </p>
 
           <div style="margin-bottom:16px; padding-bottom:16px; border-bottom:2px solid var(--ctp-surface1);">
@@ -919,10 +920,10 @@ export function SubathonControlPage({
           </div>
         </details>
 
-        <details class="card fold-block" style="margin-bottom:24px;">
-          <summary>DONATE TEST (SUBMATRON TIME ADDITION)</summary>
+        <details class="card fold-block" style="margin-bottom:24px;" open>
+          <summary>{T('ctrl_sub_test_section')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            DISPATCH A TEST DONATION TO ADD TIME TO SUBMATRON D1 TIMER &amp; TRIGGER OVERLAY POPUP
+            {T('ctrl_sub_test_sub')}
           </p>
 
           <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">

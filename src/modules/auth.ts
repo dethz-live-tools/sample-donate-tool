@@ -9,17 +9,23 @@ import {
   CATPPUCCIN_ACCENTS,
   CATPPUCCIN_FLAVORS,
   createAdmin,
+  DEFAULT_DISCORD_PERMISSIONS,
   deleteDonation,
+  DISCORD_PERMISSIONS,
   getAdmin,
+  getDiscordWhitelistEntry,
   getDonationStats,
   getSubathonState,
   isDiscordWhitelisted,
   listDiscordWhitelist,
   listDonations,
+  parseDiscordPermissions,
   removeDiscordWhitelist,
   saveAdminDiscord,
   setApiEnabled,
   updateAdmin,
+  updateDiscordWhitelistEntry,
+  type DiscordPermission,
   type SubathonState
 } from './db'
 import {
@@ -28,12 +34,14 @@ import {
   getOverlayStatus,
   resolveDonateEnabled,
   resolveFilterConfig,
+  resolveHeaderConfig,
   resolveThemeConfig,
   resolveTtsConfig,
   resolveTtsEnabled,
   touchOverlayHeartbeat,
   updateDonateEnabled,
   updateFilterConfig,
+  updateHeaderConfig,
   updateThemeConfig,
   updateTtsConfig,
   updateTtsEnabled,
@@ -43,8 +51,36 @@ import { DEFAULT_BLOCKED_WORDS } from './filter'
 import { EDGE_TTS_VOICES } from './tts'
 
 const COOKIE_NAME = 'dash_token'
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
+const REFRESH_COOKIE_NAME = 'dash_refresh'
+const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 // 1 hour default session_timeout
+const DEFAULT_REFRESH_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days default refresh token TTL
 const loginAttempts = new Map<string, { count: number; resetAt: number }>()
+
+export function parseDurationMs(raw: unknown, fallbackMs: number, minMs = 60_000): number {
+  const s = String(raw ?? '').trim().toLowerCase()
+  if (!s) return fallbackMs
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?$/)
+  if (!m) return fallbackMs
+  const val = Number(m[1])
+  if (!Number.isFinite(val) || val <= 0) return fallbackMs
+  const unit = m[2] || ''
+  let ms = val
+  if (unit === 'd') ms = val * 86_400_000
+  else if (unit === 'h') ms = val * 3_600_000
+  else if (unit === 'm') ms = val * 60_000
+  else if (unit === 's') ms = val * 1000
+  else if (unit === 'ms') ms = val
+  else ms = val > 31_536_000 ? val : val * 1000 // plain number: seconds (or ms if > 1 year in seconds)
+  return Math.max(minMs, Math.round(ms))
+}
+
+export function getSessionTimeoutMs(env?: Bindings): number {
+  return parseDurationMs(env?.SESSION_TIMEOUT, DEFAULT_SESSION_TTL_MS, 60_000)
+}
+
+export function getRefreshTimeoutMs(env?: Bindings): number {
+  return parseDurationMs(env?.REFRESH_TOKEN_TIMEOUT, DEFAULT_REFRESH_TTL_MS, 300_000)
+}
 
 function toHex(buf: ArrayBuffer | Uint8Array): string {
   return Array.from(buf instanceof Uint8Array ? buf : new Uint8Array(buf))
@@ -109,12 +145,16 @@ export async function getTikTokWebhookKey(env: Bindings | undefined): Promise<st
 }
 
 export function getEnvAllowedDiscordIds(env?: Bindings): string[] {
-  const raw = String(
-    env?.DISCORD_ALLOWED_USER_IDS ||
-      env?.DISCORD_ADMIN_USER_ID ||
-      (env as any)?.VITE_DISCORD_ALLOWED_USER_IDS ||
-      ''
-  ).trim()
+  const raw = [
+    env?.DISCORD_ALLOWED_USER_IDS,
+    env?.DISCORD_ADMIN_USER_ID,
+    env?.DISCORD_OWNER_ID,
+    env?.DISCORD_ID,
+    (env as any)?.VITE_DISCORD_ALLOWED_USER_IDS
+  ]
+    .filter(Boolean)
+    .join(',')
+    .trim()
   if (!raw) return []
   return Array.from(
     new Set(
@@ -133,13 +173,64 @@ async function createSessionToken(
   tokenVersion = 1,
   discordId = ''
 ): Promise<string> {
-  const exp = Date.now() + SESSION_TTL_MS
+  const exp = Date.now() + getSessionTimeoutMs(env)
   const payload = discordId ? `${username}:${exp}:${discordId}` : `${username}:${exp}`
   const sig = await hmacSign(getSecret(env, passwordHash, tokenVersion), payload)
   return discordId ? `${exp}.${sig}.${discordId}` : `${exp}.${sig}`
 }
 
-function extractToken(c: Context<{ Bindings: Bindings }>): { token: string; isBearer: boolean } {
+async function createRefreshToken(
+  env: Bindings | undefined,
+  username: string,
+  passwordHash: string,
+  tokenVersion = 1,
+  discordId = ''
+): Promise<string> {
+  const exp = Date.now() + getRefreshTimeoutMs(env)
+  const payload = discordId ? `refresh:${username}:${exp}:${discordId}` : `refresh:${username}:${exp}`
+  const sig = await hmacSign(`${getSecret(env, passwordHash, tokenVersion)}:refresh`, payload)
+  return discordId ? `${exp}.${sig}.${discordId}` : `${exp}.${sig}`
+}
+
+export function extractRefreshToken(c: Context<{ Bindings: Bindings }>, bodyRefreshToken?: unknown): string {
+  if (typeof bodyRefreshToken === 'string' && bodyRefreshToken.trim()) return bodyRefreshToken.trim()
+  const headerToken = (c.req.header('x-refresh-token') || '').trim()
+  if (headerToken) return headerToken
+  return (getCookie(c, REFRESH_COOKIE_NAME) || '').trim()
+}
+
+export async function verifyRefreshToken(
+  c: Context<{ Bindings: Bindings }>,
+  rawRefresh?: string
+): Promise<{ valid: boolean; discordId: string; exp: number }> {
+  const db = getDb(c.env)
+  const admin = await getAdmin(db)
+  if (!admin) return { valid: false, discordId: '', exp: 0 }
+  const token = (rawRefresh ?? extractRefreshToken(c)).trim()
+  if (!token || !token.includes('.')) return { valid: false, discordId: '', exp: 0 }
+  const [expStr, sig, tokenDiscordId = ''] = token.split('.')
+  const exp = Number(expStr)
+  if (!Number.isFinite(exp) || Date.now() > exp) return { valid: false, discordId: '', exp: 0 }
+  const payload = tokenDiscordId
+    ? `refresh:${admin.username}:${exp}:${tokenDiscordId}`
+    : `refresh:${admin.username}:${exp}`
+  const expected = await hmacSign(`${getSecret(c.env, admin.passwordHash, admin.tokenVersion)}:refresh`, payload)
+  const a = new TextEncoder().encode(sig)
+  const b = new TextEncoder().encode(expected)
+  if (a.length !== b.length) return { valid: false, discordId: '', exp: 0 }
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
+  if (diff !== 0) return { valid: false, discordId: '', exp: 0 }
+  if (tokenDiscordId) {
+    const envIds = getEnvAllowedDiscordIds(c.env)
+    if (!envIds.includes(tokenDiscordId) && !(await isDiscordWhitelisted(db, tokenDiscordId))) {
+      return { valid: false, discordId: '', exp: 0 }
+    }
+  }
+  return { valid: true, discordId: tokenDiscordId, exp }
+}
+
+export function extractToken(c: Context<{ Bindings: Bindings }>): { token: string; isBearer: boolean } {
   const authHeader = c.req.header('authorization') || ''
   const bearer = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
   if (bearer) return { token: bearer, isBearer: true }
@@ -167,25 +258,10 @@ export async function isValidSession(c: Context<{ Bindings: Bindings }>): Promis
   if (tokenDiscordId) {
     const envIds = getEnvAllowedDiscordIds(c.env)
     if (!envIds.includes(tokenDiscordId) && !(await isDiscordWhitelisted(db, tokenDiscordId))) {
-      const dbList = await listDiscordWhitelist(db)
-      if (envIds.length > 0 || dbList.length > 0 || admin.discordId !== tokenDiscordId) {
-        return false
-      }
+      return false
     }
   }
   return true
-}
-
-export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
-  const isApi = c.req.path.startsWith('/api/')
-  const admin = await getAdmin(getDb(c.env))
-  if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
-  const { isBearer } = extractToken(c)
-  if (isBearer && !admin.apiEnabled) {
-    return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
-  }
-  if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
-  await next()
 }
 
 export async function isOwnerSession(c: Context<{ Bindings: Bindings }>): Promise<boolean> {
@@ -193,10 +269,64 @@ export async function isOwnerSession(c: Context<{ Bindings: Bindings }>): Promis
   const { token } = extractToken(c)
   const tokenDiscordId = token.split('.')[2] || ''
   if (!tokenDiscordId) return true
-  const admin = await getAdmin(getDb(c.env))
   const envIds = getEnvAllowedDiscordIds(c.env)
-  if (envIds.includes(tokenDiscordId)) return true
-  return Boolean(admin?.discordId && admin.discordId === tokenDiscordId)
+  return envIds.includes(tokenDiscordId)
+}
+
+export async function getSessionPermissions(c: Context<{ Bindings: Bindings }>): Promise<DiscordPermission[]> {
+  if (!(await isValidSession(c))) return []
+  const { token } = extractToken(c)
+  const tokenDiscordId = token.split('.')[2] || ''
+  if (!tokenDiscordId) return [...DISCORD_PERMISSIONS]
+  const envIds = getEnvAllowedDiscordIds(c.env)
+  if (envIds.includes(tokenDiscordId)) return [...DISCORD_PERMISSIONS]
+  const entry = await getDiscordWhitelistEntry(getDb(c.env), tokenDiscordId)
+  return entry ? entry.permissions : []
+}
+
+export function getFirstAllowedPath(perms: DiscordPermission[]): string {
+  if (perms.includes('dashboard')) return '/dashboard'
+  if (perms.includes('controls')) return '/overlay/control'
+  if (perms.includes('config')) return '/dashboard/config'
+  if (perms.includes('access')) return '/dashboard/access'
+  return '/login?error=unauthorized'
+}
+
+export async function dashboardAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
+  const isApi = c.req.path.startsWith('/api/') || c.req.method !== 'GET'
+  const admin = await getAdmin(getDb(c.env))
+  if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
+  const { isBearer } = extractToken(c)
+  if (isBearer && !admin.apiEnabled) {
+    return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
+  }
+  if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
+  const perms = await getSessionPermissions(c)
+  c.set('userPermissions' as any, perms)
+  c.set('sessionTimeoutMs' as any, getSessionTimeoutMs(c.env))
+  await next()
+}
+
+export function requirePermission(...anyOf: DiscordPermission[]) {
+  return async (c: Context<{ Bindings: Bindings }>, next: Next) => {
+    const isApi = c.req.path.startsWith('/api/') || c.req.method !== 'GET'
+    const admin = await getAdmin(getDb(c.env))
+    if (!admin) return isApi ? c.json({ ok: false, error: 'SETUP_REQUIRED' }, 401) : c.redirect('/setup')
+    const { isBearer } = extractToken(c)
+    if (isBearer && !admin.apiEnabled) {
+      return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
+    }
+    if (!(await isValidSession(c))) return isApi ? c.json({ ok: false, error: 'UNAUTHORIZED' }, 401) : c.redirect('/login')
+    const perms = await getSessionPermissions(c)
+    c.set('userPermissions' as any, perms)
+    c.set('sessionTimeoutMs' as any, getSessionTimeoutMs(c.env))
+    if (anyOf.length > 0 && !anyOf.some((p) => perms.includes(p))) {
+      if (isApi) return c.json({ ok: false, error: 'FORBIDDEN', required: anyOf }, 403)
+      const target = getFirstAllowedPath(perms)
+      return c.redirect(target.includes('?') ? target : `${target}?error=forbidden`)
+    }
+    await next()
+  }
 }
 
 export async function ownerAuth(c: Context<{ Bindings: Bindings }>, next: Next) {
@@ -272,7 +402,8 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri
-    }).toString()
+    }).toString(),
+    signal: AbortSignal.timeout(8000)
   }).catch(() => null)
 
   if (!tokenRes || !tokenRes.ok) {
@@ -289,7 +420,8 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json'
-    }
+    },
+    signal: AbortSignal.timeout(8000)
   }).catch(() => null)
 
   if (!userRes || !userRes.ok) {
@@ -298,8 +430,14 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
 
   const userData = ((await userRes.json().catch(() => ({}))) as Record<string, any>) || {}
   const discordId = String(userData.id || '').trim()
+  const rawHandle = String(userData.username || '').trim()
+  const globalName = String(userData.global_name || '').trim()
   const discordUsername =
-    String(userData.global_name || userData.username || '').trim() || `discord_${discordId.slice(-4)}`
+    globalName && rawHandle && globalName !== rawHandle
+      ? `${globalName} (@${rawHandle})`
+      : rawHandle
+        ? `@${rawHandle}`
+        : globalName || `discord_${discordId.slice(-4)}`
 
   if (!discordId) {
     return c.redirect('/login?error=user_failed')
@@ -307,33 +445,33 @@ async function handleDiscordCallback(c: Context<{ Bindings: Bindings }>) {
 
   const db = getDb(c.env)
   const allowedList = getEnvAllowedDiscordIds(c.env)
-  const [admin, dbWhitelist] = await Promise.all([getAdmin(db), listDiscordWhitelist(db)])
+  const dbWhitelist = await listDiscordWhitelist(db)
   const inEnv = allowedList.includes(discordId)
-  const inDb = dbWhitelist.some((x) => x.discordId === discordId)
-  let authorized = false
+  const existingEntry = dbWhitelist.find((x) => x.discordId === discordId)
+  const inDb = Boolean(existingEntry)
 
-  if (inEnv || inDb) {
-    authorized = true
-  } else if (allowedList.length === 0 && dbWhitelist.length === 0) {
-    authorized = !admin || !admin.discordId || admin.discordId === discordId
-  }
-
-  if (!authorized) {
+  if (!inEnv && !inDb) {
     return c.redirect('/login?error=unauthorized')
   }
 
-  await saveAdminDiscord(db, discordUsername, discordId)
-  if (!inEnv && !inDb) {
-    await addDiscordWhitelist(db, discordId, discordUsername)
+  await saveAdminDiscord(db, discordUsername, inEnv ? discordId : '')
+  if (inDb) {
+    await updateDiscordWhitelistEntry(db, discordId, { username: discordUsername })
   }
   const currentAdmin = await getAdmin(db)
   const sessionUser = currentAdmin?.username || discordUsername
   const passwordHash = currentAdmin?.passwordHash || `discord:${toHex(crypto.getRandomValues(new Uint8Array(32)))}`
   const tokenVersion = currentAdmin?.tokenVersion || 1
-  const token = await createSessionToken(c.env, sessionUser, passwordHash, tokenVersion, discordId)
+  const [token, refreshToken] = await Promise.all([
+    createSessionToken(c.env, sessionUser, passwordHash, tokenVersion, discordId),
+    createRefreshToken(c.env, sessionUser, passwordHash, tokenVersion, discordId)
+  ])
 
-  setSessionCookie(c, token)
-  return c.redirect('/dashboard')
+  setSessionCookie(c, token, refreshToken)
+  const effectivePerms: DiscordPermission[] = inEnv
+    ? [...DISCORD_PERMISSIONS]
+    : existingEntry?.permissions || DEFAULT_DISCORD_PERMISSIONS
+  return c.redirect(getFirstAllowedPath(effectivePerms))
 }
 
 export const authRoute = new Hono<{ Bindings: Bindings }>()
@@ -344,14 +482,14 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
   .post('/login', (c) => c.redirect('/auth/discord'))
   .post('/setup', (c) => c.redirect('/auth/discord'))
   .post('/logout', (c) => {
-    deleteCookie(c, COOKIE_NAME, { path: '/' })
+    clearSessionCookies(c)
     return c.redirect('/login')
   })
   .get('/tts', dashboardAuth, async (c) => {
     const ttsConfig = await resolveTtsConfig(c.env)
     return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
   })
-  .put('/tts', dashboardAuth, async (c) => {
+  .put('/tts', requirePermission('config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const current = await resolveTtsConfig(c.env)
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
@@ -365,7 +503,7 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     const filterConfig = await resolveFilterConfig(c.env)
     return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
   })
-  .put('/filter', dashboardAuth, async (c) => {
+  .put('/filter', requirePermission('config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const current = await resolveFilterConfig(c.env)
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
@@ -375,14 +513,29 @@ export const authRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
   })
 
-function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string) {
+function setSessionCookie(c: Context<{ Bindings: Bindings }>, token: string, refreshToken?: string) {
+  const isHttps = new URL(c.req.url).protocol === 'https:'
   setCookie(c, COOKIE_NAME, token, {
     httpOnly: true,
-    secure: new URL(c.req.url).protocol === 'https:',
+    secure: isHttps,
     path: '/',
     sameSite: 'Lax',
-    maxAge: SESSION_TTL_MS / 1000
+    maxAge: Math.floor(getSessionTimeoutMs(c.env) / 1000)
   })
+  if (refreshToken) {
+    setCookie(c, REFRESH_COOKIE_NAME, refreshToken, {
+      httpOnly: true,
+      secure: isHttps,
+      path: '/',
+      sameSite: 'Lax',
+      maxAge: Math.floor(getRefreshTimeoutMs(c.env) / 1000)
+    })
+  }
+}
+
+function clearSessionCookies(c: Context<{ Bindings: Bindings }>) {
+  deleteCookie(c, COOKIE_NAME, { path: '/' })
+  deleteCookie(c, REFRESH_COOKIE_NAME, { path: '/' })
 }
 
 // ponytail: single Hono router for JSON management API using existing PBKDF2 + HMAC token (cookie or Bearer)
@@ -409,9 +562,20 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       return c.json({ ok: false, error: 'SETUP_FAILED' }, 409)
     }
 
-    const token = await createSessionToken(c.env, username, passwordHash)
-    setSessionCookie(c, token)
-    return c.json({ ok: true, username, token, expiresAt: Number(token.split('.')[0]) })
+    const [token, refreshToken] = await Promise.all([
+      createSessionToken(c.env, username, passwordHash),
+      createRefreshToken(c.env, username, passwordHash)
+    ])
+    setSessionCookie(c, token, refreshToken)
+    return c.json({
+      ok: true,
+      username,
+      token,
+      refreshToken,
+      sessionTimeoutMs: getSessionTimeoutMs(c.env),
+      expiresAt: Number(token.split('.')[0]),
+      refreshExpiresAt: Number(refreshToken.split('.')[0])
+    })
   })
   .post('/login', async (c) => {
     const admin = await getAdmin(getDb(c.env))
@@ -440,14 +604,20 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     if (username === admin.username && (await verifyPassword(username, password, admin.passwordHash))) {
       loginAttempts.delete(ip)
       loginAttempts.delete('__global__')
-      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
-      setSessionCookie(c, token)
+      const [token, refreshToken] = await Promise.all([
+        createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion),
+        createRefreshToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
+      ])
+      setSessionCookie(c, token, refreshToken)
       return c.json({
         ok: true,
         username: admin.username,
         token,
+        refreshToken,
         tokenVersion: admin.tokenVersion,
-        expiresAt: Number(token.split('.')[0])
+        sessionTimeoutMs: getSessionTimeoutMs(c.env),
+        expiresAt: Number(token.split('.')[0]),
+        refreshExpiresAt: Number(refreshToken.split('.')[0])
       })
     }
 
@@ -462,7 +632,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     return c.json({ ok: false, error: 'INVALID_CREDENTIALS' }, 401)
   })
   .post('/logout', (c) => {
-    deleteCookie(c, COOKIE_NAME, { path: '/' })
+    clearSessionCookies(c)
     return c.json({ ok: true })
   })
   .get('/auth/status', async (c) => {
@@ -470,6 +640,8 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const authenticated = await isValidSession(c)
     const { token, isBearer } = extractToken(c)
     const exp = authenticated && token.includes('.') ? Number(token.split('.')[0]) : null
+    const refreshCheck = await verifyRefreshToken(c)
+    const isOwner = authenticated ? await isOwnerSession(c) : false
     const ip = c.req.header('cf-connecting-ip') || 'local'
     const rate = loginAttempts.get(ip)
     const rateLimited = Boolean(rate && Date.now() < rate.resetAt && rate.count >= 3)
@@ -477,48 +649,82 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       ok: true,
       setupRequired: !admin,
       authenticated,
+      role: authenticated ? (isOwner ? 'owner' : 'member') : null,
       authMethod: authenticated ? (isBearer ? 'bearer' : 'cookie') : null,
       username: authenticated ? admin?.username : undefined,
       apiEnabled: admin?.apiEnabled ?? true,
       tokenVersion: authenticated ? admin?.tokenVersion : undefined,
+      sessionTimeoutMs: getSessionTimeoutMs(c.env),
       expiresAt: exp,
+      hasRefreshToken: refreshCheck.valid,
+      refreshExpiresAt: refreshCheck.valid ? refreshCheck.exp : null,
       rateLimited
     })
   })
-  .post('/auth/refresh', dashboardAuth, async (c) => {
+  .post('/auth/refresh', async (c) => {
     const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
-    const token = await createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion)
-    setSessionCookie(c, token)
+    const { isBearer } = extractToken(c)
+    if (isBearer && !admin.apiEnabled) {
+      return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
+    }
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const rawRefresh = extractRefreshToken(c, body.refreshToken || body.refresh_token)
+    const refreshCheck = await verifyRefreshToken(c, rawRefresh)
+    let tokenDiscordId = ''
+    if (refreshCheck.valid) {
+      tokenDiscordId = refreshCheck.discordId
+    } else if (await isValidSession(c)) {
+      tokenDiscordId = extractToken(c).token.split('.')[2] || ''
+    } else {
+      clearSessionCookies(c)
+      return c.json({ ok: false, error: 'INVALID_REFRESH_TOKEN' }, 401)
+    }
+
+    const [token, refreshToken] = await Promise.all([
+      createSessionToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion, tokenDiscordId),
+      createRefreshToken(c.env, admin.username, admin.passwordHash, admin.tokenVersion, tokenDiscordId)
+    ])
+    setSessionCookie(c, token, refreshToken)
     return c.json({
       ok: true,
       username: admin.username,
       token,
+      refreshToken,
       tokenVersion: admin.tokenVersion,
-      expiresAt: Number(token.split('.')[0])
+      sessionTimeoutMs: getSessionTimeoutMs(c.env),
+      expiresAt: Number(token.split('.')[0]),
+      refreshExpiresAt: Number(refreshToken.split('.')[0])
     })
   })
-  .post('/auth/revoke', dashboardAuth, async (c) => {
+  .post('/auth/revoke', ownerAuth, async (c) => {
     const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const body = (await c.req.json().catch(() => ({}))) as any
     const keepCurrent = Boolean(body.keepCurrent)
+    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
     const nextVersion = await bumpTokenVersion(getDb(c.env))
     if (keepCurrent) {
-      const token = await createSessionToken(c.env, admin.username, admin.passwordHash, nextVersion)
-      setSessionCookie(c, token)
+      const [token, refreshToken] = await Promise.all([
+        createSessionToken(c.env, admin.username, admin.passwordHash, nextVersion, tokenDiscordId),
+        createRefreshToken(c.env, admin.username, admin.passwordHash, nextVersion, tokenDiscordId)
+      ])
+      setSessionCookie(c, token, refreshToken)
       return c.json({
         ok: true,
         revoked: true,
         tokenVersion: nextVersion,
         token,
-        expiresAt: Number(token.split('.')[0])
+        refreshToken,
+        sessionTimeoutMs: getSessionTimeoutMs(c.env),
+        expiresAt: Number(token.split('.')[0]),
+        refreshExpiresAt: Number(refreshToken.split('.')[0])
       })
     }
-    deleteCookie(c, COOKIE_NAME, { path: '/' })
+    clearSessionCookies(c)
     return c.json({ ok: true, revoked: true, tokenVersion: nextVersion })
   })
-  .put('/auth/config', dashboardAuth, async (c) => {
+  .put('/auth/config', ownerAuth, async (c) => {
     const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const body = (await c.req.json().catch(() => ({}))) as any
@@ -537,14 +743,16 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/me', dashboardAuth, async (c) => {
-    const [admin, stats, ttsEnabled] = await Promise.all([
+    const [admin, stats, ttsEnabled, permissions] = await Promise.all([
       getAdmin(getDb(c.env)),
       getDonationStats(getDb(c.env)),
-      resolveTtsEnabled(c.env)
+      resolveTtsEnabled(c.env),
+      getSessionPermissions(c)
     ])
     return c.json({
       ok: true,
       username: admin?.username,
+      permissions,
       ttsEnabled,
       stats,
       overlayStatus: getOverlayStatus()
@@ -554,7 +762,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const ttsConfig = await resolveTtsConfig(c.env)
     return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
   })
-  .put('/tts', dashboardAuth, async (c) => {
+  .put('/tts', requirePermission('config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const current = await resolveTtsConfig(c.env)
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
@@ -568,7 +776,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const filterConfig = await resolveFilterConfig(c.env)
     return c.json({ ok: true, ...filterConfig, defaultCount: DEFAULT_BLOCKED_WORDS.length })
   })
-  .put('/filter', dashboardAuth, async (c) => {
+  .put('/filter', requirePermission('config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const current = await resolveFilterConfig(c.env)
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
@@ -577,7 +785,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const updated = await updateFilterConfig(c.env, { enabled: nextEnabled, words, action })
     return c.json({ ok: true, ...updated, defaultCount: DEFAULT_BLOCKED_WORDS.length, overlayStatus: getOverlayStatus() })
   })
-  .put('/credentials', dashboardAuth, async (c) => {
+  .put('/credentials', ownerAuth, async (c) => {
     const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
 
@@ -598,18 +806,25 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       return c.json({ ok: false, error: 'UPDATE_FAILED' }, 500)
     }
 
+    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
     const nextVersion = newPassword ? await bumpTokenVersion(getDb(c.env)) : admin.tokenVersion
-    const token = await createSessionToken(c.env, newUsername, nextHash, nextVersion)
-    setSessionCookie(c, token)
+    const [token, refreshToken] = await Promise.all([
+      createSessionToken(c.env, newUsername, nextHash, nextVersion, tokenDiscordId),
+      createRefreshToken(c.env, newUsername, nextHash, nextVersion, tokenDiscordId)
+    ])
+    setSessionCookie(c, token, refreshToken)
     return c.json({
       ok: true,
       username: newUsername,
       token,
+      refreshToken,
       tokenVersion: nextVersion,
-      expiresAt: Number(token.split('.')[0])
+      sessionTimeoutMs: getSessionTimeoutMs(c.env),
+      expiresAt: Number(token.split('.')[0]),
+      refreshExpiresAt: Number(refreshToken.split('.')[0])
     })
   })
-  .get('/donations', dashboardAuth, async (c) => {
+  .get('/donations', requirePermission('dashboard'), async (c) => {
     const rawLimit = Number(c.req.query('limit') || 100)
     const limit = Math.min(500, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : 100))
     const rawSince = Number(c.req.query('since') || 0)
@@ -621,7 +836,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     ])
     return c.json({ ok: true, stats, items })
   })
-  .delete('/donations/:id', dashboardAuth, async (c) => {
+  .delete('/donations/:id', requirePermission('dashboard'), async (c) => {
     const id = c.req.param('id')
     const deleted = await deleteDonation(getDb(c.env), id)
     if (!deleted) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
@@ -631,7 +846,7 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const state = await getSubathonState(getDb(c.env))
     return c.json({ ok: true, state })
   })
-  .put('/subathon', dashboardAuth, async (c) => {
+  .put('/subathon', requirePermission('controls'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const subathonState = await applySubathonCommand(getDb(c.env), { cmd: 'set', ...body })
     const payload = { action: 'subathon', cmd: 'set', ...body, subathonState, timestamp: Date.now() }
@@ -642,11 +857,11 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     await resolveTtsEnabled(c.env)
     return c.json({ ok: true, ...getOverlayStatus() })
   })
-  .post('/overlay/control', dashboardAuth, async (c) => {
+  .post('/overlay/control', requirePermission('controls', 'config'), async (c) => {
     const body = ((await c.req.json().catch(() => ({}))) as OverlayCommand) || {}
     const action = String(body.action || '').trim()
     if (!action) return c.json({ ok: false, error: 'ACTION_REQUIRED' }, 400)
-    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon'])
+    const allowed = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg', 'theme'])
     if (!allowed.has(action)) return c.json({ ok: false, error: 'INVALID_ACTION' }, 400)
     if (action === 'heartbeat') {
       touchOverlayHeartbeat()
@@ -674,42 +889,91 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
       })
     }
     let subathonState: SubathonState | undefined
-    if (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown')) {
+    if (body.cmd !== 'bg' && (action === 'subathon' || (action === 'countdown' && body.mode !== 'countdown'))) {
       subathonState = await applySubathonCommand(getDb(c.env), body)
     }
     const payload = { ...body, action, ...(subathonState ? { subathonState } : {}), timestamp: Date.now() }
     broadcastControl(payload)
     return c.json({ ok: true, command: payload, ...(subathonState ? { subathonState } : {}), status: getOverlayStatus() })
   })
-  .get('/access', dashboardAuth, async (c) => {
+  .get('/access', requirePermission('access'), async (c) => {
     const items = await listDiscordWhitelist(getDb(c.env))
     return c.json({ ok: true, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
-  .post('/access', ownerAuth, async (c) => {
+  .post('/access', requirePermission('access'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const discordId = String(body.discordId || body.discord_user_id || '').trim()
     const note = String(body.note || '').trim().slice(0, 100)
+    let username = body.username !== undefined ? String(body.username || '').trim().slice(0, 80) : undefined
+    const permissions =
+      body.permissions !== undefined ? parseDiscordPermissions(body.permissions) : DEFAULT_DISCORD_PERMISSIONS
     if (!/^\d{15,22}$/.test(discordId)) {
       return c.json({ ok: false, error: 'INVALID_DISCORD_ID' }, 400)
     }
+    if (!username && (c.env as any)?.DISCORD_BOT_TOKEN) {
+      const botRes = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
+        headers: { Authorization: `Bot ${(c.env as any).DISCORD_BOT_TOKEN}` },
+        signal: AbortSignal.timeout(4000)
+      }).catch(() => null)
+      if (botRes?.ok) {
+        const u = ((await botRes.json().catch(() => ({}))) as Record<string, any>) || {}
+        const handle = String(u.username || '').trim()
+        const globalName = String(u.global_name || '').trim()
+        username =
+          globalName && handle && globalName !== handle
+            ? `${globalName} (@${handle})`
+            : handle
+              ? `@${handle}`
+              : globalName || undefined
+      }
+    }
     const db = getDb(c.env)
-    await addDiscordWhitelist(db, discordId, note)
+    await addDiscordWhitelist(db, discordId, note, username, permissions)
     const items = await listDiscordWhitelist(db)
     return c.json({ ok: true, discordId, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
-  .delete('/access/:id', ownerAuth, async (c) => {
+  .patch('/access/:id', requirePermission('access'), async (c) => {
     const id = String(c.req.param('id') || '').trim()
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const db = getDb(c.env)
+    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
+    const envIds = getEnvAllowedDiscordIds(c.env)
+    if (envIds.includes(id)) {
+      return c.json({ ok: false, error: 'CANNOT_MODIFY_OWNER' }, 400)
+    }
+    let permissions =
+      body.permissions !== undefined ? parseDiscordPermissions(body.permissions) : undefined
+    if (permissions && id === tokenDiscordId && !permissions.includes('access')) {
+      permissions = [...permissions, 'access']
+    }
+    const username = body.username !== undefined ? String(body.username || '').trim().slice(0, 80) : undefined
+    const note = body.note !== undefined ? String(body.note || '').trim().slice(0, 100) : undefined
+    const updated = await updateDiscordWhitelistEntry(db, id, { username, note, permissions })
+    if (!updated) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
+    const items = await listDiscordWhitelist(db)
+    return c.json({ ok: true, id, envIds, items })
+  })
+  .delete('/access/:id', requirePermission('access'), async (c) => {
+    const id = String(c.req.param('id') || '').trim()
+    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
+    const envIds = getEnvAllowedDiscordIds(c.env)
+    if (envIds.includes(id)) {
+      return c.json({ ok: false, error: 'CANNOT_MODIFY_OWNER' }, 400)
+    }
+    if (id === tokenDiscordId) {
+      return c.json({ ok: false, error: 'CANNOT_REMOVE_SELF' }, 400)
+    }
     const db = getDb(c.env)
     const removed = await removeDiscordWhitelist(db, id)
     if (!removed) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     const items = await listDiscordWhitelist(db)
-    return c.json({ ok: true, id, envIds: getEnvAllowedDiscordIds(c.env), items })
+    return c.json({ ok: true, id, envIds, items })
   })
   .get('/donate', dashboardAuth, async (c) => {
     const donateEnabled = await resolveDonateEnabled(c.env)
     return c.json({ ok: true, donateEnabled, overlayStatus: getOverlayStatus() })
   })
-  .put('/donate', dashboardAuth, async (c) => {
+  .put('/donate', requirePermission('dashboard', 'config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const current = await resolveDonateEnabled(c.env)
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !current
@@ -720,8 +984,21 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const theme = await resolveThemeConfig(c.env)
     return c.json({ ok: true, ...theme, flavors: CATPPUCCIN_FLAVORS, accents: CATPPUCCIN_ACCENTS, overlayStatus: getOverlayStatus() })
   })
-  .put('/theme', dashboardAuth, async (c) => {
+  .put('/theme', requirePermission('config'), async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as any
     const updated = await updateThemeConfig(c.env, { flavor: body.flavor, accent: body.accent })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
+  })
+  .get('/header', dashboardAuth, async (c) => {
+    const header = await resolveHeaderConfig(c.env)
+    return c.json({ ok: true, ...header, overlayStatus: getOverlayStatus() })
+  })
+  .put('/header', requirePermission('config'), async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const updated = await updateHeaderConfig(c.env, {
+      siteTitle: body.siteTitle,
+      headerTitle: body.headerTitle,
+      headerSubtitle: body.headerSubtitle
+    })
     return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
   })

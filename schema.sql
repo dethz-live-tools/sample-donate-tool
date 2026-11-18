@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS admins (
   api_enabled INTEGER DEFAULT 1,
   donate_enabled INTEGER DEFAULT 0,
   theme_flavor TEXT DEFAULT 'macchiato',
-  theme_accent TEXT DEFAULT 'sapphire'
+  theme_accent TEXT DEFAULT 'sapphire',
+  site_title TEXT DEFAULT '',
+  header_title TEXT DEFAULT '',
+  header_subtitle TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS subathon_state (
@@ -48,6 +51,8 @@ CREATE TABLE IF NOT EXISTS subathon_state (
 
 CREATE TABLE IF NOT EXISTS discord_whitelist (
   discord_id TEXT PRIMARY KEY,
+  username TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
+  permissions TEXT NOT NULL DEFAULT 'dashboard,controls,config',
   created_at INTEGER NOT NULL
 );

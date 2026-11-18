@@ -1,16 +1,16 @@
 import { Hono } from 'hono'
 import { csrf } from 'hono/csrf'
 import { secureHeaders } from 'hono/secure-headers'
-import { authRoute, dashboardAuth, getEnvAllowedDiscordIds, getTikTokWebhookKey, manageRoute } from './modules/auth'
+import { authRoute, getEnvAllowedDiscordIds, getTikTokWebhookKey, manageRoute, requirePermission } from './modules/auth'
 import { getConfig, type Bindings } from './modules/config'
 import { resolveLocale, t, type Locale } from './i18n'
 import { getDb } from './db/client'
 import { getAdmin, getLeaderboard, getSubathonState, listDiscordWhitelist, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveDonateEnabled, resolveFilterConfig, resolveThemeConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveDonateEnabled, resolveFilterConfig, resolveHeaderConfig, resolveThemeConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
 import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
 import { tiktokRoute } from './modules/tiktok'
-import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
+import { EDGE_TTS_VOICES, normalizeTtsOptions, synthesizeEdgeTTS } from './modules/tts'
 import {
   AlertControlPage,
   CountdownControlPage,
@@ -41,7 +41,7 @@ app.use(
       objectSrc: ["'none'"],
       frameAncestors: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://challenges.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'"],
@@ -50,17 +50,19 @@ app.use(
   })
 )
 app.use('*', async (c, next) => {
-  // ponytail: per-request locale & theme from DB for SSR pages
+  // ponytail: per-request locale, theme & web title from DB for SSR pages
   c.set('lang', resolveLocale(c.req.query(), c.req.header('cookie'), c.req.header('accept-language'), c.env?.DEFAULT_LANG))
   if (c.req.method === 'GET' && !c.req.path.startsWith('/api/')) {
-    const theme = await resolveThemeConfig(c.env)
+    const [theme, header] = await Promise.all([resolveThemeConfig(c.env), resolveHeaderConfig(c.env)])
     c.set('themeFlavor', theme.flavor)
     c.set('themeAccent', theme.accent)
+    c.set('siteTitle', header.siteTitle)
   }
   return next()
 })
 app.use('*', async (c, next) => {
-  if (c.req.header('authorization')?.toLowerCase().startsWith('bearer ')) return next()
+  const authHeader = c.req.header('authorization') || ''
+  if (authHeader.toLowerCase().startsWith('bearer ') && authHeader.slice(7).trim().length > 0) return next()
   if (
     c.req.path === '/api/manage/login' ||
     c.req.path === '/api/manage/setup' ||
@@ -77,20 +79,21 @@ app.route('/api/events', eventsRoute)
 app.route('/api/donate', donateRoute)
 app.route('/api/tiktok', tiktokRoute)
 
-app.get('/api/tts', dashboardAuth, async (c) => {
+app.get('/api/tts', requirePermission('config', 'controls'), async (c) => {
   const text = (c.req.query('text') || '').slice(0, 500)
   if (!text.trim()) return c.text('Text is required', 400)
   const ttsConfig = await resolveTtsConfig(c.env)
-  const voice = c.req.query('voice') || ttsConfig.voice
-  const rate = c.req.query('rate') || ttsConfig.rate
-  const pitch = c.req.query('pitch') || ttsConfig.pitch
+  const { voice, rate, pitch } = normalizeTtsOptions({
+    voice: c.req.query('voice') || ttsConfig.voice,
+    rate: c.req.query('rate') || ttsConfig.rate,
+    pitch: c.req.query('pitch') || ttsConfig.pitch
+  })
   try {
     const res = await synthesizeEdgeTTS(text, { voice, rate, pitch })
     return new Response(res.audio, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Cache-Control': 'public, max-age=86400',
-        'Access-Control-Allow-Origin': '*'
+        'Cache-Control': 'private, max-age=3600'
       }
     })
   } catch (err: any) {
@@ -98,29 +101,14 @@ app.get('/api/tts', dashboardAuth, async (c) => {
   }
 })
 
-app.get('/tts', dashboardAuth, async (c) => {
-  const ttsConfig = await resolveTtsConfig(c.env)
-  return c.json({ ok: true, ...ttsConfig, voices: EDGE_TTS_VOICES })
-})
-
-app.put('/tts', dashboardAuth, async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as any
-  const current = await resolveTtsConfig(c.env)
-  const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : current.enabled
-  const voice = typeof body.voice === 'string' && body.voice ? body.voice : current.voice
-  const rate = typeof body.rate === 'string' ? body.rate : current.rate
-  const pitch = typeof body.pitch === 'string' ? body.pitch : current.pitch
-  const updated = await updateTtsConfig(c.env, { enabled: nextEnabled, voice, rate, pitch })
-  return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
-})
-
 app.get('/', async (c) => {
-  const donateEnabled = await resolveDonateEnabled(c.env)
+  const [donateEnabled, header] = await Promise.all([resolveDonateEnabled(c.env), resolveHeaderConfig(c.env)])
   return c.render(
     <HomePage
       config={getConfig(c.env)}
       overlayOnline={isOverlayOnline()}
       donateEnabled={donateEnabled}
+      header={header}
       mobileSid={c.req.query('sid') || ''}
       lang={c.get('lang') as Locale}
     />
@@ -129,9 +117,9 @@ app.get('/', async (c) => {
 app.get('/setup', (c) => c.redirect('/login'))
 app.get('/login', async (c) => {
   const configured = Boolean(c.env?.DISCORD_CLIENT_ID || c.env?.VITE_DISCORD_CLIENT_ID)
-  return c.render(<LoginPage error={c.req.query('error') || undefined} configured={configured} />)
+  return c.render(<LoginPage error={c.req.query('error') || undefined} configured={configured} lang={c.get('lang') as Locale} />)
 })
-app.get('/dashboard', dashboardAuth, async (c) => {
+app.get('/dashboard', requirePermission('dashboard'), async (c) => {
   const [items] = await Promise.all([
     listDonations(getDb(c.env)),
     resolveTtsConfig(c.env),
@@ -140,38 +128,50 @@ app.get('/dashboard', dashboardAuth, async (c) => {
   ])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/dashboard/config', dashboardAuth, async (c) => {
+app.get('/dashboard/config', requirePermission('config'), async (c) => {
   await Promise.all([
     resolveTtsConfig(c.env),
     resolveFilterConfig(c.env),
     resolveDonateEnabled(c.env),
-    resolveThemeConfig(c.env)
+    resolveThemeConfig(c.env),
+    resolveHeaderConfig(c.env)
   ])
   return c.render(<ConfigPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/config', dashboardAuth, (c) => c.redirect('/dashboard/config'))
-app.get('/dashboard/access', dashboardAuth, async (c) => {
-  const [items] = await Promise.all([listDiscordWhitelist(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
+app.get('/config', requirePermission('config'), (c) => c.redirect('/dashboard/config'))
+app.get('/dashboard/access', requirePermission('access'), async (c) => {
+  const db = getDb(c.env)
+  const [rawItems, admin] = await Promise.all([
+    listDiscordWhitelist(db),
+    getAdmin(db),
+    resolveTtsConfig(c.env),
+    resolveFilterConfig(c.env)
+  ])
+  const items = rawItems.map((item) =>
+    !item.username && admin?.discordId === item.discordId && admin.username
+      ? { ...item, username: admin.username }
+      : item
+  )
   return c.render(<AccessPage envIds={getEnvAllowedDiscordIds(c.env)} items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/access', dashboardAuth, (c) => c.redirect('/dashboard/access'))
-app.get('/overlay/control', dashboardAuth, async (c) => {
+app.get('/access', requirePermission('access'), (c) => c.redirect('/dashboard/access'))
+app.get('/overlay/control', requirePermission('controls'), async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<OverlayControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/overlay/control/alert', dashboardAuth, async (c) => {
+app.get('/overlay/control/alert', requirePermission('controls'), async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<AlertControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/overlay/control/leaderboard', dashboardAuth, async (c) => {
+app.get('/overlay/control/leaderboard', requirePermission('controls'), async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<LeaderboardControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/overlay/control/countdown', dashboardAuth, async (c) => {
+app.get('/overlay/control/countdown', requirePermission('controls'), async (c) => {
   await Promise.all([resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<CountdownControlPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
-app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
+app.get('/overlay/control/subathon', requirePermission('controls'), async (c) => {
   const [, , subathonState, tiktokWebhookKey] = await Promise.all([
     resolveTtsConfig(c.env),
     resolveFilterConfig(c.env),
@@ -187,11 +187,11 @@ app.get('/overlay/control/subathon', dashboardAuth, async (c) => {
     />
   )
 })
-app.get('/control', dashboardAuth, (c) => c.redirect('/overlay/control'))
-app.get('/control/alert', dashboardAuth, (c) => c.redirect('/overlay/control/alert'))
-app.get('/control/leaderboard', dashboardAuth, (c) => c.redirect('/overlay/control/leaderboard'))
-app.get('/control/countdown', dashboardAuth, (c) => c.redirect('/overlay/control/countdown'))
-app.get('/control/subathon', dashboardAuth, (c) => c.redirect('/overlay/control/subathon'))
+app.get('/control', requirePermission('controls'), (c) => c.redirect('/overlay/control'))
+app.get('/control/alert', requirePermission('controls'), (c) => c.redirect('/overlay/control/alert'))
+app.get('/control/leaderboard', requirePermission('controls'), (c) => c.redirect('/overlay/control/leaderboard'))
+app.get('/control/countdown', requirePermission('controls'), (c) => c.redirect('/overlay/control/countdown'))
+app.get('/control/subathon', requirePermission('controls'), (c) => c.redirect('/overlay/control/subathon'))
 const isTransparentQuery = (c: any) => {
   const t = c.req.query('transparent')
   const bg = c.req.query('bg')

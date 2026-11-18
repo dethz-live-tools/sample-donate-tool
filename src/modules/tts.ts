@@ -90,6 +90,19 @@ function formatVolume(volume?: string): string {
   return '+0%'
 }
 
+export function normalizeTtsOptions(opts: { voice?: unknown; rate?: unknown; pitch?: unknown }): {
+  voice: string
+  rate: string
+  pitch: string
+} {
+  const v = typeof opts.voice === 'string' && ALLOWED_VOICE_IDS.has(opts.voice) ? opts.voice : 'th-TH-NiwatNeural'
+  return {
+    voice: v,
+    rate: formatRate(typeof opts.rate === 'string' ? opts.rate : undefined),
+    pitch: formatPitch(typeof opts.pitch === 'string' ? opts.pitch : undefined)
+  }
+}
+
 export function buildSSML(text: string, voice = 'th-TH-NiwatNeural', rate = '+0%', pitch = '+0Hz', volume = '+0%'): string {
   const safeVoice = ALLOWED_VOICE_IDS.has(voice) ? voice : 'th-TH-NiwatNeural'
   const lang = safeVoice.split('-').slice(0, 2).join('-') || 'th-TH'

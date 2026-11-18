@@ -128,8 +128,6 @@
   padding: 0;
   border-radius: 0 !important;
   box-shadow: none !important;
-
-  transition: all .3s !important;
 }
 
 body {
@@ -225,7 +223,7 @@ details.fold-block > summary::-webkit-details-marker {
 }
 
 details.fold-block > summary::after {
-  content: '[+ SHOW]';
+  content: '+ Show';
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--ctp-lavender);
@@ -236,6 +234,10 @@ details.fold-block > summary::after {
   flex-shrink: 0;
 }
 
+html[lang="th"] details.fold-block > summary::after {
+  content: '+ แสดง';
+}
+
 details.fold-block[open] > summary {
   margin-bottom: 16px;
   padding-bottom: 12px;
@@ -243,9 +245,13 @@ details.fold-block[open] > summary {
 }
 
 details.fold-block[open] > summary::after {
-  content: '[- HIDE]';
+  content: '- Hide';
   border-color: var(--ctp-accent);
   color: var(--ctp-accent);
+}
+
+html[lang="th"] details.fold-block[open] > summary::after {
+  content: '- ซ่อน';
 }
 
 h1 {
@@ -302,8 +308,9 @@ textarea:hover {
 input:focus,
 select:focus,
 textarea:focus {
-  border-width: 5px;
   border-color: var(--ctp-accent);
+  outline: 2px solid var(--ctp-accent);
+  outline-offset: -2px;
 }
 
 input:disabled,
@@ -330,7 +337,7 @@ textarea:disabled {
 .dropzone:hover,
 .dropzone.dragover {
   background: var(--ctp-surface1);
-  border: 5px solid var(--ctp-accent);
+  border: 3px solid var(--ctp-accent);
   color: var(--ctp-text);
 }
 
@@ -403,7 +410,30 @@ button:hover:not(:disabled) {
 button:active:not(:disabled) {
   background: var(--ctp-accent);
   color: var(--ctp-crust);
-  border-width: 5px;
+  outline: 2px solid var(--ctp-accent);
+  outline-offset: -2px;
+}
+
+.copy-inline-btn {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: var(--ctp-surface0);
+  color: var(--ctp-accent);
+  border: 2px solid var(--ctp-surface2);
+  vertical-align: middle;
+}
+
+.copy-inline-btn:hover:not(:disabled) {
+  background: var(--ctp-accent);
+  color: var(--ctp-crust);
+  border-color: var(--ctp-accent);
 }
 
 button:disabled {

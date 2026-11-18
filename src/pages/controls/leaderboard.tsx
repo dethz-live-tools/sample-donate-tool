@@ -1,14 +1,15 @@
 import type { OverlayStatus } from '../../modules/events'
 import { ControlLayout } from './layout'
-import { t, type Locale } from '../../i18n'
+import { t, type I18nKey, type Locale } from '../../i18n'
 
 export function LeaderboardControlPage({ overlayStatus, lang = 'th' }: { overlayStatus?: OverlayStatus; lang?: Locale }) {
+  const T = (key: I18nKey, vars?: Record<string, string | number>) => t(lang, key, vars)
   return (
     <ControlLayout
       lang={lang}
       activeTab="leaderboard"
-      title={t(lang, 'ctrl_leaderboard_title')}
-      subtitle={t(lang, 'ctrl_leaderboard_subtitle')}
+      title={T('ctrl_leaderboard_title')}
+      subtitle={T('ctrl_leaderboard_subtitle')}
       overlayStatus={overlayStatus}
       openOverlayHref="/overlay/leaderboard?limit=5&title=TOP+DONORS"
       extraScript={`
@@ -70,8 +71,8 @@ export function LeaderboardControlPage({ overlayStatus, lang = 'th' }: { overlay
       `}
     >
       <div>
-        <details class="inverted-block fold-block">
-          <summary>TOP DONORS LEADERBOARD OBS BROWSER SOURCE (450 x 500)</summary>
+        <details class="inverted-block fold-block" open>
+          <summary>{T('ctrl_ov_lb_title')}</summary>
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
             <input
               type="text"
@@ -85,7 +86,7 @@ export function LeaderboardControlPage({ overlayStatus, lang = 'th' }: { overlay
               id="copyLbUrlBtn"
               style="width:auto; padding:10px 16px; font-size:13px; white-space:nowrap;"
             >
-              COPY URL
+              {T('ctrl_copy_url')}
             </button>
             <a
               id="previewLbLink"
@@ -93,59 +94,59 @@ export function LeaderboardControlPage({ overlayStatus, lang = 'th' }: { overlay
               target="_blank"
               style="white-space:nowrap; font-size:12px;"
             >
-              OPEN PREVIEW
+              {T('ctrl_open_preview')}
             </a>
           </div>
           <label style="display:inline-flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--ctp-text);">
             <input type="checkbox" id="lbTransparentToggle" style="width:auto; margin:0;" />
-            <span>TRANSPARENT CARD BACKGROUND (HIDE BOX &amp; BORDER)</span>
+            <span>{T('ctrl_transparent_bg')}</span>
           </label>
           <div style="font-size:13px; color:var(--ctp-subtext0);">
-            Recommended OBS settings: Width <strong>450</strong>, Height <strong>500</strong>. Automatically refreshes when new donations arrive.
+            {T('ctrl_ov_lb_desc')}
           </div>
         </details>
 
-        <details class="card fold-block" style="margin-bottom:24px;">
-          <summary>LEADERBOARD DISPLAY OPTIONS</summary>
+        <details class="card fold-block" style="margin-bottom:24px;" open>
+          <summary>{T('ctrl_lb_options')}</summary>
           <p class="subtitle" style="margin-top:0; margin-bottom:16px;">
-            CUSTOMIZE HEADER TITLE AND NUMBER OF TOP DONORS SHOWN
+            {T('ctrl_lb_options_sub')}
           </p>
 
           <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
             <button type="button" id="lbPreset3Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              TOP 3 DONORS
+              Top 3
             </button>
             <button type="button" id="lbPreset5Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              TOP 5 DONORS
+              Top 5
             </button>
             <button type="button" id="lbPreset10Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              TOP 10 DONORS
+              Top 10
             </button>
             <button type="button" id="lbPreset20Btn" style="width:auto; padding:10px 16px; font-size:13px;">
-              TOP 20 DONORS
+              Top 20
             </button>
             <button
               type="button"
               id="cmdReloadBtn"
               style="width:auto; padding:10px 16px; font-size:13px; background:var(--ctp-sapphire); border-color:var(--ctp-sapphire);"
             >
-              FORCE RELOAD OVERLAY
+              {T('ctrl_force_reload')}
             </button>
           </div>
 
           <form id="lbConfigForm">
             <div class="row">
               <div>
-                <label>LEADERBOARD HEADER TITLE</label>
+                <label>{T('ctrl_lb_header_label')}</label>
                 <input type="text" id="lbTitleInput" value="TOP DONORS" placeholder="TOP DONORS" required />
               </div>
               <div>
-                <label>MAX RANKS TO DISPLAY (1 - 50)</label>
+                <label>{T('ctrl_lb_limit_label')}</label>
                 <input type="number" id="lbLimitInput" value="5" min="1" max="50" required />
               </div>
             </div>
             <button type="submit" style="width:auto; padding:12px 24px; font-size:14px;">
-              APPLY TO LIVE OVERLAY &amp; UPDATE URL
+              {T('ctrl_lb_apply_btn')}
             </button>
           </form>
         </details>

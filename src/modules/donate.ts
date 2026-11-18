@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
-import { dashboardAuth } from './auth'
+import { requirePermission } from './auth'
 import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
 import { t, type Locale } from '../i18n'
 import { addSubathonDonation, insertDonation } from './db'
 import { broadcast, resolveDonateEnabled, resolveTtsConfig, resolveTtsEnabled, resolveFilterConfig, type DonateEvent } from './events'
 import { filterWordContent } from './filter'
-import { verifySlip } from './slip2sure'
+import { isSupportedSlipImageBytes, verifySlip } from './slip2sure'
 import { generateEdgeTTS } from './tts'
 
 const inflightRefs = new Set<string>()
@@ -25,23 +25,31 @@ type MobileUploadSession = {
   updatedAt: number
 }
 const SESSION_TTL_MS = 15 * 60 * 1000
+const MAX_SESSIONS = 20
+const MAX_SESSION_BYTES = 25 * 1024 * 1024
 const uploadSessions = new Map<string, MobileUploadSession>()
 
-function cleanSessions() {
+function cleanSessions(incomingBytes = 0) {
   const now = Date.now()
+  let totalBytes = 0
   for (const [k, v] of uploadSessions) {
-    if (now - v.updatedAt > SESSION_TTL_MS) uploadSessions.delete(k)
+    if (now - v.updatedAt > SESSION_TTL_MS) {
+      uploadSessions.delete(k)
+    } else {
+      totalBytes += v.slipBuffer?.byteLength || 0
+    }
   }
-  while (uploadSessions.size > 50) {
+  while (uploadSessions.size > MAX_SESSIONS || (incomingBytes > 0 && totalBytes + incomingBytes > MAX_SESSION_BYTES && uploadSessions.size > 0)) {
     const oldest = uploadSessions.keys().next().value
     if (!oldest) break
+    totalBytes -= uploadSessions.get(oldest)?.slipBuffer?.byteLength || 0
     uploadSessions.delete(oldest)
   }
 }
 
 function sanitizeSid(raw: unknown): string {
   const s = String(raw || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64)
-  return s.length >= 8 ? s : ''
+  return s.length >= 16 ? s : ''
 }
 
 function sanitizeInput(text: string, maxLen: number): string {
@@ -90,6 +98,9 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
   .post('/session', async (c) => {
     cleanSessions()
     const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
+    if (!(await resolveDonateEnabled(c.env))) {
+      return c.json({ ok: false, code: 'DONATE_CLOSED', error: T('err_donate_closed') }, 403)
+    }
     const contentType = c.req.header('content-type') || ''
     let sid = ''
     let donor: string | undefined
@@ -130,13 +141,15 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
     if (message !== undefined) existing.message = message
 
     if (file) {
-      if (!(await resolveDonateEnabled(c.env))) {
-        return c.json({ ok: false, code: 'DONATE_CLOSED', error: T('err_donate_closed') }, 403)
-      }
       if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
         return c.json({ ok: false, error: T('err_file_type') }, 400)
       }
-      existing.slipBuffer = await file.arrayBuffer()
+      const buf = await file.arrayBuffer()
+      if (!isSupportedSlipImageBytes(new Uint8Array(buf, 0, Math.min(12, buf.byteLength)))) {
+        return c.json({ ok: false, error: T('err_file_type') }, 400)
+      }
+      cleanSessions(buf.byteLength)
+      existing.slipBuffer = buf
       existing.slipName = (file.name || 'slip.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50) || 'slip.jpg'
       existing.slipMime = file.type
       existing.slipUpdatedAt = Date.now()
@@ -193,7 +206,8 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
           secret: turnstileSecret,
           response: token,
           remoteip: c.req.header('cf-connecting-ip') || ''
-        })
+        }),
+        signal: AbortSignal.timeout(8000)
       }).catch(() => null)
       const outcome = verifyRes
         ? ((await verifyRes.json().catch(() => ({ success: false }))) as { success: boolean; 'error-codes'?: string[] })
@@ -278,7 +292,7 @@ export const donateRoute = new Hono<{ Bindings: Bindings }>()
       inflightRefs.delete(verified.transRef)
     }
   })
-  .post('/test', dashboardAuth, async (c) => {
+  .post('/test', requirePermission('dashboard', 'controls'), async (c) => {
     const T = (k: Parameters<typeof t>[1]) => t((c.get('lang') || 'th') as Locale, k)
     const cfg = getConfig(c.env)
     const body = (await c.req.json().catch(() => ({}))) as any

@@ -25,6 +25,31 @@ function matchMaskedDigits(masked: string, expected: string): boolean {
   return true
 }
 
+export function isSupportedSlipImageBytes(bytes: Uint8Array): boolean {
+  const isPng =
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const isWebp =
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  return isPng || isJpeg || isWebp
+}
+
 // ponytail: direct Slip2Sure API fetch instead of slip2sure-js + undici + image-type
 export async function verifySlip(
   form: FormData,
@@ -53,6 +78,10 @@ export async function verifySlip(
   if (file.size > 5 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
     return { ok: false, status: 400, error: T('err_file_type') }
   }
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  if (!isSupportedSlipImageBytes(head)) {
+    return { ok: false, status: 400, error: T('err_file_type') }
+  }
   const upstream = new FormData()
   const safeName = (file.name || 'slip.jpg').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50) || 'slip.jpg'
   upstream.append('image', file, safeName)
@@ -63,7 +92,8 @@ export async function verifySlip(
   const s2sRes = await fetch(endpoint, {
     method: 'POST',
     headers: { 'x-api-key': cfg.s2sKey },
-    body: upstream
+    body: upstream,
+    signal: AbortSignal.timeout(10_000)
   }).catch(() => null)
   if (!s2sRes) {
     return { ok: false, status: 502, code: 'UPSTREAM_ERROR', error: T('err_upstream') }
@@ -75,7 +105,7 @@ export async function verifySlip(
       ok: false,
       status: s2sRes.status >= 400 && s2sRes.status < 600 ? s2sRes.status : 400,
       code: s2sData?.result || 'ERROR',
-      error: s2sData?.message || T('err_verify_failed')
+      error: typeof s2sData?.message === 'string' ? s2sData.message.slice(0, 200) : T('err_verify_failed')
     }
   }
 

@@ -37,7 +37,10 @@ export const admins = pgTable('admins', {
   discordId: text('discord_id').notNull().default(''),
   donateEnabled: boolean('donate_enabled').notNull().default(false),
   themeFlavor: text('theme_flavor').notNull().default('macchiato'),
-  themeAccent: text('theme_accent').notNull().default('sapphire')
+  themeAccent: text('theme_accent').notNull().default('sapphire'),
+  siteTitle: text('site_title').notNull().default(''),
+  headerTitle: text('header_title').notNull().default(''),
+  headerSubtitle: text('header_subtitle').notNull().default('')
 }, (t) => [check('admins_id_is_1', sql`${t.id} = 1`)])
 
 export const subathonState = pgTable('subathon_state', {
@@ -62,6 +65,8 @@ export const subathonState = pgTable('subathon_state', {
 
 export const discordWhitelist = pgTable('discord_whitelist', {
   discordId: text('discord_id').primaryKey(),
+  username: text('username').notNull().default(''),
   note: text('note').notNull().default(''),
+  permissions: text('permissions').notNull().default('dashboard,controls,config'),
   createdAt: int64('created_at').notNull()
 })
