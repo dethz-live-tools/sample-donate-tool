@@ -191,5 +191,12 @@
   "status_open": "เปิดรับ",
   "status_closed": "ปิดรับ",
   "dash_toggle_donate_close": "ปิดรับโดเนท",
-  "dash_toggle_donate_open": "เปิดรับโดเนท"
+  "dash_toggle_donate_open": "เปิดรับโดเนท",
+  "nav_config": "ตั้งค่าระบบ",
+  "cfg_title": "ตั้งค่าระบบ (SYSTEM CONFIG)",
+  "cfg_subtitle": "จัดการธีมสี CATPPUCCIN เสียงอ่าน EDGE TTS ตัวกรองคำหยาบ และการรับโดเนท",
+  "cfg_theme_title": "ธีมสีและการแสดงผล (CATPPUCCIN THEME)",
+  "cfg_theme_subtitle": "เลือกชุดสี (FLAVOR) และสีเน้น (ACCENT) // บันทึกลงฐานข้อมูลและซิงก์ทุกหน้าอัตโนมัติ",
+  "cfg_flavor_label": "ชุดสี (CATPPUCCIN FLAVOR)",
+  "cfg_accent_label": "สีเน้น (ACCENT COLOR)"
 }

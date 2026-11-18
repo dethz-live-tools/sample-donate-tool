@@ -114,6 +114,8 @@ export function CountdownOverlayPage({
               const cmd = JSON.parse(e.data);
               if (cmd.action === 'reload') {
                 window.location.reload();
+              } else if (cmd.action === 'theme' && window.__applyTheme) {
+                window.__applyTheme(cmd.flavor, cmd.accent);
               } else if (cmd.action === 'countdown') {
                 if (cmd.mode && cmd.mode !== 'countdown') return;
                 if (typeof cmd.transparent === 'boolean') setTransparentBg(cmd.transparent);

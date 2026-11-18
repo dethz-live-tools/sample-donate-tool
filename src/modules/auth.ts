@@ -6,6 +6,8 @@ import {
   addDiscordWhitelist,
   applySubathonCommand,
   bumpTokenVersion,
+  CATPPUCCIN_ACCENTS,
+  CATPPUCCIN_FLAVORS,
   createAdmin,
   deleteDonation,
   getAdmin,
@@ -26,11 +28,13 @@ import {
   getOverlayStatus,
   resolveDonateEnabled,
   resolveFilterConfig,
+  resolveThemeConfig,
   resolveTtsConfig,
   resolveTtsEnabled,
   touchOverlayHeartbeat,
   updateDonateEnabled,
   updateFilterConfig,
+  updateThemeConfig,
   updateTtsConfig,
   updateTtsEnabled,
   type OverlayCommand
@@ -711,4 +715,13 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !current
     const donateEnabled = await updateDonateEnabled(c.env, nextEnabled)
     return c.json({ ok: true, donateEnabled, overlayStatus: getOverlayStatus() })
+  })
+  .get('/theme', dashboardAuth, async (c) => {
+    const theme = await resolveThemeConfig(c.env)
+    return c.json({ ok: true, ...theme, flavors: CATPPUCCIN_FLAVORS, accents: CATPPUCCIN_ACCENTS, overlayStatus: getOverlayStatus() })
+  })
+  .put('/theme', dashboardAuth, async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const updated = await updateThemeConfig(c.env, { flavor: body.flavor, accent: body.accent })
+    return c.json({ ok: true, ...updated, overlayStatus: getOverlayStatus() })
   })

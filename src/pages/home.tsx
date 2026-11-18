@@ -668,6 +668,9 @@ export function HomePage({
             if (typeof data === 'object' && typeof data?.donateEnabled === 'boolean') {
               applyDonateState(data.donateEnabled);
             }
+            if (typeof data === 'object' && window.__applyTheme && (data?.themeFlavor || data?.themeAccent)) {
+              window.__applyTheme(data.themeFlavor, data.themeAccent);
+            }
           }
 
           const es = new EventSource('/api/events');

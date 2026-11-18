@@ -191,5 +191,12 @@
   "status_open": "Open",
   "status_closed": "Closed",
   "dash_toggle_donate_close": "Close donations",
-  "dash_toggle_donate_open": "Open donations"
+  "dash_toggle_donate_open": "Open donations",
+  "nav_config": "Config",
+  "cfg_title": "System configuration",
+  "cfg_subtitle": "Catppuccin theme, Edge Neural TTS, word filter, and donation receiving settings",
+  "cfg_theme_title": "Catppuccin theme & accent",
+  "cfg_theme_subtitle": "Select flavor & accent color // persisted in database & synced across all pages",
+  "cfg_flavor_label": "Catppuccin flavor",
+  "cfg_accent_label": "Accent color"
 }

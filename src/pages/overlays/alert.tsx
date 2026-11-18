@@ -210,6 +210,8 @@ export function AlertOverlayPage({
                 setTimeout(() => window.location.reload(), 1500);
               } else if ((cmd.action === 'alert' || cmd.action === 'bg') && typeof cmd.transparent === 'boolean') {
                 setTransparentBg(cmd.transparent);
+              } else if (cmd.action === 'theme' && window.__applyTheme) {
+                window.__applyTheme(cmd.flavor, cmd.accent);
               }
             } catch (err) {
               console.error('[overlay] control error', err);

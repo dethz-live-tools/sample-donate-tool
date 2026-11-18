@@ -5,17 +5,24 @@ import { getConfig, type Bindings } from './config'
 import { getDb } from '../db/client'
 import {
   applySubathonCommand,
+  CATPPUCCIN_ACCENTS,
+  CATPPUCCIN_FLAVORS,
   getDonateEnabled,
   getFilterConfig,
   getLeaderboard,
   getSubathonState,
+  getThemeConfig,
   getTtsConfig,
   listDonations,
   setDonateEnabled,
   setFilterConfig,
+  setThemeConfig,
   setTtsConfig,
+  type CatppuccinAccent,
+  type CatppuccinFlavor,
   type FilterSettings,
   type SubathonState,
+  type ThemeSettings,
   type TtsSettings
 } from './db'
 import { syncSubathonWithTikTokLive } from './tiktok'
@@ -37,6 +44,8 @@ export type OverlayStatus = {
   online: boolean
   count: number
   donateEnabled?: boolean
+  themeFlavor?: CatppuccinFlavor
+  themeAccent?: CatppuccinAccent
   ttsEnabled: boolean
   ttsVoice?: string
   ttsRate?: string
@@ -61,10 +70,35 @@ const controlListeners = new Set<(cmd: OverlayCommand) => void>()
 const overlayConnections = new Set<string>()
 let lastOverlayHeartbeat = 0
 let runtimeDonateEnabled: boolean | null = null
+let runtimeThemeConfig: ThemeSettings | null = null
 let runtimeTtsConfig: TtsSettings | null = null
 let runtimeFilterConfig: FilterSettings | null = null
 const OVERLAY_TIMEOUT_MS = 15_000
-const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg'])
+const ALLOWED_CONTROL_ACTIONS = new Set(['reload', 'clear', 'disconnect', 'tts', 'heartbeat', 'countdown', 'leaderboard', 'subathon', 'alert', 'bg', 'theme'])
+
+export async function resolveThemeConfig(env?: Bindings): Promise<ThemeSettings> {
+  const def: ThemeSettings = runtimeThemeConfig ?? { flavor: 'macchiato', accent: 'sapphire' }
+  try {
+    const val = await getThemeConfig(getDb(env))
+    runtimeThemeConfig = val
+    return val
+  } catch {
+    return def
+  }
+}
+
+export async function updateThemeConfig(env: Bindings | undefined, update: Partial<ThemeSettings>): Promise<ThemeSettings> {
+  const val = await setThemeConfig(getDb(env), update)
+  runtimeThemeConfig = val
+  broadcastOverlayStatus()
+  broadcastControl({
+    action: 'theme',
+    flavor: val.flavor,
+    accent: val.accent,
+    timestamp: Date.now()
+  })
+  return val
+}
 
 export async function resolveDonateEnabled(env?: Bindings): Promise<boolean> {
   try {
@@ -138,6 +172,8 @@ export function getOverlayStatus(): OverlayStatus {
     online: isOverlayOnline(),
     count: overlayConnections.size,
     donateEnabled: runtimeDonateEnabled ?? false,
+    themeFlavor: runtimeThemeConfig?.flavor ?? 'macchiato',
+    themeAccent: runtimeThemeConfig?.accent ?? 'sapphire',
     ttsEnabled: runtimeTtsConfig?.enabled ?? true,
     ttsVoice: runtimeTtsConfig?.voice ?? 'th-TH-NiwatNeural',
     ttsRate: runtimeTtsConfig?.rate ?? '+0%',
@@ -187,7 +223,7 @@ function sanitizeEvent(ev: DonateEvent, isAdmin: boolean): DonateEvent {
 }
 
 async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: string) {
-  await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
+  await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
   const isAdmin = await isValidSession(c)
   const client = forcedClient || c.req.query('client') || (c.req.path.endsWith('/overlay') ? 'overlay' : 'default')
   const isOverlay = client === 'overlay'
@@ -316,7 +352,7 @@ async function sseHandler(c: Context<{ Bindings: Bindings }>, forcedClient?: str
 
 export const eventsRoute = new Hono<{ Bindings: Bindings }>()
   .get('/poll', async (c) => {
-    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
     const isAdmin = await isValidSession(c)
     if (c.req.query('client') === 'overlay') {
       touchOverlayHeartbeat()
@@ -333,7 +369,7 @@ export const eventsRoute = new Hono<{ Bindings: Bindings }>()
     })
   })
   .get('/status', async (c) => {
-    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env)])
+    await Promise.all([resolveTtsEnabled(c.env), resolveDonateEnabled(c.env), resolveThemeConfig(c.env)])
     return c.json({ ok: true, ...getOverlayStatus() })
   })
   .get('/leaderboard', async (c) => {

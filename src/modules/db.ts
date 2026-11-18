@@ -62,10 +62,14 @@ function ensureSchema(db: AppDatabase): Promise<void> {
         token_version integer not null default 1,
         api_enabled boolean not null default true,
         discord_id text not null default '',
-        donate_enabled boolean not null default false
+        donate_enabled boolean not null default false,
+        theme_flavor text not null default 'macchiato',
+        theme_accent text not null default 'sapphire'
       )`
     )
     await db.execute(sql`alter table admins add column donate_enabled boolean not null default false`).catch(() => {})
+    await db.execute(sql`alter table admins add column theme_flavor text not null default 'macchiato'`).catch(() => {})
+    await db.execute(sql`alter table admins add column theme_accent text not null default 'sapphire'`).catch(() => {})
     await db.execute(
       sql`create table if not exists subathon_state (
         id integer primary key,
@@ -205,6 +209,85 @@ export async function setApiEnabled(db: AppDatabase, enabled: boolean): Promise<
   await ensureSchema(db)
   await db.update(admins).set({ apiEnabled: enabled }).where(eq(admins.id, 1)).returning({ id: admins.id })
   return enabled
+}
+
+export const CATPPUCCIN_FLAVORS = ['latte', 'frappe', 'macchiato', 'mocha'] as const
+export type CatppuccinFlavor = (typeof CATPPUCCIN_FLAVORS)[number]
+
+export const CATPPUCCIN_ACCENTS = [
+  'rosewater',
+  'flamingo',
+  'pink',
+  'mauve',
+  'red',
+  'maroon',
+  'peach',
+  'yellow',
+  'green',
+  'teal',
+  'sky',
+  'sapphire',
+  'blue',
+  'lavender'
+] as const
+export type CatppuccinAccent = (typeof CATPPUCCIN_ACCENTS)[number]
+
+export type ThemeSettings = {
+  flavor: CatppuccinFlavor
+  accent: CatppuccinAccent
+}
+
+export function isCatppuccinFlavor(v: unknown): v is CatppuccinFlavor {
+  return typeof v === 'string' && (CATPPUCCIN_FLAVORS as readonly string[]).includes(v)
+}
+
+export function isCatppuccinAccent(v: unknown): v is CatppuccinAccent {
+  return typeof v === 'string' && (CATPPUCCIN_ACCENTS as readonly string[]).includes(v)
+}
+
+export async function getThemeConfig(db: AppDatabase): Promise<ThemeSettings> {
+  const def: ThemeSettings = { flavor: 'macchiato', accent: 'sapphire' }
+  await ensureSchema(db)
+  const [row] = await db.select().from(admins).where(eq(admins.id, 1)).limit(1)
+  if (!row) return def
+  const f = str(row.themeFlavor)
+  const a = str(row.themeAccent)
+  return {
+    flavor: isCatppuccinFlavor(f) ? f : 'macchiato',
+    accent: isCatppuccinAccent(a) ? a : 'sapphire'
+  }
+}
+
+export async function setThemeConfig(db: AppDatabase, config: Partial<ThemeSettings>): Promise<ThemeSettings> {
+  const current = await getThemeConfig(db)
+  const updated: ThemeSettings = {
+    flavor: isCatppuccinFlavor(config.flavor) ? config.flavor : current.flavor,
+    accent: isCatppuccinAccent(config.accent) ? config.accent : current.accent
+  }
+  const rows = await db
+    .update(admins)
+    .set({ themeFlavor: updated.flavor, themeAccent: updated.accent })
+    .where(eq(admins.id, 1))
+    .returning({ id: admins.id })
+  if (rows.length === 0) {
+    await db
+      .insert(admins)
+      .values({
+        id: 1,
+        username: 'admin',
+        passwordHash: 'discord:pending',
+        createdAt: Date.now(),
+        donateEnabled: false,
+        themeFlavor: updated.flavor,
+        themeAccent: updated.accent
+      })
+      .onConflictDoUpdate({
+        target: admins.id,
+        set: { themeFlavor: updated.flavor, themeAccent: updated.accent }
+      })
+      .returning({ id: admins.id })
+  }
+  return updated
 }
 
 export async function getDonateEnabled(db: AppDatabase, fallback = false): Promise<boolean> {

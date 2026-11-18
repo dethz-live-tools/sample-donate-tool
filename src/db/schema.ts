@@ -35,7 +35,9 @@ export const admins = pgTable('admins', {
   tokenVersion: integer('token_version', { mode: 'number' }).notNull().default(1),
   apiEnabled: boolean('api_enabled').notNull().default(true),
   discordId: text('discord_id').notNull().default(''),
-  donateEnabled: boolean('donate_enabled').notNull().default(false)
+  donateEnabled: boolean('donate_enabled').notNull().default(false),
+  themeFlavor: text('theme_flavor').notNull().default('macchiato'),
+  themeAccent: text('theme_accent').notNull().default('sapphire')
 }, (t) => [check('admins_id_is_1', sql`${t.id} = 1`)])
 
 export const subathonState = pgTable('subathon_state', {

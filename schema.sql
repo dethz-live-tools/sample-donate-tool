@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS admins (
   filter_action TEXT DEFAULT 'censor',
   token_version INTEGER DEFAULT 1,
   api_enabled INTEGER DEFAULT 1,
-  donate_enabled INTEGER DEFAULT 0
+  donate_enabled INTEGER DEFAULT 0,
+  theme_flavor TEXT DEFAULT 'macchiato',
+  theme_accent TEXT DEFAULT 'sapphire'
 );
 
 CREATE TABLE IF NOT EXISTS subathon_state (

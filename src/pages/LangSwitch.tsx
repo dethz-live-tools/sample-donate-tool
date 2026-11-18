@@ -9,6 +9,7 @@ export function LangSwitch({ lang = 'th' }: { lang?: Locale }) {
     <button
       id="langSwitch"
       type="button"
+      data-target-lang={target}
       onclick={`window.__setLang?window.__setLang('${target}'):(location.search='?lang=${target}')`}
     >
       {label}
@@ -16,9 +17,9 @@ export function LangSwitch({ lang = 'th' }: { lang?: Locale }) {
   )
 }
 
-export type AdminSection = 'dashboard' | 'controls' | 'access'
+export type AdminSection = 'dashboard' | 'controls' | 'config' | 'access'
 
-// ponytail: single shared admin navbar across Dashboard, Overlay Controls, and Discord Access
+// ponytail: single shared admin navbar across Dashboard, Overlay Controls, Config, and Discord Access
 export function AdminNav({
   active,
   lang = 'th',
@@ -35,6 +36,23 @@ export function AdminNav({
 
   return (
     <nav class="nav-links">
+      <div class="nav-group">
+        <a href="/dashboard" class={`nav-pill ${active === 'dashboard' ? 'is-active' : ''}`}>
+          {t(lang, 'nav_dashboard')}
+        </a>
+        <a href="/overlay/control" class={`nav-pill ${active === 'controls' ? 'is-active' : ''}`}>
+          {t(lang, 'dash_overlay_controls')}
+        </a>
+        <a href="/dashboard/config" class={`nav-pill ${active === 'config' ? 'is-active' : ''}`}>
+          {t(lang, 'nav_config')}
+        </a>
+        <a href="/dashboard/access" class={`nav-pill ${active === 'access' ? 'is-active' : ''}`}>
+          {t(lang, 'dash_access_link')}
+        </a>
+        <a href="/" class="nav-pill nav-subtle">
+          {t(lang, 'ctrl_donate_page')} &rarr;
+        </a>
+      </div>
       <div class="nav-group" style={{ width: '100%', justifyContent: 'end !important' }}>
         {overlayStatus !== undefined && (
           <div id="overlayNavBadge" class={`overlay-indicator ${overlayOnline ? 'is-online' : ''}`}>
@@ -55,21 +73,6 @@ export function AdminNav({
             {t(lang, 'dash_logout')}
           </button>
         </form>
-      </div>
-
-      <div class="nav-group">
-        <a href="/dashboard" class={`nav-pill ${active === 'dashboard' ? 'is-active' : ''}`}>
-          {t(lang, 'nav_dashboard')}
-        </a>
-        <a href="/overlay/control" class={`nav-pill ${active === 'controls' ? 'is-active' : ''}`}>
-          {t(lang, 'dash_overlay_controls')}
-        </a>
-        <a href="/dashboard/access" class={`nav-pill ${active === 'access' ? 'is-active' : ''}`}>
-          {t(lang, 'dash_access_link')}
-        </a>
-        <a href="/" class="nav-pill nav-subtle">
-          {t(lang, 'ctrl_donate_page')} &rarr;
-        </a>
       </div>
     </nav>
   )

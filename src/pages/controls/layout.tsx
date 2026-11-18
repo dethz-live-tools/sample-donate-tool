@@ -195,6 +195,9 @@ export function ControlLayout({
               countText.textContent = String(count);
             }
             if (typeof data === 'object') {
+              if (window.__applyTheme && (data?.themeFlavor || data?.themeAccent)) {
+                window.__applyTheme(data.themeFlavor, data.themeAccent);
+              }
               if (typeof data?.ttsEnabled === 'boolean') {
                 const ttsOn = data.ttsEnabled;
                 if (ttsStatusText) {

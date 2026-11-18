@@ -7,7 +7,7 @@ import { resolveLocale, t, type Locale } from './i18n'
 import { getDb } from './db/client'
 import { getAdmin, getLeaderboard, getSubathonState, listDiscordWhitelist, listDonations } from './modules/db'
 import { donateRoute } from './modules/donate'
-import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveDonateEnabled, resolveFilterConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
+import { eventsRoute, getOverlayStatus, isOverlayOnline, resolveDonateEnabled, resolveFilterConfig, resolveThemeConfig, resolveTtsConfig, resolveTtsEnabled, updateFilterConfig, updateTtsConfig } from './modules/events'
 import { DEFAULT_BLOCKED_WORDS } from './modules/filter'
 import { tiktokRoute } from './modules/tiktok'
 import { EDGE_TTS_VOICES, synthesizeEdgeTTS } from './modules/tts'
@@ -19,6 +19,7 @@ import {
   SubathonControlPage
 } from './pages/controls'
 import { AccessPage } from './pages/access'
+import { ConfigPage } from './pages/config'
 import { DashboardPage } from './pages/dashboard'
 import { HomePage } from './pages/home'
 import { LoginPage } from './pages/login'
@@ -48,9 +49,14 @@ app.use(
     }
   })
 )
-app.use('*', (c, next) => {
-  // ponytail: per-request locale for i18n (query > cookie > Accept-Language > env > th)
+app.use('*', async (c, next) => {
+  // ponytail: per-request locale & theme from DB for SSR pages
   c.set('lang', resolveLocale(c.req.query(), c.req.header('cookie'), c.req.header('accept-language'), c.env?.DEFAULT_LANG))
+  if (c.req.method === 'GET' && !c.req.path.startsWith('/api/')) {
+    const theme = await resolveThemeConfig(c.env)
+    c.set('themeFlavor', theme.flavor)
+    c.set('themeAccent', theme.accent)
+  }
   return next()
 })
 app.use('*', async (c, next) => {
@@ -134,6 +140,16 @@ app.get('/dashboard', dashboardAuth, async (c) => {
   ])
   return c.render(<DashboardPage items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
 })
+app.get('/dashboard/config', dashboardAuth, async (c) => {
+  await Promise.all([
+    resolveTtsConfig(c.env),
+    resolveFilterConfig(c.env),
+    resolveDonateEnabled(c.env),
+    resolveThemeConfig(c.env)
+  ])
+  return c.render(<ConfigPage overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
+})
+app.get('/config', dashboardAuth, (c) => c.redirect('/dashboard/config'))
 app.get('/dashboard/access', dashboardAuth, async (c) => {
   const [items] = await Promise.all([listDiscordWhitelist(getDb(c.env)), resolveTtsConfig(c.env), resolveFilterConfig(c.env)])
   return c.render(<AccessPage envIds={getEnvAllowedDiscordIds(c.env)} items={items} overlayStatus={getOverlayStatus()} lang={c.get('lang') as Locale} />)
