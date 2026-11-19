@@ -39,8 +39,11 @@ docker compose up -d --build app postgres
 
 Tables auto-create on first request — `ensureSchema()` in `db.ts` runs portable
 `CREATE TABLE IF NOT EXISTS` DDL (booleans as `boolean`, epoch-millis columns as
-`bigint`; SQLite's `bigint` is INTEGER affinity, so the same DDL works on both).
-No migration runner is required at runtime.
+`bigint`; SQLite's `bigint` is INTEGER affinity, so the same DDL works on both)
+and idempotent `ALTER TABLE ... ADD COLUMN` statements for columns added in newer
+releases (`donate_enabled`, `theme_flavor`, `theme_accent`, `site_title`,
+`header_title`, `header_subtitle` on `admins`; `username`, `permissions` on
+`discord_whitelist`). No migration runner is required at runtime.
 
 ## Column types (why some differ from the obvious)
 

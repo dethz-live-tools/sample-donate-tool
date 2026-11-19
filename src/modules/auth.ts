@@ -106,6 +106,7 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function verifyPassword(username: string, password: string, stored: string): Promise<boolean> {
+  if (!stored || stored.startsWith('discord:')) return false
   const candidate = stored.includes(':')
     ? await pbkdf2(password, stored.split(':')[0])
     : await sha256(`rawblock:pwd:${username}:${password}`)
@@ -128,18 +129,26 @@ async function hmacSign(secret: string, data: string): Promise<string> {
   return toHex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)))
 }
 
-const EPHEMERAL_FALLBACK_SECRET = toHex(crypto.getRandomValues(new Uint8Array(32)))
+let ephemeralFallbackSecret: string | undefined
+
+// Lazy per-isolate fallback: CF Workers forbid crypto.getRandomValues() in global scope.
+function getBaseSecret(env: Bindings | undefined): string {
+  return (
+    env?.SESSION_SECRET ||
+    env?.SLIP2SURE_API_KEY ||
+    (ephemeralFallbackSecret ??= toHex(crypto.getRandomValues(new Uint8Array(32))))
+  )
+}
 
 function getSecret(env: Bindings | undefined, passwordHash: string, tokenVersion = 1): string {
-  const base = env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || EPHEMERAL_FALLBACK_SECRET
-  return `${base}:${passwordHash}:v${tokenVersion}`
+  return `${getBaseSecret(env)}:${passwordHash}:v${tokenVersion}`
 }
 
 export async function getTikTokWebhookKey(env: Bindings | undefined): Promise<string> {
   const admin = await getAdmin(getDb(env))
   const baseSecret = admin
     ? getSecret(env, admin.passwordHash, admin.tokenVersion)
-    : `${env?.SESSION_SECRET || env?.SLIP2SURE_API_KEY || EPHEMERAL_FALLBACK_SECRET}:default`
+    : `${getBaseSecret(env)}:default`
   const sig = await hmacSign(baseSecret, 'tiktok-webhook-key')
   return sig.slice(0, 32)
 }
@@ -538,6 +547,29 @@ function clearSessionCookies(c: Context<{ Bindings: Bindings }>) {
   deleteCookie(c, REFRESH_COOKIE_NAME, { path: '/' })
 }
 
+async function guardAccessMutation(
+  c: Context<{ Bindings: Bindings }>,
+  db: ReturnType<typeof getDb>,
+  targetId: string,
+  nextPermissions?: DiscordPermission[],
+  isDelete = false
+): Promise<{ status: 400 | 403; error: string } | null> {
+  const envIds = getEnvAllowedDiscordIds(c.env)
+  if (envIds.includes(targetId)) return { status: 400, error: 'CANNOT_MODIFY_OWNER' }
+  const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
+  if (isDelete && targetId === tokenDiscordId) return { status: 400, error: 'CANNOT_REMOVE_SELF' }
+  if (await isOwnerSession(c)) return null
+  if (targetId === tokenDiscordId) return { status: 403, error: 'CANNOT_MODIFY_SELF' }
+  const [existing, callerPerms] = await Promise.all([getDiscordWhitelistEntry(db, targetId), getSessionPermissions(c)])
+  if (existing?.permissions.includes('access') || nextPermissions?.includes('access')) {
+    return { status: 403, error: 'OWNER_REQUIRED' }
+  }
+  if (existing?.permissions.some((p) => !callerPerms.includes(p)) || nextPermissions?.some((p) => !callerPerms.includes(p))) {
+    return { status: 403, error: 'FORBIDDEN' }
+  }
+  return null
+}
+
 // ponytail: single Hono router for JSON management API using existing PBKDF2 + HMAC token (cookie or Bearer)
 export const manageRoute = new Hono<{ Bindings: Bindings }>()
   .post('/setup', async (c) => {
@@ -665,10 +697,15 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const admin = await getAdmin(getDb(c.env))
     if (!admin) return c.json({ ok: false, error: 'SETUP_REQUIRED' }, 400)
     const { isBearer } = extractToken(c)
-    if (isBearer && !admin.apiEnabled) {
+    const body = (await c.req.json().catch(() => ({}))) as any
+    const hasExplicitRefresh = Boolean(
+      (typeof body.refreshToken === 'string' && body.refreshToken.trim()) ||
+        (typeof body.refresh_token === 'string' && body.refresh_token.trim()) ||
+        (c.req.header('x-refresh-token') || '').trim()
+    )
+    if ((isBearer || hasExplicitRefresh) && !admin.apiEnabled) {
       return c.json({ ok: false, error: 'MANAGE_API_DISABLED' }, 403)
     }
-    const body = (await c.req.json().catch(() => ({}))) as any
     const rawRefresh = extractRefreshToken(c, body.refreshToken || body.refresh_token)
     const refreshCheck = await verifyRefreshToken(c, rawRefresh)
     let tokenDiscordId = ''
@@ -905,11 +942,19 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const discordId = String(body.discordId || body.discord_user_id || '').trim()
     const note = String(body.note || '').trim().slice(0, 100)
     let username = body.username !== undefined ? String(body.username || '').trim().slice(0, 80) : undefined
-    const permissions =
-      body.permissions !== undefined ? parseDiscordPermissions(body.permissions) : DEFAULT_DISCORD_PERMISSIONS
     if (!/^\d{15,22}$/.test(discordId)) {
       return c.json({ ok: false, error: 'INVALID_DISCORD_ID' }, 400)
     }
+    const db = getDb(c.env)
+    const isOwner = await isOwnerSession(c)
+    const permissions =
+      body.permissions !== undefined
+        ? parseDiscordPermissions(body.permissions)
+        : isOwner
+          ? DEFAULT_DISCORD_PERMISSIONS
+          : (await getSessionPermissions(c)).filter((p) => p !== 'access')
+    const guardErr = await guardAccessMutation(c, db, discordId, permissions)
+    if (guardErr) return c.json({ ok: false, error: guardErr.error }, guardErr.status)
     if (!username && (c.env as any)?.DISCORD_BOT_TOKEN) {
       const botRes = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
         headers: { Authorization: `Bot ${(c.env as any).DISCORD_BOT_TOKEN}` },
@@ -927,7 +972,6 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
               : globalName || undefined
       }
     }
-    const db = getDb(c.env)
     await addDiscordWhitelist(db, discordId, note, username, permissions)
     const items = await listDiscordWhitelist(db)
     return c.json({ ok: true, discordId, envIds: getEnvAllowedDiscordIds(c.env), items })
@@ -936,38 +980,26 @@ export const manageRoute = new Hono<{ Bindings: Bindings }>()
     const id = String(c.req.param('id') || '').trim()
     const body = (await c.req.json().catch(() => ({}))) as any
     const db = getDb(c.env)
-    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
-    const envIds = getEnvAllowedDiscordIds(c.env)
-    if (envIds.includes(id)) {
-      return c.json({ ok: false, error: 'CANNOT_MODIFY_OWNER' }, 400)
-    }
-    let permissions =
+    const permissions =
       body.permissions !== undefined ? parseDiscordPermissions(body.permissions) : undefined
-    if (permissions && id === tokenDiscordId && !permissions.includes('access')) {
-      permissions = [...permissions, 'access']
-    }
+    const guardErr = await guardAccessMutation(c, db, id, permissions)
+    if (guardErr) return c.json({ ok: false, error: guardErr.error }, guardErr.status)
     const username = body.username !== undefined ? String(body.username || '').trim().slice(0, 80) : undefined
     const note = body.note !== undefined ? String(body.note || '').trim().slice(0, 100) : undefined
     const updated = await updateDiscordWhitelistEntry(db, id, { username, note, permissions })
     if (!updated) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     const items = await listDiscordWhitelist(db)
-    return c.json({ ok: true, id, envIds, items })
+    return c.json({ ok: true, id, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
   .delete('/access/:id', requirePermission('access'), async (c) => {
     const id = String(c.req.param('id') || '').trim()
-    const tokenDiscordId = extractToken(c).token.split('.')[2] || ''
-    const envIds = getEnvAllowedDiscordIds(c.env)
-    if (envIds.includes(id)) {
-      return c.json({ ok: false, error: 'CANNOT_MODIFY_OWNER' }, 400)
-    }
-    if (id === tokenDiscordId) {
-      return c.json({ ok: false, error: 'CANNOT_REMOVE_SELF' }, 400)
-    }
     const db = getDb(c.env)
+    const guardErr = await guardAccessMutation(c, db, id, undefined, true)
+    if (guardErr) return c.json({ ok: false, error: guardErr.error }, guardErr.status)
     const removed = await removeDiscordWhitelist(db, id)
     if (!removed) return c.json({ ok: false, error: 'NOT_FOUND' }, 404)
     const items = await listDiscordWhitelist(db)
-    return c.json({ ok: true, id, envIds, items })
+    return c.json({ ok: true, id, envIds: getEnvAllowedDiscordIds(c.env), items })
   })
   .get('/donate', dashboardAuth, async (c) => {
     const donateEnabled = await resolveDonateEnabled(c.env)

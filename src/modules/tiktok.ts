@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { dashboardAuth, extractToken, getTikTokWebhookKey, isValidSession } from './auth'
+import { extractToken, getTikTokWebhookKey, isValidSession, requirePermission } from './auth'
 import type { Bindings } from './config'
 import { getDb } from '../db/client'
 import { addSubathonDonation, applySubathonCommand, getSubathonState, type AppDatabase, type SubathonState } from './db'
@@ -499,7 +499,7 @@ async function handleTikTokGiftWebhook(c: Context<{ Bindings: Bindings }>) {
 }
 
 export const tiktokRoute = new Hono<{ Bindings: Bindings }>()
-  .get('/config', dashboardAuth, async (c) => {
+  .get('/config', requirePermission('controls'), async (c) => {
     const key = await getTikTokWebhookKey(c.env)
     return c.json({ ok: true, key })
   })

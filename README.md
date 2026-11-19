@@ -17,15 +17,15 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
   - Default voice `th-TH-NiwatNeural` with automatic failover fallback if a voice cluster becomes exhausted
   - Zero external SDK or API key needed — runs free and fast
   - Audio loaded and decoded locally in browser / OBS overlay via Web Audio API MP3 decoding
-  - Dashboard & Overlay Controller settings to select voices, adjust speech rate and pitch, and test audio locally
+  - Configuration page (`/dashboard/config`) to select voices, adjust speech rate and pitch, and test audio locally
   - Spoken text cleans asterisks (`***`) automatically so TTS skips pronouncing "ดอกจัน" / "asterisk"
-  - Configurable on/off via `TTS_ENABLED` env var or live toggle on `/dashboard`, `/overlay/control` and `PUT /api/manage/tts` (persisted in D1)
+  - Configurable on/off via `TTS_ENABLED` env var or live toggle on `/dashboard/config`, `/overlay/control`, and `PUT /api/manage/tts` (persisted in DB)
 - **Word Filtering & Profanity Censor**:
   - Integrated `obbaeiei/bad-words-thai` dictionary with 270+ Thai profanities, phonetic variations, karaoke terms, and English curse words
   - Smart whitelist protection for everyday Thai words (`สวัสดี`, `อีเมล`, `หีบสมบัติ`, `ไอที`) preventing false-positive masking
   - Configurable actions: Censor with `***` or automatically silence/mute TTS audio
-  - Custom blocked words supported via Dashboard & Overlay Controller settings (`/dashboard`, `/overlay/control`)
-  - Full persistence in Cloudflare D1 (`admins` table) and REST API endpoints (`GET/PUT /api/manage/filter`)
+  - Custom blocked words supported via Configuration page (`/dashboard/config`)
+  - Full persistence in D1 / PostgreSQL (`admins` table) and REST API endpoints (`GET/PUT /api/manage/filter`)
 - **Subathon / Countdown Timer Overlay (`/overlay/countdown`, `/overlay/subathon`)**:
   - Dedicated subathon marathon timer (`/overlay/subathon` or `/overlay/submatron`) and stream countdown (`/overlay/countdown`)
   - Live timer that automatically adds time on donation (configurable seconds per 1 THB, e.g. 6s/THB)
@@ -42,13 +42,15 @@ Stream donation platform with real-time OBS overlay alerts, automatic slip verif
 - **TikTok Live & Gift Integration (`/api/tiktok/webhook`, `/api/tiktok/live`)**:
   - Automatic subathon timer extension on TikTok gifts (TikFinity / custom JSON webhook) with HMAC key validation
   - TikTok live stream status sync (auto-start/reset when live, pause on offline with 2-minute webhook override TTL and 3-minute grace period)
-- **Discord OAuth2, Access Whitelist & Donation Gate**:
-  - Discord OAuth2 sign-in (`/auth/discord`) gated by `DISCORD_ALLOWED_USER_IDS` and dynamic DB whitelist (`/dashboard/access`, primary owner RBAC via `ownerAuth`)
-  - Live donation gate (`donate_enabled`) toggled from `/dashboard` or `PUT /api/manage/donate` to open/close donations in real time
+- **Discord OAuth2, Access Whitelist, RBAC & Site Config**:
+  - Discord OAuth2 sign-in (`/auth/discord`) gated by `DISCORD_ALLOWED_USER_IDS` (primary owners) and dynamic DB whitelist (`/dashboard/access`) with per-user permission scopes (`dashboard`, `controls`, `config`, `access`)
+  - Configurable access/idle timeout (`SESSION_TIMEOUT`, default `3600s`) and refresh token (`REFRESH_TOKEN_TIMEOUT`, default `604800s`, `dash_refresh`) with automatic client session refresh
+  - Configuration page (`/dashboard/config`, alias `/config`) for Catppuccin flavor/accent theme selector (`macchiato`, `latte`, `frappe`, `mocha`), custom site title & header title/subtitle, TTS voice/rate/pitch, and profanity filter
+  - Live donation gate (`donate_enabled`) toggled from `/dashboard`, `/dashboard/config`, or `PUT /api/manage/donate` to open/close donations in real time
   - Thai / English i18n UI switcher (`LangSwitch`, `?lang=th|en`)
 - **Admin Dashboard, Management API & Dual Database (D1 / Postgres)**:
-  - Rate-limited auth (`/login`, global + per-IP lockout) using Web Crypto `PBKDF2` / `HMAC-SHA256` signed tokens (`dash_token` cookie or `Authorization: Bearer <token>`) and `SESSION_SECRET`-guarded `/api/manage/setup`
-  - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), TTS & filter settings, access whitelist, donation gate, ledger management, and overlay control
+  - Rate-limited auth (`/login`, global + per-IP lockout) using Web Crypto `PBKDF2` / `HMAC-SHA256` signed tokens (`dash_token` / `dash_refresh` cookies or `Authorization: Bearer <token>`) and `SESSION_SECRET`-guarded `/api/manage/setup`
+  - Headless Management JSON API (`/api/manage/*`) for login, auth/token control (`status`, `refresh`, `revoke`, `config`), TTS, filter, theme, header, subathon, access whitelist, donation gate, ledger management, and overlay control
   - Donation history table and simulated test alerts (`/dashboard`) persisted via Drizzle ORM on Cloudflare D1 or PostgreSQL (`POSTGRES_URL`)
 
 ## Quick Start
@@ -88,24 +90,25 @@ bun run deploy
 ## Project Structure
 
 - `src/index.tsx` — App entry, `Content-Security-Policy` & security headers, CSRF middleware, and route wiring
-- `src/renderer.tsx` — HTML layout shell, client i18n bootstrap, and asset tags
+- `src/renderer.tsx` — HTML layout shell, dynamic `siteTitle`, Google Fonts (`Archivo Black`, `Work Sans`, `Space Mono`, `IBM Plex Sans Thai` fallback), theme sync, and client i18n bootstrap
 - `src/i18n.ts` & `src/locales/` — Thai (`th.json`) and English (`en.json`) localization tables
-- `src/style.css` — Global raw-block UI and overlay styles
+- `src/style.css` — Catppuccin flavors/accents (`data-flavor`, `data-accent`) and raw-block UI/overlay styles
 - `src/db/schema.ts` & `src/db/client.ts` — Drizzle schema (`donations`, `admins`, `subathon_state`, `discord_whitelist`) and D1/Postgres factory
 - `src/modules/config.ts` — Environment and receiver account config loader
 - `src/modules/db.ts` — Portable Drizzle queries and `ensureSchema()` auto-initialization
-- `src/modules/auth.ts` — Discord OAuth2, `ownerAuth` RBAC, rate limiting, and `PBKDF2` / `HMAC-SHA256` session middleware
-- `src/modules/slip2sure.ts` — Slip2Sure API verification, receiver mask check, and duplicate guard
+- `src/modules/auth.ts` — Discord OAuth2, `requirePermission()` / `ownerAuth` RBAC, refresh tokens, rate limiting, and `PBKDF2` / `HMAC-SHA256` session middleware
+- `src/modules/slip2sure.ts` — Slip2Sure API verification, magic-byte validation, receiver mask check, and duplicate guard
 - `src/modules/filter.ts` — Word filtering engine, bad words dictionary (obbaeiei/bad-words-thai), and whitelist masking
 - `src/modules/tts.ts` — Microsoft Edge Neural TTS audio generator, SSML validation, and cluster failover
 - `src/modules/tiktok.ts` — TikTok gift & live-status webhooks, scraper sync, and override TTL
 - `src/modules/events.ts` — SSE stream (`/api/events`, `/api/events/overlay`), overlay status, polling, and command bus
 - `src/modules/donate.ts` — Donation submission (`POST /api/donate`), mobile slip sessions, and test alerts (`POST /api/donate/test`)
-- `src/pages/home.tsx` — Public donor page (`GET /`) with PromptPay QR, slip upload, closed-gate UI, and live overlay status
+- `src/pages/home.tsx` — Public donor page (`GET /`) with custom header title, PromptPay QR, slip upload, closed-gate UI, and live overlay status
 - `src/pages/login.tsx` — Discord OAuth2 sign-in page (`GET /login`)
 - `src/pages/dashboard.tsx` — Streamer dashboard (`GET /dashboard`) with revenue stats, donation gate toggle, test alert form, and history
-- `src/pages/access.tsx` — Discord access whitelist manager (`GET /dashboard/access`)
-- `src/pages/LangSwitch.tsx` — Shared `AdminNav` navigation bar and Thai/English locale switcher
+- `src/pages/config.tsx` — Configuration page (`GET /dashboard/config`, alias `/config`) for site/header title, Catppuccin theme, TTS, profanity filter, and donation gate
+- `src/pages/access.tsx` — Discord access whitelist & permission manager (`GET /dashboard/access`)
+- `src/pages/LangSwitch.tsx` — Shared `AdminNav` navigation bar, session auto-refresh guard, and Thai/English locale switcher
 - `src/pages/controls/` — Remote overlay controllers (`/overlay/control`, `/alert`, `/leaderboard`, `/countdown`, `/subathon`)
 - `src/pages/overlays/` — OBS Browser Source overlays (`/overlay`, `/alert`, `/leaderboard`, `/countdown`, `/subathon`)
 - `schema.sql` — SQL schema reference for `donations`, `admins`, `subathon_state`, and `discord_whitelist`
