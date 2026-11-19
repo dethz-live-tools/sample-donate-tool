@@ -35,3 +35,5 @@ pentest_log/
 
 # misc
 .DS_Store
+
+.agents
